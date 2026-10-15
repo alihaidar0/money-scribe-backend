@@ -24,10 +24,14 @@ timonwong
 usernamehw
 
 # Tools, services, standards
+Argon
 autonumber
+cffi
 errorlens
 ghaction
 healthz
+keychain
+keyset
 Mailpit
 oasdiff
 pgcli
@@ -37,10 +41,12 @@ pyupgrade
 SARIF
 Schemathesis
 Sigstore
+simplejwt
 spectacular
 stoplight
 tini
 tufin
+upsert
 winget
 zizmor
 zizmorcore
