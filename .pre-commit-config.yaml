@@ -1,0 +1,86 @@
+# ============================================================
+#  .pre-commit-config.yaml — pure Python hooks (no Node.js)
+#
+#  Install once, after `uv init` (all hook types in one go):
+#    pre-commit install
+#
+#  Branch model: topic branch → PR → develop → PR → main. Nobody commits or
+#  pushes to develop or main: `no-commit-to-branch` stops a commit there and
+#  `block-protected-push` stops a push (the GitHub rulesets are the real gate).
+#
+#  Dependabot's pre-commit ecosystem bumps every `rev:` weekly.
+#  Keep the ruff hook's rev equal to ruff in uv.lock — their
+#  Dependabot PRs arrive the same Monday; merge them together.
+# ============================================================
+default_install_hook_types:
+  - pre-commit
+  - commit-msg
+  - pre-push
+default_stages: [pre-commit]
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-toml
+      - id: check-json
+        exclude: ^(\.vscode|\.devcontainer)/   # JSON with comments (JSONC)
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: ["--maxkb=1024"]
+      - id: detect-private-key
+      - id: debug-statements
+      - id: check-case-conflict
+      - id: mixed-line-ending
+        args: ["--fix=lf"]
+      - id: no-commit-to-branch
+        args: [--branch, main, --branch, develop]
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.16.10
+    hooks:
+      - id: ruff-check
+        args: [--fix, --output-format=full]
+        types_or: [python, pyi]
+      - id: ruff-format
+        types_or: [python, pyi]
+
+  - repo: https://github.com/adamchainz/django-upgrade
+    rev: 1.33.0
+    hooks:
+      - id: django-upgrade
+        args: [--target-version, auto]   # reads the Django version from pyproject.toml
+
+  # Keeps uv.lock in sync whenever pyproject.toml changes.
+  - repo: https://github.com/astral-sh/uv-pre-commit
+    rev: 0.12.23
+    hooks:
+      - id: uv-lock
+
+  # Schema-validates the workflow and Dependabot files before they reach CI.
+  - repo: https://github.com/python-jsonschema/check-jsonschema
+    rev: 0.38.2
+    hooks:
+      - id: check-github-workflows
+      - id: check-dependabot
+
+  - repo: https://github.com/compilerla/conventional-pre-commit
+    rev: v4.4.0
+    hooks:
+      - id: conventional-pre-commit
+        stages: [commit-msg]
+        args: [--strict, feat, fix, chore, docs, style, refactor, perf, test, build, ci, revert, wip]
+
+  # Local pre-push guard: no direct push to an existing main or develop.
+  - repo: local
+    hooks:
+      - id: block-protected-push
+        name: block direct pushes to main and develop
+        entry: bash scripts/block-protected-push.sh
+        language: system
+        stages: [pre-push]
+        always_run: true
+        pass_filenames: false

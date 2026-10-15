@@ -1,0 +1,84 @@
+# syntax=docker/dockerfile:1
+# ============================================================
+#  docker/Dockerfile.prod — production image (Gunicorn)
+#
+#  Built and published by .github/workflows/docker.yml on every
+#  release (merge develop → main), and built + smoke-tested in CI
+#  on every develop push. Deployment-agnostic: runs on any container platform.
+#
+#    builder  pinned uv resolves the locked dependencies into /app/.venv
+#    runtime  slim Python + the venv + the code; non-root, no uv, no compilers
+#
+#  Build locally:
+#    docker build -f docker/Dockerfile.prod -t my-project:prod .
+# ============================================================
+
+# ── Pinned inputs (literal FROM lines so Dependabot can bump them) ──
+FROM ghcr.io/astral-sh/uv:0.13.1@sha256:4a1f3666816dafadd20ceb71eac9a7d56d7ef30279f7d64048519ab901ada336 AS uv
+
+FROM python:3.14.8-slim-trixie@sha256:a2b82f3c48559aa0a8446d9af49826b6e2b2016f4cd2afabfe6013ec53729170 AS base
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    LANG=C.UTF-8
+
+SHELL ["/bin/bash", "-euo", "pipefail", "-c"]
+
+# ═════════════════════════════ builder ═════════════════════════════
+FROM base AS builder
+
+COPY --from=uv /uv /usr/local/bin/uv
+
+# Compile bytecode for faster starts; copy (not hardlink) out of the cache
+# mount; use the image's Python, never download another one.
+ENV UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy \
+    UV_PYTHON_DOWNLOADS=never \
+    UV_PROJECT_ENVIRONMENT=/app/.venv
+
+WORKDIR /app
+
+# Dependencies first — this layer is rebuilt only when the lock changes.
+RUN --mount=type=cache,target=/root/.cache/uv \
+    --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
+    --mount=type=bind,source=uv.lock,target=uv.lock \
+    uv sync --locked --no-dev --no-install-project
+
+COPY . .
+
+# Collect static files at build time (no database needed).
+RUN SECRET_KEY=collectstatic-only \
+    DJANGO_SETTINGS_MODULE=config.settings.production \
+    DATABASE_URL=sqlite:////tmp/collectstatic.db \
+    /app/.venv/bin/python manage.py collectstatic --noinput
+
+# ═════════════════════════════ runtime ═════════════════════════════
+FROM base AS runtime
+
+# libpq5: runtime client library for psycopg (tiny; harmless with psycopg[binary]).
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libpq5 \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN groupadd --gid 1001 app \
+    && useradd --uid 1001 --gid app --no-create-home --shell /usr/sbin/nologin app
+
+WORKDIR /app
+
+COPY --from=builder --chown=app:app /app /app
+COPY --chmod=0755 scripts/entrypoint.prod.sh /usr/local/bin/entrypoint
+
+ENV PATH="/app/.venv/bin:${PATH}" \
+    DJANGO_SETTINGS_MODULE=config.settings.production \
+    PORT=8080 \
+    WEB_CONCURRENCY=2
+
+# Numeric UID:GID so platforms can verify non-root (e.g. Kubernetes runAsNonRoot).
+USER 1001:1001
+
+EXPOSE 8080
+
+ENTRYPOINT ["entrypoint"]
+# Gunicorn reads WEB_CONCURRENCY (workers); the entrypoint binds to $PORT.
+CMD ["gunicorn", "config.wsgi:application"]

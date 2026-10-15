@@ -1,0 +1,49 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Django: Dev Server",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/manage.py",
+      "args": ["runserver", "0.0.0.0:8000", "--noreload"],
+      "django": true,
+      "justMyCode": true,
+      "env": {
+        "DJANGO_SETTINGS_MODULE": "config.settings.development"
+      },
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "Django: Attach Debugger (debugpy)",
+      "type": "debugpy",
+      "request": "attach",
+      "connect": { "host": "localhost", "port": 5678 },
+      "django": true,
+      "justMyCode": true,
+      "pathMappings": [
+        { "localRoot": "${workspaceFolder}", "remoteRoot": "/workspace" }
+      ]
+    },
+    {
+      "name": "Pytest: Current File",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "pytest",
+      "args": ["${file}", "-v", "--tb=short", "-s"],
+      "env": { "DJANGO_SETTINGS_MODULE": "config.settings.testing" },
+      "console": "integratedTerminal",
+      "justMyCode": true
+    },
+    {
+      "name": "Pytest: All Tests",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "pytest",
+      "args": ["--tb=short", "-v"],
+      "env": { "DJANGO_SETTINGS_MODULE": "config.settings.testing" },
+      "console": "integratedTerminal",
+      "justMyCode": true
+    }
+  ]
+}

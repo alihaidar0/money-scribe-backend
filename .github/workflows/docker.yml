@@ -1,0 +1,199 @@
+# ============================================================
+#  .github/workflows/docker.yml
+#
+#  Publishes the project's PRODUCTION image — OPT-IN, off by default.
+#
+#  The template only VERIFIES the image: CI ("Production image") builds
+#  docker/Dockerfile.prod and smoke-tests it on every pull request, pushing
+#  nothing. A project that wants the image in a registry turns this workflow
+#  on with ONE repository variable (Settings → Secrets and variables →
+#  Actions → Variables):
+#
+#    PUBLISH_IMAGE = ghcr        GitHub Container Registry, ghcr.io/<owner>/<repo>
+#                                no secrets: it signs in with the automatic GITHUB_TOKEN
+#    PUBLISH_IMAGE = dockerhub   Docker Hub, docker.io/<DOCKERHUB_USERNAME>/<repo>
+#                                variable DOCKERHUB_USERNAME + secret DOCKERHUB_TOKEN
+#    (unset)                     nothing is published; this workflow ends green with a
+#                                notice. Any other value fails, so a typo is noticed.
+#
+#  Another registry or host: replace the `publish` job (and add the project's own
+#  deployment workflow). Nothing in the template assumes where a project runs.
+#
+#  Triggers:
+#    - Push to main (every merge develop → main is a release)
+#    - Tag v*.*.*                 → adds the semver tags (started by the Release
+#                                   workflow, whose tag does not trigger this one)
+#    - Manual dispatch
+#
+#  No re-test here: the image was built and smoke-tested by CI on the pull
+#  request, which the rulesets require to be green before the merge.
+#
+#  Jobs:
+#    ready    opt-in switch + project state (manage.py and uv.lock exist) + image name
+#    publish  Docker's reusable builder (docker/github-builder): native
+#             amd64 + arm64 builds, SBOM, Sigstore-signed provenance.
+#             Tags: latest · sha-<short> · <version> + <major>.<minor> on v* tags
+#    scan     Trivy scan of the pushed digest → Security tab (informational)
+# ============================================================
+
+name: Docker
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*.*.*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docker-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+
+  ready:
+    name: Detect project state
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    outputs:
+      ready: ${{ steps.check.outputs.ready }}
+      image: ${{ steps.check.outputs.image }}
+      registry: ${{ steps.check.outputs.registry }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Publishing enabled?
+        id: check
+        env:
+          PUBLISH_IMAGE: ${{ vars.PUBLISH_IMAGE }}
+          DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_USERNAME }}
+          REPOSITORY: ${{ github.repository }}
+          REPO_NAME: ${{ github.event.repository.name }}
+        run: |
+          skip() { echo "ready=false" >> "$GITHUB_OUTPUT"; echo "::notice::Production image not published — $1"; echo "⏭️ $1" >> "$GITHUB_STEP_SUMMARY"; exit 0; }
+          fail() { echo "::error::$1"; exit 1; }
+
+          mode="${PUBLISH_IMAGE,,}"
+          [ -n "$mode" ] || skip "image publishing is off (repository variable PUBLISH_IMAGE is not set; CI still builds and smoke-tests the image)."
+          [ -f manage.py ] && [ -f uv.lock ] || skip "project not initialised yet (manage.py / uv.lock missing)."
+
+          case "$mode" in
+            ghcr)
+              registry="ghcr.io"
+              image="ghcr.io/${REPOSITORY,,}"
+              ;;
+            dockerhub)
+              [ -n "$DOCKERHUB_USERNAME" ] || fail "PUBLISH_IMAGE=dockerhub needs the repository variable DOCKERHUB_USERNAME (and the secret DOCKERHUB_TOKEN)."
+              registry="docker.io"
+              image="docker.io/${DOCKERHUB_USERNAME}/${REPO_NAME,,}"
+              ;;
+            *)
+              fail "PUBLISH_IMAGE must be 'ghcr' or 'dockerhub' (or unset to publish nothing); got '${PUBLISH_IMAGE}'."
+              ;;
+          esac
+
+          {
+            echo "ready=true"
+            echo "image=${image}"
+            echo "registry=${registry}"
+          } >> "$GITHUB_OUTPUT"
+          echo "Publishing \`${image}\`" >> "$GITHUB_STEP_SUMMARY"
+
+  publish:
+    name: Publish
+    needs: ready
+    if: needs.ready.outputs.ready == 'true'
+    uses: docker/github-builder/.github/workflows/build.yml@58cb9f5b71b1836d6f690c1e95effdeb9b98cb8a # v1.17.0
+    permissions:
+      contents: read
+      id-token: write   # keyless (Sigstore) signing of the provenance attestation
+      packages: write   # push to ghcr.io (only used when PUBLISH_IMAGE=ghcr)
+    with:
+      output: image
+      push: true
+      context: .
+      file: docker/Dockerfile.prod
+      target: runtime
+      platforms: linux/amd64,linux/arm64
+      runner: |
+        default=ubuntu-26.04
+        linux/arm64=ubuntu-26.04-arm
+      cache: true
+      cache-mode: max
+      sbom: true
+      set-meta-labels: true
+      set-meta-annotations: true
+      meta-images: ${{ needs.ready.outputs.image }}
+      meta-tags: |
+        type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+        type=sha,prefix=sha-,format=short
+        type=semver,pattern={{version}}
+        type=semver,pattern={{major}}.{{minor}}
+    secrets:
+      # ghcr: the automatic token of this run. dockerhub: the stored access token.
+      registry-auths: |
+        - registry: ${{ needs.ready.outputs.registry }}
+          username: ${{ needs.ready.outputs.registry == 'ghcr.io' && github.actor || vars.DOCKERHUB_USERNAME }}
+          password: ${{ needs.ready.outputs.registry == 'ghcr.io' && secrets.GITHUB_TOKEN || secrets.DOCKERHUB_TOKEN }}
+
+  scan:
+    name: Scan
+    needs: [ready, publish]
+    if: ${{ !cancelled() && needs.publish.result == 'success' }}
+    runs-on: ubuntu-26.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: read           # pull a private ghcr.io package
+      security-events: write   # upload Trivy SARIF to the Security tab
+    steps:
+      # Informational (exit-code 0): findings land in Security → Code scanning.
+      - name: Scan image for vulnerabilities
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        env:
+          # A package on ghcr.io can be private; Docker Hub images need no login here.
+          TRIVY_USERNAME: ${{ needs.ready.outputs.registry == 'ghcr.io' && github.actor || '' }}
+          TRIVY_PASSWORD: ${{ needs.ready.outputs.registry == 'ghcr.io' && secrets.GITHUB_TOKEN || '' }}
+        with:
+          image-ref: ${{ needs.ready.outputs.image }}@${{ needs.publish.outputs.digest }}
+          format: sarif
+          output: trivy-results.sarif
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: "0"
+
+      - name: Upload Trivy results to Security tab
+        uses: github/codeql-action/upload-sarif@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4.38.2
+        with:
+          sarif_file: trivy-results.sarif
+
+      - name: Write job summary
+        if: always()
+        env:
+          IMAGE: ${{ needs.ready.outputs.image }}
+          DIGEST: ${{ needs.publish.outputs.digest }}
+          META_JSON: ${{ needs.publish.outputs.meta-json }}
+          VERIFY: ${{ needs.publish.outputs.cosign-verify-commands }}
+          SHA: ${{ github.sha }}
+        run: |
+          {
+            echo "## 🐳 Published production image"
+            echo ""
+            echo "| Field | Value |"
+            echo "|-------|-------|"
+            echo "| **Image** | \`${IMAGE}\` |"
+            echo "| **Digest** | \`${DIGEST}\` |"
+            echo "| **Tags** | $(jq -r '[.tags[] | "`" + . + "`"] | join(" ")' <<<"$META_JSON") |"
+            echo "| **Platforms** | \`linux/amd64\`, \`linux/arm64\` |"
+            echo "| **Commit** | \`${SHA}\` |"
+            echo ""
+            echo "### Verify the signed provenance"
+            echo '```bash'
+            echo "$VERIFY"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

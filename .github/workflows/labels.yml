@@ -1,0 +1,140 @@
+# ============================================================
+#  .github/workflows/labels.yml
+#
+#  Keeps the repository's GitHub labels identical to .github/labels.yml
+#  (labels as code), with the plain `gh` CLI — no third-party action.
+#
+#  Triggers:
+#    - Push to develop (the default branch) or main where labels.yml changed.
+#      This includes the first commit of a repository created from the
+#      template, so the labels exist before Dependabot opens its first PRs.
+#    - PR that changes the file → validates it only (nothing is applied)
+#    - Manual dispatch on develop / main → applies (Actions → Labels → Run
+#      workflow), only needed if the labels are missing. Ticking `prune` also
+#      deletes every label that is NOT in labels.yml (see below).
+#
+#  What is removed:
+#    - GitHub's own default labels that labels.yml does not define
+#      (OBSOLETE below) are deleted on every sync, so a new project ends up
+#      with exactly the labels in labels.yml and nothing else. They are
+#      matched by exact name; a label that is listed in labels.yml is never
+#      deleted. Deleting a label detaches it from the issues and pull requests
+#      that carried it.
+#    - Any other label created by hand in the UI is left alone, unless a
+#      manual run ticks `prune`, which makes labels.yml the only truth.
+# ============================================================
+
+name: Labels
+
+on:
+  push:
+    branches: [develop, main]
+    paths:
+      - ".github/labels.yml"
+      - ".github/workflows/labels.yml"
+  pull_request:
+    paths:
+      - ".github/labels.yml"
+      - ".github/workflows/labels.yml"
+  workflow_dispatch:
+    inputs:
+      prune:
+        description: "Also delete every label that is not in .github/labels.yml"
+        type: boolean
+        default: false
+
+# Least privilege by default; only the sync job may write (labels are an Issues API).
+permissions:
+  contents: read
+
+concurrency:
+  group: labels-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  sync:
+    name: Sync labels to GitHub
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write   # labels are managed through the Issues API
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          sparse-checkout: .github/labels.yml
+          persist-credentials: false
+
+      # yq, jq and gh are preinstalled on the runner. `gh label create --force`
+      # creates a missing label and updates colour and description of an
+      # existing one.
+      - name: Validate and sync labels
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          APPLY: ${{ github.event_name != 'pull_request' && (github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/main') }}
+          PRUNE: ${{ github.event_name == 'workflow_dispatch' && inputs.prune }}
+        run: |
+          set -euo pipefail
+
+          # GitHub's default labels that labels.yml does not define.
+          OBSOLETE=("accessibility" "help wanted" "invalid" "question" "wontfix")
+
+          wanted="$(mktemp)"
+          count=0
+          while IFS= read -r label; do
+            name="$(jq -r '.name // ""' <<< "${label}")"
+            color="$(jq -r '.color // ""' <<< "${label}")"
+            description="$(jq -r '.description // ""' <<< "${label}")"
+
+            if [ -z "${name}" ] || [[ ! "${color}" =~ ^[0-9a-fA-F]{6}$ ]]; then
+              echo "::error file=.github/labels.yml::Invalid label entry (needs a name and a 6-digit hex colour): ${label}"
+              exit 1
+            fi
+
+            printf '%s\n' "${name}" >> "${wanted}"
+            if [ "${APPLY}" = "true" ]; then
+              gh label create "${name}" --color "${color}" --description "${description}" --force
+            fi
+            count=$((count + 1))
+          done < <(yq -o=json -I=0 '.[]' .github/labels.yml)
+
+          if [ "${count}" -eq 0 ]; then
+            echo "::error file=.github/labels.yml::No labels found in the file."
+            exit 1
+          fi
+
+          if [ "${APPLY}" != "true" ]; then
+            echo "Validated ${count} labels (dry run: nothing applied)." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          # ── Removal ──────────────────────────────────────────────────────
+          existing="$(gh label list --limit 500 --json name --jq '.[].name')"
+          removed=()
+          while IFS= read -r name; do
+            [ -n "${name}" ] || continue
+            # Never delete what labels.yml defines.
+            if grep -qxF -- "${name}" "${wanted}"; then continue; fi
+
+            delete=false
+            for obsolete in "${OBSOLETE[@]}"; do
+              if [ "${name}" = "${obsolete}" ]; then delete=true; fi
+            done
+            if [ "${PRUNE}" = "true" ]; then delete=true; fi
+
+            if [ "${delete}" = "true" ]; then
+              gh label delete "${name}" --yes
+              removed+=("${name}")
+            fi
+          done <<< "${existing}"
+
+          {
+            echo "Synced ${count} labels."
+            if [ "${#removed[@]}" -gt 0 ]; then
+              echo ""
+              echo "Removed ${#removed[@]} label(s) not in labels.yml:"
+              printf -- '- %s\n' "${removed[@]}"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

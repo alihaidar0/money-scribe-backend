@@ -1,0 +1,48 @@
+{
+  "version": "0.2",
+  "language": "en,en-GB",
+  "useGitignore": true,
+  "enableGlobDot": true,
+  "ignorePaths": [
+    ".git/**",
+    "LICENSE",
+    "*.xml",
+    "uv.lock",
+    "**/*.py",
+    "**/*.pyi",
+    "**/migrations/**",
+    "**/static/**",
+    "**/templates/**"
+  ],
+  "dictionaryDefinitions": [
+    {
+      "name": "project-words",
+      "path": "./.cspell/project-words.txt",
+      "addWords": true,
+      "description": "Tool, package, and project names used in this repository."
+    }
+  ],
+  "dictionaries": [
+    "project-words",
+    "softwareTerms",
+    "companies",
+    "misc",
+    "filetypes",
+    "python",
+    "bash",
+    "docker",
+    "fullstack",
+    "django"
+  ],
+  "overrides": [
+    {
+      "filename": "**/Dockerfile*",
+      "languageId": "dockerfile"
+    }
+  ],
+  "ignoreRegExpList": [
+    "sha256:[0-9a-f]{64}",
+    "@[0-9a-f]{40}",
+    "\\b[0-9a-f]{40}\\b"
+  ]
+}

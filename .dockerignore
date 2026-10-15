@@ -1,0 +1,73 @@
+# ============================================================
+#  .dockerignore — build context for docker/Dockerfile.prod
+#  Only the application code, pyproject.toml, uv.lock and the prod
+#  entrypoint are needed. Keeps the context small and secrets out.
+# ============================================================
+
+# ── VCS / CI / editor ──────────────────────────────────────────────────────
+.git
+.gitignore
+.gitattributes
+.github
+.devcontainer
+.vscode
+.idea
+.editorconfig
+
+# ── Docker / dev tooling ───────────────────────────────────────────────────
+.dockerignore
+docker-compose*.yml
+docker/
+.pre-commit-config.yaml
+.hadolint.yaml
+.markdownlint-cli2.jsonc
+cspell.json
+.cspell/
+repomix.config.json
+*-code.xml
+scripts/*
+!scripts/entrypoint.prod.sh
+
+# ── Python cache / builds ──────────────────────────────────────────────────
+__pycache__
+*.py[cod]
+*.so
+*.egg-info
+dist/
+build/
+
+# ── Virtual environments ───────────────────────────────────────────────────
+.venv
+venv/
+
+# ── Test + type-check caches ───────────────────────────────────────────────
+.pytest_cache
+.mypy_cache
+.ruff_cache
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+
+# ── Secrets ────────────────────────────────────────────────────────────────
+.env
+.env.*
+*.pem
+*.key
+*.crt
+
+# ── Local data ─────────────────────────────────────────────────────────────
+media/
+staticfiles/
+*.sqlite3
+
+# ── OS ─────────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# ── Docs / logs ────────────────────────────────────────────────────────────
+*.md
+LICENSE
+docs/
+*.log

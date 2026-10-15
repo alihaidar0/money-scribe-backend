@@ -1,0 +1,33 @@
+# Release-notes categories for auto-generated GitHub Releases
+# (consumed by .github/workflows/release.yml).
+changelog:
+  exclude:
+    labels:
+      - skip-changelog
+  categories:
+    - title: Breaking changes
+      labels:
+        - breaking change
+    - title: Features and improvements
+      labels:
+        - feature
+        - enhancement
+    - title: Bug fixes
+      labels:
+        - bug
+    - title: Security
+      labels:
+        - security
+    - title: Dependency updates
+      labels:
+        - dependencies
+    - title: CI and automation
+      labels:
+        - ci
+        - github-actions
+    - title: Documentation
+      labels:
+        - documentation
+    - title: Other changes
+      labels:
+        - "*"

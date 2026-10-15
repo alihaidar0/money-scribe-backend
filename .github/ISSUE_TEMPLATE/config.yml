@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Getting started
+    url: https://github.com/alihaidar0/django-template#readme
+    about: Setup, the dev container, and the development workflow.
+  - name: django-devcontainer issues
+    url: https://github.com/alihaidar0/django-devcontainer/issues
+    about: Problems with the shared dev image (Python, uv, tools, aliases, image build) belong there.
+  - name: Security vulnerability
+    url: https://github.com/alihaidar0/django-template/security/advisories/new
+    about: Report security issues privately, not as a public issue.

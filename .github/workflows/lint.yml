@@ -1,0 +1,77 @@
+# ============================================================
+#  .github/workflows/lint.yml
+#
+#  Static checks for the repository's infrastructure files (Python code
+#  is covered by CI → pre-commit / mypy). A reusable workflow, called by the
+#  "Lint" job of ci.yml, so one aggregate check ("CI passed") covers it.
+#  Run it by hand from the Actions tab if you want only these checks.
+#
+#    hadolint        docker/Dockerfile.prod (config: .hadolint.yaml)
+#    ShellCheck      scripts/*.sh and .github/scripts/*.sh (preinstalled on the runner)
+#    actionlint      .github/workflows/* (config: .github/actionlint.yaml)
+#    zizmor          GitHub Actions security audit (injection, permissions, pinning)
+#    compose config  docker-compose.yml is valid and interpolates
+#    cspell          docs, configs, scripts — not Python (config: cspell.json)
+#    markdownlint    every Markdown file (config: .markdownlint-cli2.jsonc)
+# ============================================================
+
+name: Lint
+
+on:
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-26.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: hadolint
+        uses: hadolint/hadolint-action@06be81baf89a55ffd0e24b8f04a4185738dd3387 # v3.5.0
+        with:
+          dockerfile: docker/Dockerfile.prod
+          config: .hadolint.yaml
+
+      - name: ShellCheck
+        run: shellcheck --version | head -2 && shellcheck scripts/*.sh .github/scripts/*.sh
+
+      - name: actionlint
+        uses: raven-actions/actionlint@3d39aea434753780c3b3d4a1a31c854b4dbf49d7 # v2.2.0
+
+      - name: zizmor
+        uses: zizmorcore/zizmor-action@cc914d7f3750a2d13d75c7f184a1060aa0e9d482 # v0.6.4
+        with:
+          inputs: .github/
+          persona: regular
+          # Fail the job with inline annotations instead of uploading SARIF
+          # (keeps this job at contents: read).
+          advanced-security: false
+          annotations: true
+
+      - name: docker compose config
+        run: |
+          docker compose config --quiet && echo "✅ docker-compose.yml is valid"
+          docker compose -f .github/api-tools/docker-compose.yml config --quiet && echo "✅ .github/api-tools/docker-compose.yml is valid"
+
+      - name: cspell
+        uses: streetsidesoftware/cspell-action@6f3c77c1406bc930f944ba97e9801a22e42caf58 # v9.1.0
+        with:
+          config: cspell.json
+          files: "**"
+          incremental_files_only: false
+          check_dot_files: true
+          inline: error
+
+      - name: markdownlint
+        uses: DavidAnson/markdownlint-cli2-action@21c1be1b93ad9ed58fa840aacc3f279cde2a72ff # v24.2.0
+        with:
+          globs: "**/*.md"

@@ -1,0 +1,103 @@
+{
+  // Dev Container spec: https://containers.dev/implementors/json_reference/
+  //
+  // The image (alihaidar199527/django-devcontainer) is pulled, never built.
+  // Its `devcontainer.metadata` label already sets remoteUser = dev and
+  // updateRemoteUserUID, so neither is repeated here.
+  "name": "Django Dev Container",
+  "dockerComposeFile": ["../docker-compose.yml"],
+  "service": "app",
+  "workspaceFolder": "/workspace",
+  "shutdownAction": "stopCompose",
+
+  // ── Forwarded ports ──────────────────────────────────────────────────
+  "forwardPorts": [8000, 5432, 6379, 8025, 5555, 5678],
+  "portsAttributes": {
+    "8000": { "label": "Django", "onAutoForward": "notify" },
+    "5432": { "label": "PostgreSQL", "onAutoForward": "silent" },
+    "6379": { "label": "Redis", "onAutoForward": "silent" },
+    "8025": { "label": "Mailpit", "onAutoForward": "silent" },
+    "5555": { "label": "Flower", "onAutoForward": "silent" },
+    "5678": { "label": "debugpy", "onAutoForward": "silent" }
+  },
+
+  // ── VS Code ──────────────────────────────────────────────────────────
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        // AI pair programming, installed inside the container
+        "anthropic.claude-code",
+        // Python
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "ms-python.debugpy",
+        "ms-python.mypy-type-checker",
+        "charliermarsh.ruff",
+        // Django
+        "batisteo.vscode-django",
+        // Containers
+        "ms-azuretools.vscode-containers",
+        // Git / GitHub
+        "eamodio.gitlens",
+        "mhutchie.git-graph",
+        "github.vscode-github-actions",
+        "github.vscode-pull-request-github",
+        // Database / API
+        "ms-ossdata.vscode-pgsql",
+        "Redis.redis-for-vscode",
+        "humao.rest-client",
+        // Quality of the repo's own files (same checks as the Lint workflow)
+        "streetsidesoftware.code-spell-checker",
+        "davidanson.vscode-markdownlint",
+        "timonwong.shellcheck",
+        "exiasr.hadolint",
+        "redhat.vscode-yaml",
+        // Utilities
+        "tamasfe.even-better-toml",
+        "dotenv.dotenv-vscode",
+        "editorconfig.editorconfig",
+        "usernamehw.errorlens"
+      ],
+      "settings": {
+        "python.defaultInterpreterPath": "/workspace/.venv/bin/python",
+        "[python]": {
+          "editor.formatOnSave": true,
+          "editor.defaultFormatter": "charliermarsh.ruff",
+          "editor.codeActionsOnSave": {
+            "source.fixAll.ruff": "explicit",
+            "source.organizeImports.ruff": "explicit"
+          }
+        },
+        // The project's mypy (from `uv add --dev mypy django-stubs`) and its config.
+        "mypy-type-checker.importStrategy": "fromEnvironment",
+        "mypy-type-checker.args": ["--config-file=${workspaceFolder}/pyproject.toml"],
+        // Test Explorer runs pytest with the [tool.pytest.ini_options] from pyproject.toml.
+        "python.testing.pytestEnabled": true,
+        "python.testing.unittestEnabled": false,
+        // The image already puts /workspace/.venv/bin first on PATH — no activation.
+        "python.terminal.activateEnvironment": false,
+        // Django templates: HTML language features + Emmet in *.html.
+        "files.associations": { "**/templates/**/*.html": "django-html" },
+        "emmet.includeLanguages": { "django-html": "html" },
+        // Same line endings as .gitattributes, also for files created on Windows.
+        "files.eol": "\n",
+        "terminal.integrated.defaultProfile.linux": "bash",
+        "files.watcherExclude": {
+          "**/.git/objects/**": true,
+          "**/.venv/**": true,
+          "**/__pycache__/**": true,
+          "**/.mypy_cache/**": true,
+          "**/.ruff_cache/**": true,
+          "**/.pytest_cache/**": true
+        }
+      }
+    }
+  },
+
+  // ── Lifecycle ────────────────────────────────────────────────────────
+  // postCreateCommand (once): owns the .venv volume; on an existing project
+  // (uv.lock present) also runs `uv sync --locked` and `pre-commit install`.
+  // postStartCommand (every start): context-aware next steps.
+  "postCreateCommand": "bash /workspace/scripts/post-create.sh",
+  "postStartCommand": "bash /workspace/scripts/welcome.sh"
+}

@@ -1,0 +1,159 @@
+# ============================================================
+#  docker-compose.yml — development stack
+#
+#  Pulls the pre-built dev image (no local build) for app, celery and
+#  celery-beat; everything else is a stock, pinned image.
+#
+#    app          VS Code attaches here (/workspace = this folder)
+#    celery       worker — waits for manage.py, reloads on code change
+#    celery-beat  scheduler — waits for manage.py
+#    db           PostgreSQL 18
+#    redis        cache + Celery broker/result backend
+#    mailpit      catches outgoing email (UI :8025, SMTP :1025)
+#
+#  The compose project name defaults to the folder name, so every
+#  project gets its own containers, network and volumes.
+#
+#  Git inside the container: VS Code Dev Containers forwards the host
+#  ssh-agent (the keys) and copies ~/.gitconfig. Neither ~/.ssh nor any
+#  private key is mounted. A host-only alias in the remote URL (for example
+#  `git@github.com-work:owner/repo.git`) is mapped to github.com and pinned to
+#  this repository's key by scripts/pin-ssh-key.sh, which welcome.sh runs on
+#  every start.
+#
+#  The project's .venv lives in a named volume (Linux filesystem), not in
+#  the bind-mounted folder: installs and imports stay fast even when the
+#  project sits on a Windows/macOS drive. Shared by app, celery, beat.
+# ============================================================
+
+# ── Shared settings for the three containers built from the dev image ──
+x-dev-image: &dev-image
+  # The shared dev image (non-root user `dev`). The template always follows the
+  # newest published image (`latest`); a project freezes it on first start with
+  # `bash scripts/pin-image.sh` (python-X.Y.Z.R@sha256:…, the Python line it is
+  # on), after which the toolchain only changes through a reviewed Dependabot
+  # pull request. Keep this a literal line (no ${VAR}) so Dependabot's
+  # docker-compose ecosystem can read it.
+  image: alihaidar199527/django-devcontainer:latest
+  # tini as PID 1: forwards signals and reaps zombies, so `docker compose stop`
+  # is instant instead of waiting 10 s for `sleep infinity`.
+  init: true
+  working_dir: /workspace
+  env_file:
+    - path: .env
+      required: false
+  environment:
+    DJANGO_SETTINGS_MODULE: ${DJANGO_SETTINGS_MODULE:-config.settings.development}
+    SECRET_KEY: ${SECRET_KEY:-dev-secret-key-change-in-production}
+    DEBUG: ${DEBUG:-True}
+    # 10.0.2.2 is the Android emulator's alias for the host machine.
+    ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost,127.0.0.1,0.0.0.0,10.0.2.2}
+    # Browser clients on another origin (Flutter web: flutter run -d web-server, port 8080).
+    # Production allows none until a project lists its own origins.
+    CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:8080,http://127.0.0.1:8080}
+    # `environment` wins over `env_file`, so every value keeps a ${VAR:-default}
+    # form — setting it in .env (e.g. an external DATABASE_URL) takes effect.
+    DATABASE_URL: ${DATABASE_URL:-postgres://${POSTGRES_USER:-django}:${POSTGRES_PASSWORD:-django_pass}@db:5432/${POSTGRES_DB:-django_dev}}
+    REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+    CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/1}
+    CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://redis:6379/2}
+    EMAIL_HOST: ${EMAIL_HOST:-mailpit}
+    EMAIL_PORT: ${EMAIL_PORT:-1025}
+    # First connection to github.com needs no manual "yes" prompt.
+    GIT_SSH_COMMAND: ssh -o StrictHostKeyChecking=accept-new
+  volumes:
+    - .:/workspace:cached
+    - venv:/workspace/.venv
+    - uv-cache:/home/dev/.cache/uv
+  depends_on:
+    db:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+  # "no": if a process crashes during development it should stop loudly,
+  # not restart in a tight loop.
+  restart: "no"
+
+services:
+  app:
+    <<: *dev-image
+    command: sleep infinity
+    volumes:
+      - .:/workspace:cached
+      - venv:/workspace/.venv
+      - uv-cache:/home/dev/.cache/uv
+      - shell-history:/home/dev/.shell_history
+    ports:
+      - "127.0.0.1:8000:8000"   # Django dev server
+      - "127.0.0.1:5555:5555"   # Flower
+      - "127.0.0.1:5678:5678"   # debugpy
+
+  celery:
+    <<: *dev-image
+    # Waits until the project exists (manage.py) and its dependencies are
+    # installed (.venv/bin/celery), then starts on its own — no restart needed
+    # after the quickstart. watchfiles restarts the worker on code changes.
+    command: >
+      sh -c '
+        echo "⏳ Celery worker waits for manage.py and the project venv (uv sync)…"
+        until [ -f manage.py ] && [ -x .venv/bin/celery ]; do sleep 5; done
+        exec watchfiles --filter python "celery -A config worker -l INFO --pool=solo" /workspace
+      '
+
+  celery-beat:
+    <<: *dev-image
+    command: >
+      sh -c '
+        echo "⏳ Celery Beat waits for manage.py and the project venv (uv sync)…"
+        until [ -f manage.py ] && [ -x .venv/bin/celery ]; do sleep 5; done
+        exec celery -A config beat -l INFO --scheduler django_celery_beat.schedulers:DatabaseScheduler
+      '
+
+  db:
+    image: postgres:18.6-alpine@sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-django}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-django_pass}
+      POSTGRES_DB: ${POSTGRES_DB:-django_dev}
+    volumes:
+      # PostgreSQL 18+ keeps data in /var/lib/postgresql/18/docker, so the volume
+      # is mounted one level up. Mounting .../data (the pre-18 path) would leave
+      # the real data in an anonymous volume that `docker compose down` discards.
+      - postgres-data:/var/lib/postgresql
+    ports:
+      - "127.0.0.1:5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  redis:
+    image: redis:8.10.2-alpine@sha256:3811787313eba226a2ef38658c6ccb91cd5e110edc89c37767de373120a0e5a0
+    restart: unless-stopped
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis-data:/data
+    ports:
+      - "127.0.0.1:6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  mailpit:
+    image: axllent/mailpit:v1.31.4@sha256:b68349e3a014b90c5610bfb26b2ae36f3892d7b8cf25ee140c6c71c98d2fcf48
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8025:8025"   # web UI
+      - "127.0.0.1:1025:1025"   # SMTP
+
+volumes:
+  venv:
+  postgres-data:
+  redis-data:
+  uv-cache:
+  shell-history:

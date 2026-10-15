@@ -1,0 +1,166 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    // ── Django ─────────────────────────────────────────────────────────
+    {
+      "label": "Django: Run Server",
+      "type": "shell",
+      "command": "uv run python manage.py runserver 0.0.0.0:8000",
+      "isBackground": true,
+      "group": "none",
+      "presentation": { "reveal": "always", "panel": "dedicated" }
+    },
+    {
+      "label": "Django: Migrate",
+      "type": "shell",
+      "command": "uv run python manage.py migrate",
+      "group": "none",
+      "presentation": { "reveal": "always", "panel": "shared" }
+    },
+    {
+      "label": "Django: Make Migrations",
+      "type": "shell",
+      "command": "uv run python manage.py makemigrations",
+      "group": "none",
+      "presentation": { "reveal": "always", "panel": "shared" }
+    },
+    {
+      "label": "Django: Shell",
+      "type": "shell",
+      "command": "uv run python manage.py shell",
+      "group": "none",
+      "presentation": { "reveal": "always", "panel": "dedicated" }
+    },
+    {
+      "label": "Django: Create Superuser",
+      "type": "shell",
+      "command": "uv run python manage.py createsuperuser",
+      "group": "none",
+      "presentation": { "reveal": "always", "panel": "shared" }
+    },
+    {
+      "label": "Django: Collect Static",
+      "type": "shell",
+      "command": "uv run python manage.py collectstatic --noinput",
+      "group": "none",
+      "presentation": { "reveal": "always", "panel": "shared" }
+    },
+    {
+      "label": "Django: System Check",
+      "type": "shell",
+      "command": "uv run python manage.py check --deploy",
+      "group": "none",
+      "presentation": { "reveal": "always", "panel": "shared" }
+    },
+    // ── Testing ────────────────────────────────────────────────────────
+    {
+      "label": "Pytest: All Tests",
+      "type": "shell",
+      "command": "uv run pytest -v --tb=short",
+      "group": { "kind": "test", "isDefault": true },
+      "presentation": { "reveal": "always", "panel": "dedicated" }
+    },
+    {
+      "label": "Pytest: With Coverage",
+      "type": "shell",
+      "command": "uv run pytest --cov=. --cov-report=html --cov-report=term-missing",
+      "group": "test",
+      "presentation": { "reveal": "always", "panel": "dedicated" }
+    },
+    {
+      "label": "Pytest: Current File",
+      "type": "shell",
+      "command": "uv run pytest ${file} -v --tb=short -s",
+      "group": "test",
+      "presentation": { "reveal": "always", "panel": "dedicated" }
+    },
+    // ── Code quality ───────────────────────────────────────────────────
+    {
+      "label": "Ruff: Lint + Fix",
+      "type": "shell",
+      "command": "uv run ruff check . --fix",
+      "group": "none",
+      "presentation": { "reveal": "always", "panel": "shared" }
+    },
+    {
+      "label": "Ruff: Format",
+      "type": "shell",
+      "command": "uv run ruff format .",
+      "group": "none",
+      "presentation": { "reveal": "always", "panel": "shared" }
+    },
+    {
+      "label": "Mypy: Type Check",
+      "type": "shell",
+      "command": "uv run mypy .",
+      "group": "none",
+      "presentation": { "reveal": "always", "panel": "shared" }
+    },
+    {
+      "label": "Pre-commit: Run All",
+      "type": "shell",
+      "command": "uv run pre-commit run --all-files",
+      "group": "none",
+      "presentation": { "reveal": "always", "panel": "shared" }
+    },
+    {
+      "label": "Pre-commit: Update Hooks",
+      "type": "shell",
+      "command": "uv run pre-commit autoupdate",
+      "group": "none",
+      "presentation": { "reveal": "always", "panel": "shared" }
+    },
+    // ── Security ───────────────────────────────────────────────────────
+    {
+      "label": "Security: pip-audit",
+      "type": "shell",
+      "command": "uv run pip-audit --skip-editable",
+      "group": "none",
+      "presentation": { "reveal": "always", "panel": "shared" }
+    },
+    // ── Dependencies ───────────────────────────────────────────────────
+    {
+      "label": "uv: Add Package",
+      "type": "shell",
+      "command": "uv add ${input:packageName}",
+      "group": "none",
+      "presentation": { "reveal": "always", "panel": "shared" }
+    },
+    {
+      "label": "uv: Add Dev Package",
+      "type": "shell",
+      "command": "uv add --dev ${input:packageName}",
+      "group": "none",
+      "presentation": { "reveal": "always", "panel": "shared" }
+    },
+    {
+      "label": "uv: Sync",
+      "type": "shell",
+      "command": "uv sync",
+      "group": "none",
+      "presentation": { "reveal": "always", "panel": "shared" }
+    },
+    {
+      "label": "uv: Lock",
+      "type": "shell",
+      "command": "uv lock",
+      "group": "none",
+      "presentation": { "reveal": "always", "panel": "shared" }
+    },
+    // ── Pre-commit install ─────────────────────────────────────────────
+    {
+      "label": "Pre-commit: Install All Hook Types",
+      "type": "shell",
+      "command": "uv run pre-commit install",
+      "group": "none",
+      "presentation": { "reveal": "always", "panel": "shared" }
+    }
+  ],
+  "inputs": [
+    {
+      "id": "packageName",
+      "type": "promptString",
+      "description": "Package name to install with uv add"
+    }
+  ]
+}

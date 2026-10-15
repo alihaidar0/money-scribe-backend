@@ -1,0 +1,143 @@
+# .github/workflows/pr-labels.yml
+#
+# Adds labels to a pull request from its Conventional Commit title, so the
+# generated release notes (grouped by label, see .github/release.yml) never
+# depend on someone remembering to set them. It only ever adds labels: anything
+# set by hand is kept. Not part of "CI passed" - it validates nothing.
+#
+#   feat(...)                                   feature
+#   fix(...)                                    bug
+#   docs(...)                                   documentation
+#   ci(...)                                     ci
+#   chore/refactor/style/test/perf/build/revert chore
+#   scope deps or deps-dev                      dependencies
+#   scope docker                                docker
+#   type! or a BREAKING CHANGE: footer          breaking change
+#   develop -> main promotion                   skip-changelog (its pull requests are listed already)
+#
+# When the title is not a Conventional Commit, the topic branch prefix decides
+# (feat/ fix/ docs/ ci/ chore/ deps/).
+#
+# The title and body are untrusted input: they only reach the script through
+# environment variables and are never expanded into the shell code.
+name: PR labels
+
+on:
+  pull_request:
+    types:
+      - opened
+      - edited
+      - reopened
+    branches:
+      - develop
+      - main
+
+# One run per pull request at a time. A run that has already started finishes
+# (it only adds labels, so it is safe to complete); only a run still waiting is
+# replaced by the newest edit, so a quick title or description edit no longer
+# cancels a running job and leaves a red cancelled run behind.
+concurrency:
+  group: pr-labels-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  label:
+    name: Label from the title
+    # Bots label themselves (Dependabot configures its labels), and a pull
+    # request from a fork gets a read-only token.
+    if: >-
+      github.event.pull_request.user.type != 'Bot' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Add labels
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+        run: |
+          set -euo pipefail
+
+          wanted=()
+          type=""
+          scope=""
+          bang=""
+
+          if [[ "${PR_TITLE}" =~ ^([a-z]+)(\(([^\)]+)\))?(!)?:[[:space:]] ]]; then
+            type="${BASH_REMATCH[1]}"
+            scope="${BASH_REMATCH[3]}"
+            bang="${BASH_REMATCH[4]}"
+          else
+            echo "::warning title=PR title::Use a Conventional Commit title such as 'fix(ci): summary'; no label was added from it."
+          fi
+
+          # No Conventional Commit title: use the topic branch prefix instead
+          # (feat/…, fix/…, docs/…, ci/…, chore/…, deps/…), the branch names
+          # the workflow documents.
+          if [ -z "${type}" ]; then
+            case "${HEAD_REF}" in
+              feat/* | feature/*) type="feat" ;;
+              fix/* | bugfix/* | hotfix/*) type="fix" ;;
+              docs/*) type="docs" ;;
+              ci/*) type="ci" ;;
+              chore/* | refactor/* | style/* | test/* | perf/* | build/* | revert/*) type="chore" ;;
+              deps/*) type="chore"; scope="deps" ;;
+            esac
+          fi
+
+          case "${type}" in
+            feat) wanted+=("feature") ;;
+            fix) wanted+=("bug") ;;
+            docs) wanted+=("documentation") ;;
+            ci) wanted+=("ci") ;;
+            chore | refactor | style | test | perf | build | revert) wanted+=("chore") ;;
+          esac
+
+          case "${scope}" in
+            deps | deps-dev) wanted+=("dependencies") ;;
+            docker) wanted+=("docker") ;;
+          esac
+
+          if [ -n "${bang}" ] || grep -qE '^BREAKING CHANGE:' <<< "${PR_BODY:-}"; then
+            wanted+=("breaking change")
+          fi
+
+          if [ "${HEAD_REF}" = "develop" ] && [ "${BASE_REF}" = "main" ]; then
+            wanted+=("skip-changelog")
+          fi
+
+          if [ "${#wanted[@]}" -eq 0 ]; then
+            echo "No label to add."
+            exit 0
+          fi
+
+          # Only labels that exist can be added; labels.yml defines them.
+          existing="$(gh label list --limit 200 --json name --jq '.[].name')"
+          to_add=()
+          for label in "${wanted[@]}"; do
+            if grep -qxF -- "${label}" <<< "${existing}"; then
+              to_add+=("${label}")
+            else
+              echo "::warning::Label '${label}' does not exist; run the Labels workflow or add it to .github/labels.yml."
+            fi
+          done
+
+          if [ "${#to_add[@]}" -eq 0 ]; then
+            exit 0
+          fi
+
+          args=()
+          for label in "${to_add[@]}"; do
+            args+=(--add-label "${label}")
+          done
+          gh pr edit "${PR_NUMBER}" "${args[@]}"
+          echo "Added: ${to_add[*]}" >> "$GITHUB_STEP_SUMMARY"

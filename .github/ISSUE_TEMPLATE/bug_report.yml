@@ -1,0 +1,46 @@
+name: Bug report
+description: Something is broken or behaves incorrectly.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. For security issues use the private advisory form instead.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What did you do, what did you expect, and what actually happened?
+      placeholder: |
+        Steps:
+        1. ...
+        Expected: ...
+        Actual: ...
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / error output
+      description: Paste relevant output. Redact keys, URLs, and `.env` values.
+      render: text
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - "Dev container / docker-compose.yml"
+        - "Getting started / scripts (welcome.sh, init-django.sh)"
+        - "CI / GitHub workflows / Dependabot"
+        - "Production image (Dockerfile.prod, entrypoint)"
+        - "Application code"
+        - "Unsure"
+    validations:
+      required: true
+  - type: textarea
+    id: env
+    attributes:
+      label: Environment
+      description: Host OS + architecture, Docker Desktop version, and whether you're inside the dev container.
+    validations:
+      required: true

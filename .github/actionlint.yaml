@@ -1,0 +1,7 @@
+# actionlint config — https://github.com/rhysd/actionlint/blob/main/docs/config.md
+self-hosted-runner:
+  # GitHub-hosted Ubuntu 26.04 images. Listed here only because actionlint
+  # releases up to v1.7.12 predate them; remove once actionlint knows them.
+  labels:
+    - ubuntu-26.04
+    - ubuntu-26.04-arm

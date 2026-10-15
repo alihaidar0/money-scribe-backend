@@ -1,0 +1,27 @@
+# ============================================================
+#  .spectral.yaml — style rules for openapi/schema.yaml
+#
+#  Checked by the "API style" job of ci.yml (Spectral). Errors fail CI; the
+#  warnings of the recommended ruleset are shown but do not. Run locally from
+#  the repository root:
+#    docker compose -f .github/api-tools/docker-compose.yml run --rm spectral \
+#      lint openapi/schema.yaml --ruleset .spectral.yaml
+# ============================================================
+extends: ["spectral:oas"]
+
+rules:
+  # Not applicable to a generated Django schema (or a deployment choice):
+  path-keys-no-trailing-slash: off   # Django's APPEND_SLASH convention: /api/v1/items/
+  oas3-api-servers: off              # where the API runs is a deployment choice
+  info-contact: off                  # the project adds its own if it wants one
+
+  # What a contract must have so that a client can be built from it alone:
+  operation-operationId: error       # stable names for generated client methods
+  operation-description: error       # every operation explains itself (docstring or @extend_schema)
+  success-response-has-content:
+    description: A 200 or 201 response must declare its content (use 204 for an empty response).
+    severity: error
+    given: "$.paths[*][*].responses[?(@property == '200' || @property == '201')]"
+    then:
+      field: content
+      function: truthy

@@ -1,0 +1,39 @@
+# ============================================================
+#  .github/api-tools/docker-compose.yml
+#
+#  The two tools of the API-contract CI jobs (ci.yml), as pinned containers:
+#    oasdiff   breaking-change check and changelog between two OpenAPI files
+#    spectral  style linter (ruleset: .spectral.yaml)
+#
+#  Pulled, never built, and not part of the dev stack. They run as containers
+#  and not as GitHub Actions on purpose: GitHub checks every action a workflow
+#  references against the repository's allowed-actions list when the workflow
+#  starts, even in jobs that are skipped, so an action that is not allowed would
+#  fail CI itself in every project that has no API yet. No Node.js, and nothing
+#  added to the dev image.
+#
+#  Dependabot (docker-compose ecosystem, directory /.github/api-tools) bumps the
+#  tags and digests. The oasdiff project also publishes release candidates
+#  (v1.x.y-rc.N): merge only stable tags.
+#
+#  Run from the repository root, for example:
+#    docker compose -f .github/api-tools/docker-compose.yml run --rm spectral \
+#      lint openapi/schema.yaml --ruleset .spectral.yaml
+#    docker compose -f .github/api-tools/docker-compose.yml run --rm oasdiff \
+#      breaking /path/to/old.yaml openapi/schema.yaml
+# ============================================================
+
+services:
+  oasdiff:
+    image: tufin/oasdiff:v1.33.0@sha256:6263a96dd2ef0726c54e21fea9b8e1607eac4841add0079324b424c1f52b819c
+    working_dir: /w
+    volumes:
+      - ../..:/w:ro
+
+  spectral:
+    image: stoplight/spectral:6.17.0@sha256:c8ffae6ee561b70e80402f1ea669e8b37c74fee48a3dbe2147b71359ed987239
+    working_dir: /w
+    volumes:
+      - ../..:/w:ro
+    environment:
+      NODE_NO_WARNINGS: "1"

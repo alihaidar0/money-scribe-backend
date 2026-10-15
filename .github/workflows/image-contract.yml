@@ -1,0 +1,36 @@
+# ============================================================
+#  .github/workflows/image-contract.yml
+#
+#  Weekly check that the template still matches what the django-devcontainer
+#  image provides (PostgreSQL and Python versions, the image the compose file
+#  pulls, the documented shell aliases). A red run means one of the two
+#  repositories moved on. It is deliberately not a required check: it depends
+#  on another repository's state.
+#
+#  Runs only in the template repository, never in a generated project.
+# ============================================================
+
+name: Image contract
+
+on:
+  schedule:
+    - cron: "0 7 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    name: Check against django-devcontainer
+    if: ${{ github.event.repository.is_template }}
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Compare with the image's published sources
+        run: bash .github/scripts/check-image-contract.sh

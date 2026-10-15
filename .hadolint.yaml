@@ -1,0 +1,7 @@
+# hadolint config — https://github.com/hadolint/hadolint#configure
+# Used by the Lint workflow and by the VS Code hadolint extension.
+failure-threshold: info
+ignored:
+  # Pin apt package versions: the production image takes the latest Debian
+  # security fixes whenever it is rebuilt (base image digest bumps via Dependabot).
+  - DL3008

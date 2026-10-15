@@ -1,0 +1,11 @@
+# .github/zizmor.yml
+#
+# Configuration for the zizmor step of the Lint workflow (lint.yml).
+rules:
+  # zizmor suggests GitHub's newer `$/` syntax for actions in the same
+  # repository. actionlint does not parse it yet and fails the Lint job on it,
+  # so the workflows keep the workspace-relative `./` form, which runs on every
+  # runner version. Re-enable this rule and switch to `$/` once actionlint
+  # accepts it.
+  self-repository:
+    disable: true

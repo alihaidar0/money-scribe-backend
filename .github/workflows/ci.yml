@@ -1,0 +1,586 @@
+# ============================================================
+#  .github/workflows/ci.yml
+#
+#  Pull-request validation. The ONE required status check for branch
+#  protection is the aggregate job "CI passed" at the bottom of this file.
+#
+#  Repository checks (every tier): source branch, lint (hadolint · ShellCheck ·
+#  actionlint · zizmor · compose · cspell · markdownlint — lint.yml), commit
+#  messages, pre-commit (ruff lint + format, file hygiene), template guard.
+#
+#  Project checks grow with the project and never fail a fresh template:
+#
+#    Tier 1  template     no pyproject.toml   prod-image (scaffolded sample project,
+#                                             itself checked with mypy · pytest · migrations · deploy check)
+#    Tier 2  pre-Django   pyproject.toml      pip-audit
+#    Tier 3  Django       manage.py + uv.lock mypy · pytest (PostgreSQL) · check --deploy ·
+#                                             missing migrations · pip-audit · prod-image
+#
+#  API contract (any tier, opt-in): once openapi/schema.yaml exists, three more jobs
+#  run: schema is current · API style (Spectral) · API breaking changes (oasdiff).
+#
+#  "prod-image" builds docker/Dockerfile.prod and serves one request
+#  through Gunicorn. On a fresh template it first scaffolds a sample
+#  project with the exact documented steps (uv init --bare → uv add →
+#  scripts/init-django.sh), checks it like a real project, and smoke-tests
+#  /healthz + the CSP header — so the template's instructions are tested.
+#
+#  Branch model: topic branch ─PR─▶ develop ─PR─▶ main. Nobody pushes to
+#  develop or main. CI runs on every pull request into either branch, so the
+#  required "CI passed" check is on the PR's head commit.
+# ============================================================
+
+name: CI
+
+on:
+  pull_request:
+    branches: [develop, main]
+    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHON_VERSION: "3.14"
+  UV_PYTHON_DOWNLOADS: automatic
+
+jobs:
+
+  # Only `develop` (of this repository) may open a pull request into `main`.
+  # GitHub rulesets cannot restrict a PR's source branch, so it is enforced here
+  # and made mandatory through the aggregate "CI passed" check.
+  verify-source-branch:
+    name: Verify source branch
+    if: github.event_name == 'pull_request' && github.base_ref == 'main'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 2
+    steps:
+      - name: Only develop may target main
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          BASE_REPO: ${{ github.repository }}
+        run: |
+          if [ "$HEAD_REF" != "develop" ] || [ "$HEAD_REPO" != "$BASE_REPO" ]; then
+            echo "::error::Pull requests into main must come from the develop branch of $BASE_REPO (got $HEAD_REPO:$HEAD_REF). Merge the change into develop first."
+            exit 1
+          fi
+          echo "Source branch OK: $HEAD_REPO:$HEAD_REF -> main"
+
+  # Static checks for the repository's infrastructure files (reusable workflow).
+  lint:
+    name: Lint
+    uses: ./.github/workflows/lint.yml
+    permissions:
+      contents: read
+
+  # Every commit of a pull request must follow Conventional Commits. The local
+  # commit-msg hook enforces the same rule; this catches commits made without
+  # the hooks (web editor, other machines). Same hook, same config.
+  commits:
+    name: Commit messages
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          # No uv.lock / pyproject.toml to key a cache on in a fresh template, and
+          # this job installs nothing worth caching (setup-uv would warn otherwise).
+          enable-cache: false
+
+      - name: Lint the pull request's commit messages
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          status=0
+          msg="$RUNNER_TEMP/commit-msg.txt"
+          while read -r sha; do
+            git log -1 --format=%B "$sha" > "$msg"
+            if ! uvx pre-commit run conventional-pre-commit --hook-stage commit-msg --commit-msg-filename "$msg" > "$RUNNER_TEMP/out.txt" 2>&1; then
+              echo "::error::Commit ${sha:0:7} does not follow Conventional Commits: $(head -n 1 "$msg")"
+              cat "$RUNNER_TEMP/out.txt"
+              status=1
+            fi
+          done < <(git rev-list --no-merges "$BASE_SHA..$HEAD_SHA")
+          exit "$status"
+
+  # The template itself must stay a blank canvas: the Django project and uv are
+  # created per project by the documented steps. Runs only in the template
+  # repository, never in a project generated from it.
+  template-guard:
+    name: Template guard
+    if: ${{ github.event.repository.is_template }}
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Keep the template a blank canvas
+        run: |
+          status=0
+          for path in manage.py config pyproject.toml uv.lock requirements.txt package.json users; do
+            if [ -e "$path" ]; then
+              echo "::error::'$path' must not exist in the template (the quickstart creates it per project)."
+              status=1
+            fi
+          done
+          exit "$status"
+
+  detect:
+    name: Detect project state
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    outputs:
+      tier: ${{ steps.state.outputs.tier }}
+      locked: ${{ steps.state.outputs.locked }}
+      api: ${{ steps.state.outputs.api }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Detect tier
+        id: state
+        run: |
+          locked=false; [ -f uv.lock ] && locked=true
+          if [ -f manage.py ]; then
+            if [ "$locked" != "true" ]; then
+              echo "::error::manage.py found but uv.lock is missing — run 'uv lock' and commit uv.lock."
+              exit 1
+            fi
+            tier=3; label="Django project — full CI"
+          elif [ -f pyproject.toml ]; then
+            tier=2; label="pre-Django — pre-commit + pip-audit"
+          else
+            tier=1; label="fresh template — pre-commit + scaffolded prod-image test"
+          fi
+          # The API-contract jobs switch on by themselves once a project commits
+          # openapi/schema.yaml (bash scripts/schema.sh generate).
+          api=false; [ -f openapi/schema.yaml ] && api=true
+          {
+            echo "tier=$tier"
+            echo "locked=$locked"
+            echo "api=$api"
+          } >> "$GITHUB_OUTPUT"
+          echo "### Tier ${tier}: ${label}" >> "$GITHUB_STEP_SUMMARY"
+
+          # Nudge (never fail) when a project has not frozen its dev image yet.
+          if [ "$tier" != "1" ] && ! grep -Eq '^[[:space:]]*image:.*django-devcontainer.*@sha256:' docker-compose.yml; then
+            echo "::warning title=Dev image is not pinned::Run 'bash scripts/pin-image.sh' to freeze the dev image in docker-compose.yml."
+          fi
+
+  pre-commit:
+    name: pre-commit
+    needs: detect
+    runs-on: ubuntu-26.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          # No uv.lock / pyproject.toml to key a cache on in a fresh template, and
+          # this job installs nothing worth caching (setup-uv would warn otherwise).
+          enable-cache: false
+
+      - name: Cache pre-commit environments
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/pre-commit
+          key: pre-commit-${{ runner.os }}-${{ hashFiles('.pre-commit-config.yaml') }}
+
+      # Same hooks as the local git hooks: ruff (lint + format), django-upgrade,
+      # file hygiene. One source of truth for code style.
+      # no-commit-to-branch and the pre-push guard are local safety nets (CI
+      # runs on develop/main refs on dispatch), so they are skipped here.
+      - name: Run all hooks
+        env:
+          SKIP: no-commit-to-branch,block-protected-push
+        run: uvx pre-commit run --all-files --show-diff-on-failure --color=always
+
+  typecheck:
+    name: mypy
+    needs: detect
+    if: needs.detect.outputs.tier == '3'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up uv
+        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          enable-cache: true
+      - name: Install dependencies
+        run: uv sync --locked
+      - name: mypy
+        run: uv run mypy .
+
+  test:
+    name: pytest
+    needs: detect
+    if: needs.detect.outputs.tier == '3'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
+    services:
+      # Same image as the dev stack (docker-compose.yml) — bump both together.
+      postgres:
+        image: postgres:18.6-alpine@sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DJANGO_SETTINGS_MODULE: config.settings.testing
+      SECRET_KEY: ci-test-only-not-a-real-secret-key-0123456789abcdef
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/test
+      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up uv
+        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          enable-cache: true
+      - name: Install dependencies
+        run: uv sync --locked
+      - name: pytest
+        # Exit code 5 = no tests collected yet (brand-new project) — not a failure.
+        run: |
+          rc=0
+          uv run pytest --cov --cov-report=xml -q || rc=$?
+          if [ "$rc" -eq 5 ]; then
+            echo "::notice::No tests collected yet — add tests under the apps' tests/ packages."
+            exit 0
+          fi
+          exit "$rc"
+      - name: Upload coverage
+        # Optional: runs only when the CODECOV_TOKEN secret is configured.
+        if: env.CODECOV_TOKEN != ''
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
+        with:
+          files: ./coverage.xml
+          token: ${{ env.CODECOV_TOKEN }}
+          fail_ci_if_error: false
+
+  django-check:
+    name: Django deploy check
+    needs: detect
+    if: needs.detect.outputs.tier == '3'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 10
+    env:
+      DJANGO_SETTINGS_MODULE: config.settings.production
+      SECRET_KEY: ci-deploy-check-only-not-a-real-secret-key-0123456789
+      DATABASE_URL: sqlite:////tmp/check.db
+      ALLOWED_HOSTS: localhost
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up uv
+        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          enable-cache: true
+      - name: Install dependencies
+        run: uv sync --locked --no-dev
+      - name: manage.py check --deploy
+        run: uv run --no-sync python manage.py check --deploy
+      - name: No missing migrations
+        run: uv run --no-sync python manage.py makemigrations --check --dry-run
+
+  security:
+    name: pip-audit
+    needs: detect
+    if: needs.detect.outputs.tier != '1'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 10
+    env:
+      LOCKED: ${{ needs.detect.outputs.locked }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up uv
+        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          # No uv.lock / pyproject.toml to key a cache on in a fresh template, and
+          # this job installs nothing worth caching (setup-uv would warn otherwise).
+          enable-cache: false
+      # Audits the exact pinned set (incl. transitive deps) without installing it.
+      - name: Audit dependencies
+        run: |
+          flag=""; [ "$LOCKED" = "true" ] && flag="--locked"
+          uv export $flag --no-emit-project --no-hashes --format requirements-txt -o /tmp/requirements.txt
+          uvx pip-audit --disable-pip --no-deps --strict -r /tmp/requirements.txt
+
+  prod-image:
+    name: Production image
+    needs: detect
+    if: needs.detect.outputs.tier != '2'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 25
+    env:
+      TIER: ${{ needs.detect.outputs.tier }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up uv
+        if: env.TIER == '1'
+        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          # No uv.lock / pyproject.toml to key a cache on in a fresh template, and
+          # this job installs nothing worth caching (setup-uv would warn otherwise).
+          enable-cache: false
+
+      # Fresh template: follow the documented steps 1–4 to get a real project.
+      - name: Scaffold a sample project (fresh template)
+        if: env.TIER == '1'
+        run: |
+          uv init --bare --name sample-project
+          uv add django djangorestframework 'psycopg[binary,pool]' dj-database-url \
+                 redis celery django-celery-beat gunicorn whitenoise drf-spectacular django-cors-headers \
+                 'drf-standardized-errors[openapi]'
+          uv add --dev pytest pytest-django pytest-cov factory-boy faker \
+                       mypy ruff django-stubs celery-types flower pip-audit ipython
+          bash scripts/init-django.sh
+
+      # The generated project must pass the same checks a real project gets.
+      - name: Check the scaffolded project
+        if: env.TIER == '1'
+        env:
+          SECRET_KEY: ci-scaffold-check-only-not-a-real-secret-key-0123456789
+          ALLOWED_HOSTS: localhost
+        run: |
+          uv run ruff check . && uv run ruff format --check .
+          uv run mypy .
+          rc=0; uv run pytest -q || rc=$?; [ "$rc" -eq 0 ] || [ "$rc" -eq 5 ]
+          uv run python manage.py makemigrations --check --dry-run
+          DJANGO_SETTINGS_MODULE=config.settings.production uv run python manage.py check --deploy
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Build docker/Dockerfile.prod
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: docker/Dockerfile.prod
+          platforms: linux/amd64
+          load: true
+          push: false
+          tags: project:ci
+          cache-from: type=gha,scope=prod-image
+          cache-to: type=gha,scope=prod-image,mode=max
+
+      - name: Smoke test — migrate, /healthz, Gunicorn, security headers
+        run: |
+          docker run -d --name app -p 8080:8080 \
+            -e SECRET_KEY=ci-smoke-only-not-a-real-secret-key-0123456789 \
+            -e DATABASE_URL=sqlite:////tmp/smoke.db \
+            -e ALLOWED_HOSTS=example.com \
+            project:ci
+          # A platform probe: internal Host, plain HTTP, SSL redirect ON.
+          for _ in $(seq 1 30); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' -H 'Host: 10.0.0.7:8080' http://localhost:8080/healthz || true)
+            [ "$code" = 200 ] && break
+            sleep 2
+          done
+          if [ "$code" != 200 ]; then
+            echo "❌ /healthz did not answer 200 (last: ${code})"; docker logs app; exit 1
+          fi
+          echo "✅ /healthz → 200 for a platform probe"
+          # A real request through the proxy: Django serves it with the CSP header.
+          headers=$(curl -s -D - -o /dev/null -H 'Host: example.com' -H 'X-Forwarded-Proto: https' http://localhost:8080/admin/login/)
+          grep -q '^HTTP/[0-9.]* 200' <<<"$headers" || { echo "❌ /admin/login/ did not return 200"; echo "$headers"; exit 1; }
+          grep -qi '^content-security-policy' <<<"$headers" || { echo "❌ no CSP header"; exit 1; }
+          echo "✅ /admin/login/ → 200 with a Content-Security-Policy header"
+          docker exec app whoami | grep -qx app && echo "✅ runs as non-root user app (1001)"
+
+  # The one check to require in branch protection. It always runs and fails if
+  # any job above failed or was cancelled; jobs skipped by design (a Django job
+  # on a fresh template, the template guard in a generated project) count as
+  # passed.
+  # ── API contract: opt-in, runs only once openapi/schema.yaml exists ──────
+  # The tools run as pinned containers (.github/api-tools/docker-compose.yml),
+  # not as GitHub Actions: GitHub checks every action a workflow references
+  # against the allowed-actions list at startup, even in skipped jobs, so a
+  # missing entry would fail this whole workflow in every project without an API.
+  api-schema:
+    name: API schema is current
+    needs: detect
+    if: needs.detect.outputs.api == 'true'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --locked
+
+      # The committed file must equal what the code generates now.
+      - name: openapi/schema.yaml is current
+        run: bash scripts/schema.sh check
+
+  api-lint:
+    name: API style (Spectral)
+    needs: detect
+    if: needs.detect.outputs.api == 'true'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Lint openapi/schema.yaml
+        run: |
+          [ -f .spectral.yaml ] || { echo "::error::.spectral.yaml is missing; restore it from the template."; exit 1; }
+          docker compose -f .github/api-tools/docker-compose.yml run --rm -T spectral \
+            lint openapi/schema.yaml --ruleset .spectral.yaml --fail-severity error
+
+  # Compares the schema on the pull request's base commit with the PR's schema.
+  # A breaking change fails the job unless the PR carries the `breaking change`
+  # label (added from a `feat!:` title or by hand): that is the explicit sign
+  # that the owner accepted it. The changelog always goes to the job summary.
+  api-breaking:
+    name: API breaking changes (oasdiff)
+    needs: detect
+    if: needs.detect.outputs.api == 'true' && github.event_name == 'pull_request'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: read   # read the PR's labels
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Checkout the base commit's schema
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: base
+          sparse-checkout: openapi/schema.yaml
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
+      - name: Compare with the base
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -uo pipefail
+
+          if [ ! -f base/openapi/schema.yaml ]; then
+            echo "::notice::The base branch has no openapi/schema.yaml yet: nothing to compare (this pull request introduces the contract)."
+            echo "No schema on the base branch yet: nothing to compare." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          oasdiff=(docker compose -f .github/api-tools/docker-compose.yml run --rm -T oasdiff)
+
+          { echo "## API changelog (base → this pull request)"; echo; "${oasdiff[@]}" changelog base/openapi/schema.yaml openapi/schema.yaml --format markdown; } >> "$GITHUB_STEP_SUMMARY" || true
+
+          set +e
+          "${oasdiff[@]}" breaking base/openapi/schema.yaml openapi/schema.yaml --fail-on ERR
+          status=$?
+          set -e
+
+          if [ "$status" -eq 0 ]; then
+            echo "No breaking changes."
+            exit 0
+          fi
+
+          # Read the labels now (not from the event payload): the labelling workflow
+          # may have added `breaking change` after this run started.
+          if gh pr view "$PR_NUMBER" --json labels --jq '.labels[].name' | grep -qxF "breaking change"; then
+            echo "::notice::Breaking API changes were found; the pull request carries the 'breaking change' label, so they are accepted."
+            exit 0
+          fi
+          echo "::error::Breaking API changes (listed above). If they are intended, add the 'breaking change' label (a feat!: title does it); before the first release the owner must approve, after it use a new versioned path or a deprecation period."
+          exit 1
+
+  ci-passed:
+    name: CI passed
+    needs:
+      - verify-source-branch
+      - lint
+      - commits
+      - template-guard
+      - detect
+      - pre-commit
+      - typecheck
+      - test
+      - django-check
+      - security
+      - prod-image
+      - api-schema
+      - api-lint
+      - api-breaking
+    if: always()
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    steps:
+      - name: Evaluate results
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          echo "$RESULTS" | jq -r 'to_entries[] | "\(.key): \(.value.result)"' | tee -a "$GITHUB_STEP_SUMMARY"
+          # Skipped jobs are not applicable at the current tier — only failures count.
+          if echo "$RESULTS" | jq -e 'any(.[]; .result == "failure" or .result == "cancelled")' >/dev/null; then
+            echo "❌ CI passed: no"
+            exit 1
+          fi
+          echo "✅ CI passed: yes"

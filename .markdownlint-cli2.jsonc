@@ -1,0 +1,13 @@
+// markdownlint config — shared by the Lint workflow (markdownlint-cli2-action)
+// and the VS Code markdownlint extension, so editor and CI agree.
+// Rules: https://github.com/DavidAnson/markdownlint/blob/main/doc/Rules.md
+{
+  "config": {
+    "default": true,
+    // Prose is not hard-wrapped; tables, URLs and code lines are long by nature.
+    "MD013": false,
+    // Tables use the "compact" style: `| a | b |` and `| --- | --- |`.
+    "MD060": { "style": "compact" }
+  },
+  "ignores": ["node_modules/**"]
+}

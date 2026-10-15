@@ -1,0 +1,127 @@
+# https://docs.github.com/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
+#
+# Every pinned version in this repo is covered by one ecosystem below:
+#   github-actions  .github/workflows/* — action SHA pins + "# vX.Y.Z" comments,
+#                   including the reusable docker/github-builder workflow
+#   docker          docker/Dockerfile.prod — FROM lines (python base + uv), tag + digest
+#   docker-compose  docker-compose.yml — postgres, redis, mailpit (tag + digest) AND
+#                   the dev image: once `bash scripts/pin-image.sh` pinned it to
+#                   python-X.Y.Z.R@sha256:…, new image builds arrive as PRs
+#   pre-commit      .pre-commit-config.yaml — hook revs
+#   uv              pyproject.toml + uv.lock — enabled by scripts/init-django.sh
+#                   (block at the end; commented here so the template itself,
+#                   which has no pyproject.toml, doesn't fail every week)
+#
+# Branch model: `develop` is the default branch, so every PR — version AND
+# security updates — targets it; releases reach `main` through the
+# develop → main PR. Dependabot alerts and security updates can stay ON.
+#
+# Cooldown: a version update is proposed only once the release is 7 days old,
+# so a compromised or broken release is usually caught (and yanked) upstream
+# before it reaches a PR.
+version: 2
+
+updates:
+  # ── GitHub Actions ────────────────────────────────────────────────────
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule: { interval: "weekly", day: "monday", time: "09:00", timezone: "UTC" }
+    cooldown: { default-days: 7 }
+    target-branch: "develop"
+    assignees: ["alihaidar0"]
+    commit-message: { prefix: "ci", include: "scope" }
+    labels: ["dependencies", "github-actions"]
+    groups:
+      github-actions-all:
+        patterns: ["*"]
+    open-pull-requests-limit: 5
+
+  # ── Production image (python base + uv) ──────────────────────────────
+  - package-ecosystem: "docker"
+    directory: "/docker"
+    schedule: { interval: "weekly", day: "monday", time: "09:00", timezone: "UTC" }
+    cooldown: { default-days: 7 }
+    target-branch: "develop"
+    assignees: ["alihaidar0"]
+    commit-message: { prefix: "build", include: "scope" }
+    labels: ["dependencies", "docker"]
+    # The production Python follows Django: the newest minor Django officially
+    # supports (see scripts/set-python.sh), not the newest Python released. Patch
+    # updates (3.14.8 -> 3.14.9) arrive here; a new minor, and any release
+    # candidate of one, is ignored and moved to on purpose with
+    # `bash scripts/set-python.sh`.
+    ignore:
+      - dependency-name: "python"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+    groups:
+      # uv minor + patch grouped; every python patch bump arrives as its own PR.
+      docker-minor-patch:
+        applies-to: version-updates
+        patterns: ["*"]
+        exclude-patterns: ["python"]
+        update-types: ["minor", "patch"]
+    open-pull-requests-limit: 5
+
+  # ── Dev services (postgres, redis, mailpit) ──────────────────────────
+  - package-ecosystem: "docker-compose"
+    # "/" is the dev stack; the second directory holds the API-contract CI tools
+    # (oasdiff, Spectral) as pinned images.
+    directories:
+      - "/"
+      - "/.github/api-tools"
+    schedule: { interval: "weekly", day: "monday", time: "09:00", timezone: "UTC" }
+    cooldown: { default-days: 7 }
+    target-branch: "develop"
+    assignees: ["alihaidar0"]
+    commit-message: { prefix: "build", include: "scope" }
+    labels: ["dependencies", "docker"]
+    # The dev image is followed to every newer build, minor and major included
+    # (a new Python minor arrives as its own PR). Read the image's release notes
+    # before merging one: the weekly Image contract run flags a Python minor
+    # that Dockerfile.prod and ci.yml do not share.
+    groups:
+      # Patch/minor together; a new PostgreSQL or Redis major arrives alone
+      # (a Postgres major needs a dump/restore of the dev volume).
+      compose-minor-patch:
+        applies-to: version-updates
+        patterns: ["*"]
+        # The dev image always arrives as its own PR.
+        exclude-patterns: ["alihaidar199527/django-devcontainer"]
+        update-types: ["minor", "patch"]
+    open-pull-requests-limit: 5
+
+  # ── pre-commit hooks ─────────────────────────────────────────────────
+  - package-ecosystem: "pre-commit"
+    directory: "/"
+    schedule: { interval: "weekly", day: "monday", time: "09:00", timezone: "UTC" }
+    cooldown: { default-days: 7 }
+    target-branch: "develop"
+    assignees: ["alihaidar0"]
+    commit-message: { prefix: "chore", include: "scope" }
+    labels: ["dependencies", "pre-commit"]
+    groups:
+      pre-commit-hooks-all:
+        patterns: ["*"]
+    open-pull-requests-limit: 3
+
+  # ── Python dependencies — enabled by scripts/init-django.sh ──────────
+  # Left commented in the template itself: without pyproject.toml the job
+  # would fail every week. scripts/init-django.sh uncomments it for you.
+  #
+  # - package-ecosystem: "uv"
+  #   directory: "/"
+  #   schedule: { interval: "weekly", day: "monday", time: "09:00", timezone: "UTC" }
+  #   cooldown: { default-days: 7 }
+  #   target-branch: "develop"
+  #   assignees: ["alihaidar0"]
+  #   commit-message: { prefix: "build", prefix-development: "chore", include: "scope" }
+  #   labels: ["dependencies", "python"]
+  #   versioning-strategy: "increase-if-necessary"
+  #   allow:
+  #     - dependency-type: "all"
+  #   groups:
+  #     python-minor-patch:
+  #       applies-to: version-updates
+  #       patterns: ["*"]
+  #       update-types: ["minor", "patch"]
+  #   open-pull-requests-limit: 10

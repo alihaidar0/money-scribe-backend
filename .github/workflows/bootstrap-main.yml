@@ -1,0 +1,64 @@
+# ============================================================
+#  .github/workflows/bootstrap-main.yml
+#
+#  A repository created from this template starts with ONE branch: the
+#  template's default branch, `develop`. The release flow also needs `main`,
+#  so this creates it from `develop` the first time it is missing. It never
+#  touches an existing `main`.
+#
+#  A push event also fires when a repository is created from a template, so
+#  this runs on the initial commit and `main` appears within a minute. It runs
+#  again on every push to `develop` (and on demand: Actions → Bootstrap main →
+#  Run workflow) as a safety net; once `main` exists it only prints a notice,
+#  and the file can be deleted.
+#
+#  Runs only in generated projects, never in the template repository. Not part
+#  of the required checks: it validates nothing.
+# ============================================================
+
+name: Bootstrap main
+
+on:
+  push:
+    branches: [develop]
+  workflow_dispatch:
+
+concurrency:
+  group: bootstrap-main
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  create-main:
+    name: Create main from develop
+    if: ${{ !github.event.repository.is_template && github.ref == 'refs/heads/develop' }}
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    permissions:
+      contents: write   # create the branch
+    steps:
+      - name: Create main when it does not exist
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+
+          # matching-refs answers an empty list (not a 404) for a missing branch.
+          exists="$(gh api "repos/${REPO}/git/matching-refs/heads/main" \
+            --jq '[.[] | select(.ref == "refs/heads/main")] | length')"
+
+          if [ "${exists}" != "0" ]; then
+            echo "main already exists; nothing to do. This workflow can be deleted." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          if gh api "repos/${REPO}/git/refs" --method POST \
+            -f ref="refs/heads/main" -f sha="${SHA}" > /dev/null; then
+            echo "Created main from develop at ${SHA}." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "::error title=main was not created::Create it by hand: git push origin develop:main (or Branches → New branch on GitHub). A repository or organisation policy may forbid workflows from creating branches."
+            exit 1
+          fi

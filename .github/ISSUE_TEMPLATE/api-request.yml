@@ -1,0 +1,66 @@
+name: API request
+description: A client (frontend, mobile app, integration) needs a new or changed API endpoint.
+title: "[API] "
+labels: ["api-request"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The API contract is `openapi/schema.yaml`, generated from the code. Describe what the
+        client needs here; the shape is agreed in this issue, then implemented in a pull request
+        that regenerates the schema. **Use invented values in every example, never real data**
+        (no real names, emails, tokens, ids or amounts from a live system).
+  - type: textarea
+    id: need
+    attributes:
+      label: Need
+      description: What must the client be able to do? Describe the behaviour, not the endpoint.
+    validations:
+      required: true
+  - type: input
+    id: feature
+    attributes:
+      label: Screen or feature name
+      description: Where the client uses it, so both sides use the same words.
+    validations:
+      required: true
+  - type: textarea
+    id: request
+    attributes:
+      label: Request example
+      description: Method, path, query parameters and body, with invented values.
+      render: http
+    validations:
+      required: true
+  - type: textarea
+    id: response
+    attributes:
+      label: Response example
+      description: Status code and JSON body, with invented values.
+      render: json
+    validations:
+      required: true
+  - type: textarea
+    id: edge-cases
+    attributes:
+      label: Error and empty cases
+      description: "Not found, invalid input, not allowed, empty list, nothing changed: what should the client receive in each case?"
+    validations:
+      required: true
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      options:
+        - Low (when convenient)
+        - Normal (this iteration)
+        - High (blocks the client)
+    validations:
+      required: true
+  - type: checkboxes
+    id: no-real-data
+    attributes:
+      label: Confirmation
+      options:
+        - label: The examples above use invented values and contain no real data.
+          required: true

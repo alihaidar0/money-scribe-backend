@@ -1,0 +1,83 @@
+# Project dictionary for cspell (see cspell.json).
+# One word per line, grouped by origin, sorted within each group.
+# Add a word here only when it is a real name — fix actual typos instead.
+
+# People, accounts, projects
+alihaidar
+axllent
+Haidar
+koalaman
+repomix
+rhysd
+
+# VS Code marketplace publishers
+batisteo
+charliermarsh
+davidanson
+eamodio
+exiasr
+humao
+mhutchie
+ossdata
+tamasfe
+timonwong
+usernamehw
+
+# Tools, services, standards
+autonumber
+errorlens
+ghaction
+healthz
+Mailpit
+oasdiff
+pgcli
+pgsql
+pytype
+pyupgrade
+SARIF
+Schemathesis
+Sigstore
+spectacular
+stoplight
+tini
+tufin
+winget
+zizmor
+zizmorcore
+
+# Packages, system, file patterns
+corsheaders
+dmypy
+ehthumbs
+encryptable
+hardlink
+htmlcov
+libpq
+nologin
+nosetests
+passwordless
+pgdata
+viewset
+
+# Environment variables, options, shell
+addopts
+allkeys
+gsub
+isready
+keygen
+maxmemory
+noinput
+noreload
+publickey
+sshkey
+sslmode
+tolower
+toupper
+PYTHONDONTWRITEBYTECODE
+PYTHONUNBUFFERED
+USERPROFILE
+
+# Shell aliases from the dev image
+pmcs
+pmmk
+pmsu
