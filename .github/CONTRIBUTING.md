@@ -15,9 +15,9 @@ feat/*  fix/*  docs/*  ci/*  chore/*  deps/*      Dependabot
         │                                              │
         └────────── pull request ──────────────────────┘
                           ▼
-develop  ──────────────────────────────────────  (default branch, integration)
+develop  ──────────────────────────────────────  (default branch, integration · staging draft)
                           │
-                          └──pull request──▶  main   (release: every merge publishes the production image)
+                          └──pull request──▶  main   (release: production draft v<version>, published by you)
 ```
 
 | Branch | Role | Direct push? | Accepts PRs from |
@@ -30,7 +30,8 @@ develop  ───────────────────────�
   open a pull request **into `develop`**. Merge it with **Create a merge
   commit** (no squash, no rebase) once **CI passed** is green.
 - A release is one pull request **`develop` → `main`**, title
-  `release: <summary>`, also merged with a merge commit.
+  `release: <summary>`, also merged with a merge commit. The merge refreshes the draft
+  release `v<version>`; you publish it from the Releases page when you want the release.
 - Dependabot opens every update pull request against `develop`. Review them
   once a week, merge what you need, then release.
 - A new repository created from the template starts with `develop` only; the
@@ -85,7 +86,7 @@ setting is listed in [`docs/github-setup.md`](../docs/github-setup.md).
 | [`pr-labels.yml`](workflows/pr-labels.yml) | PR opened / edited | labels from the Conventional Commit title (drive the release notes) |
 | [`labels.yml`](workflows/labels.yml) | push `develop` / `main` touching labels, PR validation, dispatch | `.github/labels.yml` → GitHub labels (`gh` CLI); removes GitHub's five default labels; a manual run with `prune` removes every label not in the file |
 | [`bootstrap-main.yml`](workflows/bootstrap-main.yml) | push `develop`, dispatch | projects only: creates `main` from `develop` once |
-| [`release.yml`](workflows/release.yml) | push `main` | GitHub Release with generated notes (template: `vYYYY.MM.DD`; project: `pyproject.toml` version, then starts `docker.yml` on the tag) |
+| [`release.yml`](workflows/release.yml) | push `develop` / `main` | template: publishes `vYYYY.MM.DD` on `main`; project: keeps the draft releases current through [`scripts/release-draft.sh`](../scripts/release-draft.sh): the rolling "Staging" draft on `develop`, the `v<version>` draft on `main`. You publish the latter |
 | [`docker.yml`](workflows/docker.yml) → **Docker** | push `main` (release), tags `v*.*.*`, dispatch | **opt-in** (`PUBLISH_IMAGE`): publish the production image to GHCR or Docker Hub; ends green with a notice when unset or until the project is initialised |
 | [`dockerhub-description.yml`](workflows/dockerhub-description.yml) | push `main` touching `README.md`, dispatch | **opt-in** (`PUBLISH_IMAGE=dockerhub`): README → the image's Docker Hub page |
 | [`image-contract.yml`](workflows/image-contract.yml) | weekly, dispatch | template only: PostgreSQL / Python versions, image reference and shell aliases vs `django-devcontainer` (not required) |
@@ -113,12 +114,22 @@ CI builds and smoke-tests the production image on every pull request and pushes
 nothing. A project that opted in to publishing (`PUBLISH_IMAGE`) gets, on a merge
 `develop` → `main`, `<registry>/<repo>` as `latest` + `sha-<short>` (native
 amd64 + arm64, SBOM, Sigstore-signed provenance), scanned with Trivy.
-In a project the same merge runs **Release**: when `version` in `pyproject.toml`
-is new it publishes `vX.Y.Z` (with `openapi/schema.yaml` attached as `openapi.yaml` when the
-project has one; notes generated from the merged pull requests,
-grouped by label — [`release.yml`](release.yml) lists the categories) and, when
-publishing is on, starts `docker.yml` on that tag for the `X.Y.Z` and `X.Y` image tags. In the template
-repository **Release** publishes `vYYYY.MM.DD`.
+In a project **Release** never publishes by itself; it keeps two drafts, visible to people
+with write access only:
+
+- **Staging** (tag `staging`, a pre-release): every merge into `develop` replaces its notes
+  and files. Never publish it.
+- **`v<version>`**, from `version` in `pyproject.toml`: every merge into `main` creates it or
+  replaces its notes and files, with `openapi/schema.yaml` attached as `openapi.yaml` when the
+  project has one; notes are generated from the merged pull requests, grouped by label
+  ([`release.yml`](release.yml) lists the categories). When the version is final, publish the
+  draft on the Releases page. Publishing creates the tag and, when image publishing is on,
+  starts `docker.yml` for the `X.Y.Z` and `X.Y` image tags. A published release is
+  immutable, so raise the version to prepare the next one.
+
+In the template repository **Release** publishes `vYYYY.MM.DD` on a merge into `main`.
+Deployment to staging and production is a separate, later step
+([ADR 0002](../docs/adr/0002-draft-releases-and-environments.md)).
 
 ### Python version
 

@@ -237,6 +237,8 @@ jobs:
         uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
           enable-cache: true
+          # Only the pytest job writes the shared uv cache; parallel writers of one key just warn.
+          save-cache: false
       - name: Install dependencies
         run: uv sync --locked
       - name: mypy
@@ -273,6 +275,7 @@ jobs:
       - name: Set up uv
         uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
+          # The one job that saves the uv cache (the others only restore it).
           enable-cache: true
       - name: Install dependencies
         run: uv sync --locked
@@ -315,6 +318,7 @@ jobs:
         uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
           enable-cache: true
+          save-cache: false
       - name: Install dependencies
         run: uv sync --locked --no-dev
       - name: manage.py check --deploy
@@ -461,6 +465,7 @@ jobs:
         uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
           enable-cache: true
+          save-cache: false
 
       - name: Install dependencies
         run: uv sync --locked

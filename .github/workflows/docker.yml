@@ -20,9 +20,10 @@
 #  deployment workflow). Nothing in the template assumes where a project runs.
 #
 #  Triggers:
-#    - Push to main (every merge develop → main is a release)
-#    - Tag v*.*.*                 → adds the semver tags (started by the Release
-#                                   workflow, whose tag does not trigger this one)
+#    - Push to main (a merge develop → main builds the image; the release itself
+#                    stays a draft until the owner publishes it)
+#    - Tag v*.*.*                 → adds the semver tags (publishing the release draft
+#                                   creates the tag as the owner, which starts this)
 #    - Manual dispatch
 #
 #  No re-test here: the image was built and smoke-tested by CI on the pull

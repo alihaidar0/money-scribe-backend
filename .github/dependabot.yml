@@ -108,20 +108,26 @@ updates:
   # Left commented in the template itself: without pyproject.toml the job
   # would fail every week. scripts/init-django.sh uncomments it for you.
   #
-  # - package-ecosystem: "uv"
-  #   directory: "/"
-  #   schedule: { interval: "weekly", day: "monday", time: "09:00", timezone: "UTC" }
-  #   cooldown: { default-days: 7 }
-  #   target-branch: "develop"
-  #   assignees: ["alihaidar0"]
-  #   commit-message: { prefix: "build", prefix-development: "chore", include: "scope" }
-  #   labels: ["dependencies", "python"]
-  #   versioning-strategy: "increase-if-necessary"
-  #   allow:
-  #     - dependency-type: "all"
-  #   groups:
-  #     python-minor-patch:
-  #       applies-to: version-updates
-  #       patterns: ["*"]
-  #       update-types: ["minor", "patch"]
-  #   open-pull-requests-limit: 10
+  - package-ecosystem: "uv"
+    directory: "/"
+    schedule: { interval: "weekly", day: "monday", time: "09:00", timezone: "UTC" }
+    cooldown: { default-days: 7 }
+    target-branch: "develop"
+    assignees: ["alihaidar0"]
+    commit-message: { prefix: "build", prefix-development: "chore", include: "scope" }
+    labels: ["dependencies", "python"]
+    versioning-strategy: "increase-if-necessary"
+    allow:
+      - dependency-type: "all"
+    # django-celery-beat (2.9.0, the newest) requires Django<6.1, so a Django 6.1 update cannot
+    # resolve and fails the whole grouped update. Remove this entry when django-celery-beat
+    # supports Django 6.1 (pyproject.toml and uv.lock stay on 6.0.x until then).
+    ignore:
+      - dependency-name: "django"
+        versions: [">=6.1"]
+    groups:
+      python-minor-patch:
+        applies-to: version-updates
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+    open-pull-requests-limit: 10
