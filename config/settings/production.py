@@ -6,6 +6,8 @@ from .base import *
 
 DEBUG = False
 SECRET_KEY = os.environ["SECRET_KEY"]  # required — fail fast if missing
+# Staging runs these settings too and sets APP_ENVIRONMENT=staging; anything unset is production.
+APP_ENVIRONMENT = os.environ.get("APP_ENVIRONMENT", "production")
 
 # Behind a TLS-terminating proxy / load balancer
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")

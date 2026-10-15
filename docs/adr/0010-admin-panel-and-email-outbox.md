@@ -20,8 +20,12 @@ The auth flow is the real one (register, code email, verify); only the transport
   recipients, the subject, the text body and the creation time.
 - Development keeps SMTP to Mailpit by default and can switch to the outbox; staging uses the outbox until real delivery
   exists.
-- **Production never uses it.** A deploy-time system check fails when the production settings point at the outbox, so the
-  CI job `Django deploy check` catches it.
+- **Production never uses it.** Staging and production run the same settings module and differ only in their
+  environment variables, so the deployment's name is the variable `APP_ENVIRONMENT` (`development`, `staging` or
+  `production`; the production settings default to `production`). A system check, run by `manage.py check` and so by
+  every start and by the CI job `Django deploy check`, fails with `outbox.E001` when the environment is `production` and
+  the outbox is configured. A second check, `outbox.E002`, fails on any other name, so a typo such as `prod` cannot slip
+  past the first.
 - The admin for the outbox is read-only, visible to superuser accounts only, and can delete messages. A scheduled task
   (Celery Beat, daily) deletes messages older than `OUTBOX_RETENTION_HOURS` (default 24).
 - The outbox keeps verification codes in readable form, which is acceptable only on development and staging, where the
