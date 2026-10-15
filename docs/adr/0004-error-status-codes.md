@@ -12,8 +12,12 @@ message, or takes a different action, for each of them.
 ## Decision
 
 The contract documents **400, 401, 403, 404, 409 and 429** for each operation that can return them. The package setting
-`DRF_STANDARDIZED_ERRORS["ALLOWED_ERROR_STATUS_CODES"]` lists exactly these, and each added status gets its enum name in
-`ENUM_NAME_OVERRIDES`.
+`DRF_STANDARDIZED_ERRORS["ALLOWED_ERROR_STATUS_CODES"]` lists 400, 401, 403, 404 and 429, and each status added there gets
+its enum name in `ENUM_NAME_OVERRIDES`. **`409` is declared per operation instead.** The package documents any extra
+status listed in that setting on *every* operation, which would put a conflict on plain reads, so an operation that can
+conflict says so with the shared response, `@extend_schema(responses={..., 409: CONFLICT_RESPONSE})`, from
+`config/api_errors.py`. A conflict is raised with `config.exceptions.conflict(code)`, and a throttled answer with
+`config.exceptions.throttled(code, wait)`, which sends `Retry-After`.
 
 | Status | Meaning here | Notes |
 | --- | --- | --- |

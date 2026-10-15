@@ -40,7 +40,8 @@ What the contract documents: the 400, 401, 403, 404, 409 and 429 responses of ea
 them ([ADR 0004](adr/0004-error-status-codes.md)). The 400 body is one shared schema (`Error400Response`, from
 `config/api_errors.py`), because the package's default, one schema per operation and field, grows a generated client by
 dozens of classes per endpoint. Add a status code to `DRF_STANDARDIZED_ERRORS["ALLOWED_ERROR_STATUS_CODES"]` (and its
-enum to `ENUM_NAME_OVERRIDES`) when a project wants it documented too; `409` is added with `feat/api-foundation`.
+enum to `ENUM_NAME_OVERRIDES`) when a project wants it documented on every operation. `409` is not in that list: an
+operation that can conflict declares it with `CONFLICT_RESPONSE` in `@extend_schema`, so reads do not claim it.
 
 - **A client acts on the `code`.** It refreshes the access token only on a `401` with the code `token_expired`; every other
   `401` code is final for that request, so a failed sign-in cannot loop.
