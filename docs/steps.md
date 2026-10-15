@@ -265,57 +265,127 @@ General, Actions and Advanced Security settings were applied in section 1. Full 
 
 ## 7. Decisions to settle before the API (with the owner)
 
-These are listed as open in the project notes; settle each one before the endpoint that depends on it.
+Each decision has a record in [`adr/`](adr/README.md). Settle the open ones before the endpoint that depends on them.
 
-- [ ] Wire format of money (proposal: decimal string next to a currency code, stored as integer minor units)
-- [ ] Token and auth scheme (session, token, JWT, ...)
-- [ ] Who owns the salary calculation: server or client
-- [ ] Push notification provider wiring (FCM device tokens)
-- [ ] Error status codes to document beyond the default 400, 401, 403, 404 and 429, for example `409` for a conflict
-  (`DRF_STANDARDIZED_ERRORS["ALLOWED_ERROR_STATUS_CODES"]`)
-- [ ] Pagination style per list
-- [ ] Django app split (suggested: `users`, `ledger`, `salary`, `debts`, `reports`, `preferences`, `notifications`)
-- [ ] Hosting target for staging and production (needed only for the deployment step, section 11)
+- [x] Wire format of money: a decimal string next to a currency code, chosen by the Flutter developer,
+  [ADR 0008](adr/0008-money-on-the-wire.md)
+- [x] Token and auth scheme: a short-lived JWT access token and a rotating refresh token with a 30 second replay window,
+  an `HttpOnly` cookie on the web and a session check on every request,
+  [ADR 0006](adr/0006-authentication-tokens.md)
+- [x] Sessions and device records, with their retention and privacy list,
+  [ADR 0009](adr/0009-sessions-and-devices.md)
+- [x] Who owns the salary calculation: the server, [ADR 0007](adr/0007-salary-calculation-on-the-server.md)
+- [x] Error status codes and the initial error-code registry, with `Retry-After`,
+  [ADR 0004](adr/0004-error-status-codes.md)
+- [x] Pagination: one keyset cursor class for every list, with filters and day totals,
+  [ADR 0003](adr/0003-cursor-pagination.md)
+- [x] Django app split and model conventions, [ADR 0005](adr/0005-apps-and-model-conventions.md)
+- [x] Open questions answered with the Flutter developer: the balance rule for fixed items, built-in category keys, the
+  `today` parameter, the replay window, day totals, the session fields, the email change, and the user's `time_zone` and
+  `language` ([`api-fields.md`](api-fields.md))
+- [ ] The web cookie needs a shared domain: the developer agrees in principle and waits for the owner's choice of domain
+  (sections 9 and 12)
+- [ ] Push notification provider wiring (FCM device tokens): later, with the `notifications` feature
+- [ ] Staging hosting and email delivery: decided in stage 2 (section 9). Production hosting and the shared domain of the
+  web app and the API: later (section 12)
 
-## 8. Project foundations (Container, one topic branch per item)
+## 8. Stage 1: the auth layer (one topic branch per step)
 
-Each item is its own branch and pull request. API work is contract-first: see [`api-workflow.md`](api-workflow.md) and
-[`api-conventions.md`](api-conventions.md).
+Only authentication comes first: register, verify, sign in, refresh, sign out and everything around them. Each step is its
+own branch and pull request, and API work is contract-first: agree the request and response shapes with the Flutter
+developer in a request issue, implement with tests (including a test that another user cannot reach the data, where it
+applies), regenerate `openapi/schema.yaml`, and open the pull request with the `api-change` label. The shapes are fixed in
+[`api-fields.md`](api-fields.md), [`api-conventions.md`](api-conventions.md) and the records in [`adr/`](adr/README.md);
+the process is in [`api-workflow.md`](api-workflow.md).
 
-- [ ] `feat/api-foundation`: `/api/v1/` routing, the one pagination class, the shared error body (`{type, errors[]}`,
-  see `api-conventions.md`), default permissions (authenticated, every query scoped to `request.user`)
-- [ ] `feat/money-core`: money value type (integer minor units, currency table, half-up rounding, cross-currency error)
-  with unit tests
-- [ ] Test foundation: a per-user isolation test helper (factory-boy is set up, with `UserFactory`)
-- [ ] First `openapi/schema.yaml` generated and committed on a topic branch with the first endpoint
-  (`bash scripts/schema.sh generate`). This switches on the three API CI gates (schema current, style, breaking
-  changes) and makes every release carry the schema as the `openapi.yaml` asset.
-- [ ] `.github/CODEOWNERS`: add the client owner next to `/openapi/` and `/.spectral.yaml`
-- [ ] `docs/` extended where a decision changed a convention
+- [ ] **8.1 `feat/api-foundation`**: `/api/v1/` routing; the shared error handling with `409` documented, `Retry-After` on
+  `429` and the error-code registry (ADR 0004); default permissions (authenticated, every query scoped to
+  `request.user`); the bearer security scheme in the schema; a per-user isolation test helper;
+  `.github/CODEOWNERS` gets the client owner next to `/openapi/` and `/.spectral.yaml`
+- [ ] **8.2 `feat/auth-register-signin`**: the `Session` model and the `device` object (ADR 0009); register, verify email
+  (this call creates the session) and resend the code; sign in; refresh with the 30 second replay window; sign out; the
+  session check on every request; throttling and the sign-in lock with `Retry-After`; hashed 4-digit codes, sent through
+  Mailpit in development; Argon2id password hashing; `language` and `time_zone` stored (where they live is decided in this
+  step; the proposal is a settings row of `preferences`, created with the user); the signing key, lifetimes and replay
+  window in `.env.example` and `docker-compose.yml`. **The first `openapi/schema.yaml` is generated and committed here**
+  (`bash scripts/schema.sh generate`), which switches on the three API CI gates (schema current, style, breaking changes)
+  and makes the draft release carry the schema as `openapi.yaml`. The Flutter developer can start on the register and
+  sign-in screens from this contract
+- [ ] **8.3 `feat/auth-account`**: profile (read, edit the name), change password, password reset (request, verify, set),
+  email change (request, confirm, cancel) and delete account
+- [ ] **8.4 `feat/auth-sessions`**: the keyset cursor class (`config/pagination.py`, ADR 0003) with its tests; list the
+  sessions, end one, end all others; the purge task for ended sessions (Celery Beat, 90 days); the new-device email
+- [ ] **8.5 `feat/auth-web-cookie`**: the web form of the tokens: the `HttpOnly` cookie, `X-Client: web`, the `Origin`
+  check, and CORS with credentials for an explicit list of origins (ADR 0006), tested on `localhost`. A shared domain is
+  needed only when the web build is tested against staging
+- [ ] `docs/` updated wherever a step changed a convention
+- [ ] Stage 1 is done when the five steps are merged, the schema covers every auth operation, and the Flutter developer
+  has the screens working against it locally
 
-## 9. Features (roadmap)
+## 9. Stage 2: staging deployment and the first test in the Flutter app
 
-Order is a proposal. For each: agree the request/response shape, implement with tests, regenerate the schema, open the
-pull request with the `api-change` label.
+`develop` is staging. Choose the simplest hosting that works for a phone and the web build; production comes later
+(section 12). Staging holds invented data only. Each choice gets a short record in [`adr/`](adr/README.md).
 
-- [ ] **users**: register with 4-digit email code, verify (signs in), sign in with lockout, sign out, profile,
-  change password, password reset (request, verify, set), delete account
-- [ ] **preferences**: default currency, pay schedule, notification preferences, push device tokens
-- [ ] **ledger**: accounts (delete refused when transactions exist), categories (built-ins read-only, custom ones),
-  transactions (category must allow the kind)
-- [ ] **salary**: salary months with history, payment mode kept per month, month comparison
-- [ ] **debts**: debts with repayments, derived `repaid`, `remaining`, `is_settled`, `progress`, status
-- [ ] **reports**: month overview, category spend, month comparison, debts report, period report
-- [ ] **CSV export and import** of transactions, debts and salary months, with skipped-row reporting
-- [ ] **notifications**: pay-day reminders through Celery Beat and the push provider
+- [ ] **9.1 Choose the staging hosting** and record it: it must run the app, PostgreSQL 18, Redis 8 and the Celery worker
+  and Beat, with a public HTTPS address, environment variables, an image pulled from the registry, deploys by image
+  digest, and a low cost
+- [ ] **9.2 Email delivery for staging**: the 4-digit codes must reach a real inbox (an SMTP provider or a sandbox inbox),
+  because Mailpit exists only in development
+- [ ] **9.3 The GitHub environment `staging`** (deployment branches: `develop`) with its own secrets and variables;
+  image publishing on (`PUBLISH_IMAGE`); an image built from `develop` (tags `staging` and `sha-<short>`)
+- [ ] **9.4 The staging deploy workflow**: runs after **CI passed** on `develop`; deploys by image digest, runs `migrate`
+  once, probes `/healthz`, and shows the deployed digest in its summary
+- [ ] **9.5 The first contract release**: check that `version` in `pyproject.toml` is the version to release, open the
+  release pull request (`develop` → `main`), check the draft `v<version>` (notes and the `openapi.yaml` asset), and
+  publish it so the Flutter developer pins that tag ([`consuming-the-api.md`](consuming-the-api.md)); or pin a commit and
+  wait, if you prefer
+- [ ] **9.6 The first test in the app**: the staging flavor points at the staging address. Run this list and record the
+  result:
+  - register, receive the code, verify, and land in the app; sign out and sign in again
+  - a wrong password, then the sign-in lock with its countdown (`Retry-After`)
+  - the access token expires after 10 minutes and the app refreshes without asking the user
+  - a lost response on refresh (airplane mode) recovers within 30 seconds
+  - password reset, change password, change email, delete account
+  - a session ended from another device shows the reason from its `session_*` code
+- [ ] Gate: start stage 3 only when the app works against staging. Fix what the test found first.
 
-## 10. Before the first release
+## 10. Stage 3: the features, one at a time (salary first)
+
+Each feature is a loop: agree the shapes in a request issue, implement with tests, regenerate the schema, open the pull
+request with the `api-change` label, merge, let staging deploy by itself, **test it in the Flutter app**, then move to the
+next. A decision a feature needs gets its record first. The order below is the owner's: salary first, then the others.
+
+- [ ] **10.1 `feat/money-core`** (before salary): `common/money.py`, the money value type (integer minor units, currency
+  table, half-up rounding, cross-currency error) with unit tests, decimal-string parsing and writing in the form of ADR
+  0008, and the shared `Amount` and `SignedAmount` serializer field
+- [ ] **10.2 salary**: salary months computed on the server (ADR 0007), addressed by `YYYY-MM` with `PUT`; fixed items
+  inline; balances per part and for the month; the history list with each result (the cursor class exists since 8.4);
+  payment mode kept per month; month comparison. The worked examples of ADR 0007 become unit tests
+- [ ] **10.3 preferences**: default currency, default payment mode, pay days and `remind_on_pay_days` (`time_zone` and
+  `language` exist since 8.2)
+- [ ] **10.4 ledger**: accounts (delete refused with `409` when transactions exist); categories (the built-in rows with
+  their keys, read-only; custom ones); transactions (the category must allow the kind; ordered `-date`, `-created_at`,
+  `-id` with the filters, through `django-filter`)
+- [ ] **10.5 debts**: debts with repayments, derived `repaid`, `remaining`, `is_settled`, `progress` and `status`, with the
+  `today` parameter
+- [ ] **10.6 reports**: month overview, day totals, category spend, month comparison, debts report and period report, with
+  the `part` filter
+- [ ] **10.7 CSV export and import** of transactions, debts and salary months, with skipped-row reporting and a lossless
+  round trip
+- [ ] **10.8 notifications**: push device tokens (one per session, removed when it ends), pay-day reminders through Celery
+  Beat, and the push provider wiring (the last open decision for this stage)
+
+## 11. Before the first production release
 
 - [ ] `pytest`, `mypy .`, `ruff check .`, `pre-commit run --all-files` and `bash scripts/schema.sh check` are clean
 - [ ] `python manage.py check --deploy` passes with production settings
 - [ ] Production image builds and answers `/healthz` (CI smoke test is green)
+- [ ] Staging has run the same build, and the Flutter app has been tested against it
 - [ ] `version` in `pyproject.toml` is the version to release (the draft release is named after it)
 - [ ] One pull request `develop` → `main`, titled `release: <summary>`, merged with a merge commit
+- [ ] The privacy policy and the Google Play Data safety form list exactly what
+  [ADR 0009](adr/0009-sessions-and-devices.md) stores about sessions and devices, with its retention
 - [ ] The draft release `v<version>` is correct: notes grouped by label and the `openapi.yaml` asset attached
 - [ ] The draft is published from the Releases page (**Publish release**; the release is then immutable) and the client
   developer is told the tag
@@ -324,23 +394,23 @@ A merge into `main` never publishes by itself: it creates or refreshes the draft
 refreshes the rolling draft "Staging", which is never published. See
 [`adr/0002-draft-releases-and-environments.md`](adr/0002-draft-releases-and-environments.md).
 
-## 11. Deployment (later, a separate branch)
+## 12. Production deployment (later, a separate branch)
 
-`develop` is staging and `main` is production. Nothing here is set up yet and the draft releases need none of it. Do it
-in this order, once the first real endpoints exist (staging first, production when a release candidate is stable).
+`main` is production. Nothing here is set up yet. It follows the staging deployment of section 9 and is done when a
+release candidate is stable.
 
-- [ ] Hosting target chosen (app, PostgreSQL, Redis, Celery worker and Beat), with separate staging and production
-  instances
-- [ ] GitHub environments created: `staging` (deployment branches: `develop`) and `production` (deployment branches:
-  `main`; a required reviewer once there is a second maintainer; administrators cannot bypass), each holding its own
-  secrets and variables
-- [ ] Image publishing on (`PUBLISH_IMAGE`), and an image built from `develop` for staging
-- [ ] Deploy workflows: staging after **CI passed** on `develop`, production on the published release or a merge into
-  `main`; deploy by image digest, run `migrate` once, probe `/healthz`
+- [ ] Production hosting chosen, with its own PostgreSQL, Redis, Celery worker and Beat, separate from staging
+- [ ] The GitHub environment `production` (deployment branches: `main`; a required reviewer once there is a second
+  maintainer; administrators cannot bypass) with its own secrets and variables
+- [ ] One registrable domain shared by the web app and the API (for example `app.<domain>` and `api.<domain>`), for staging
+  and for production, because the web refresh cookie is `SameSite=Strict` (ADR 0006); then the allowed origins and the
+  cookie settings. It is needed as soon as the web build is tested against staging
+- [ ] The production deploy workflow: on the published release or a merge into `main`; deploy by image digest, run
+  `migrate` once, probe `/healthz`
 - [ ] Secrets and production environment variables prepared (never in the repository)
-- [ ] Backups in place before production holds real financial data; staging holds invented data only
+- [ ] Backups in place before production holds real financial data
 
-## 12. Routine (every time)
+## 13. Routine (every time)
 
 - [ ] Sync before starting: fetch, fast-forward `main` and `develop`, switch to `develop`, remove merged local branches
 - [ ] Weekly: review Dependabot pull requests (they target `develop`), merge the ones you want
