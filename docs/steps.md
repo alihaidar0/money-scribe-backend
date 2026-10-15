@@ -275,6 +275,7 @@ These are listed as open in the project notes; settle each one before the endpoi
   (`DRF_STANDARDIZED_ERRORS["ALLOWED_ERROR_STATUS_CODES"]`)
 - [ ] Pagination style per list
 - [ ] Django app split (suggested: `users`, `ledger`, `salary`, `debts`, `reports`, `preferences`, `notifications`)
+- [ ] Hosting target for staging and production (needed only for the deployment step, section 11)
 
 ## 8. Project foundations (Container, one topic branch per item)
 
@@ -312,14 +313,38 @@ pull request with the `api-change` label.
 
 - [ ] `pytest`, `mypy .`, `ruff check .`, `pre-commit run --all-files` and `bash scripts/schema.sh check` are clean
 - [ ] `python manage.py check --deploy` passes with production settings
-- [ ] Secrets and production environment variables prepared (never in the repository)
 - [ ] Production image builds and answers `/healthz` (CI smoke test is green)
-- [ ] Version raised in `pyproject.toml`
+- [ ] `version` in `pyproject.toml` is the version to release (the draft release is named after it)
 - [ ] One pull request `develop` → `main`, titled `release: <summary>`, merged with a merge commit
-- [ ] GitHub Release published and the client notified of the schema at the release tag
+- [ ] The draft release `v<version>` is correct: notes grouped by label and the `openapi.yaml` asset attached
+- [ ] The draft is published from the Releases page (**Publish release**; the release is then immutable) and the client
+  developer is told the tag
 
-## 11. Routine (every time)
+A merge into `main` never publishes by itself: it creates or refreshes the draft `v<version>`. A merge into `develop`
+refreshes the rolling draft "Staging", which is never published. See
+[`adr/0002-draft-releases-and-environments.md`](adr/0002-draft-releases-and-environments.md).
+
+## 11. Deployment (later, a separate branch)
+
+`develop` is staging and `main` is production. Nothing here is set up yet and the draft releases need none of it. Do it
+in this order, once the first real endpoints exist (staging first, production when a release candidate is stable).
+
+- [ ] Hosting target chosen (app, PostgreSQL, Redis, Celery worker and Beat), with separate staging and production
+  instances
+- [ ] GitHub environments created: `staging` (deployment branches: `develop`) and `production` (deployment branches:
+  `main`; a required reviewer once there is a second maintainer; administrators cannot bypass), each holding its own
+  secrets and variables
+- [ ] Image publishing on (`PUBLISH_IMAGE`), and an image built from `develop` for staging
+- [ ] Deploy workflows: staging after **CI passed** on `develop`, production on the published release or a merge into
+  `main`; deploy by image digest, run `migrate` once, probe `/healthz`
+- [ ] Secrets and production environment variables prepared (never in the repository)
+- [ ] Backups in place before production holds real financial data; staging holds invented data only
+
+## 12. Routine (every time)
 
 - [ ] Sync before starting: fetch, fast-forward `main` and `develop`, switch to `develop`, remove merged local branches
 - [ ] Weekly: review Dependabot pull requests (they target `develop`), merge the ones you want
 - [ ] Weekly: open one `develop` → `main` release pull request when `develop` is verified
+- [ ] After a merge into `main`: check the draft release `v<version>` and publish it only when you want the release
+- [ ] When `django-celery-beat` supports Django 6.1 (its releases require `Django<6.1` today): remove the `django`
+  ignore entry in `.github/dependabot.yml` and let Dependabot propose the Django 6.1 update

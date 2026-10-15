@@ -9,8 +9,10 @@ In the commands, `OWNER/BACKEND_REPO` is the backend repository.
 
 ## What you consume
 
-Every release of the backend (`vX.Y.Z`) carries the contract as a release asset named
-**`openapi.yaml`**, identical to `openapi/schema.yaml` at that tag. The backend repository must have
+Every **published** release of the backend (`vX.Y.Z`) carries the contract as a release asset named
+**`openapi.yaml`**, identical to `openapi/schema.yaml` at that tag. The backend keeps the next release as
+a draft until its owner publishes it, and drafts, like the rolling "Staging" draft kept for `develop`, are
+visible to the backend's maintainers only. A client therefore pins a published tag, or a commit (below). The backend repository must have
 **release immutability** turned on (Settings → General → Releases): the release is then immutable, so the
 file for a tag never changes, and a client can check it with `gh release verify-asset`. Without that
 setting the contract can still be downloaded, but not verified. Use the release notes to see what changed: breaking changes carry the

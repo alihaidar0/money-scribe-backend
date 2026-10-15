@@ -54,6 +54,7 @@ the single required check is **CI passed**.
 
 - Branches, hooks, SSH keys, CI and releases: [`.github/CONTRIBUTING.md`](.github/CONTRIBUTING.md)
 - GitHub settings, Actions permissions, environments, security and rulesets: [`docs/github-setup.md`](docs/github-setup.md)
+- `develop` is staging and `main` is production. A merge into `develop` refreshes the rolling draft release "Staging"; a merge into `main` refreshes the draft `v<version>`, which the owner publishes from the Releases page ([ADR 0002](docs/adr/0002-draft-releases-and-environments.md)).
 - The dev image is pinned in `docker-compose.yml`; Dependabot proposes updates as pull requests.
 - CI builds and smoke-tests the production image on every pull request and pushes nothing. To publish it, set the repository variable `PUBLISH_IMAGE` (`ghcr` or `dockerhub`), see [`docs/github-setup.md`](docs/github-setup.md) section 3.
 

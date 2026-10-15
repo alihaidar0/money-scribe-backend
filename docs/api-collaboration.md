@@ -26,7 +26,7 @@ flowchart LR
         code["Views and serializers"] -->|"scripts/schema.sh generate"| schema[("openapi/schema.yaml<br/>the contract")]
         schema --> ci{{"CI gates<br/>schema current · style · breaking changes"}}
     end
-    ci -->|"merged to develop"| release["Tagged release"]
+    ci -->|"merged to main,<br/>owner publishes the draft"| release["Tagged release"]
     release -->|"schema pinned by version"| client["Client repository<br/>(Flutter and web)"]
     client -->|"generated typed client"| apps["Mobile and web apps"]
     apps -.->|"API request issue<br/>(a new need)"| code
@@ -144,7 +144,7 @@ Everything here is free or open source. Prices and limits change, so check the v
 | Interactive docs (Swagger UI) | a static page built from the schema | *planned*: published to GitHub Pages (free for public repositories) or Cloudflare Pages (free; works for private repositories) |
 | Postman | import `openapi/schema.yaml`; commit environment files with invented values | *planned*; the contract is in git, so nothing depends on a shared workspace. Postman's free-plan limits have changed repeatedly: check postman.com/pricing |
 | Test the real API against the schema | Schemathesis | optional; recommended once real endpoints exist |
-| The contract for the client | `openapi.yaml`, attached to every project release | **available**: see [`consuming-the-api.md`](consuming-the-api.md) |
+| The contract for the client | `openapi.yaml`, attached to every published project release (drafts are visible to maintainers only) | **available**: see [`consuming-the-api.md`](consuming-the-api.md) |
 | Client code | `swagger_parser` for Flutter; `openapi-typescript` and `openapi-fetch` (or Orval) for the web | **available**: the same guide; try the one you prefer on your real schema first |
 | A shared staging backend | run the backend locally with Docker (free), or a free tier such as Render with a Neon database (cold starts; check the current limits) | optional |
 
