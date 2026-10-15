@@ -15,6 +15,7 @@ Apps follow the entity groups of the client's domain. An app is created when its
 | App | Holds | Depends on |
 | --- | --- | --- |
 | `users` | the user, email codes, sessions with their device records (ADR 0001, 0006, 0009) | none |
+| `outbox` | the database email backend, the stored emails, their admin and purge task (ADR 0010) | none |
 | `ledger` | accounts, categories, transactions | `users`, `common` |
 | `salary` | salary months and the calculation (ADR 0007) | `users`, `common` |
 | `debts` | debts and repayments | `users`, `common` |
