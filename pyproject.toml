@@ -1,0 +1,80 @@
+[project]
+name = "money-scribe-backend"
+version = "0.1.0"
+requires-python = ">=3.14"
+dependencies = [
+    "celery>=5.6.3",
+    "dj-database-url>=3.1.2",
+    "django>=6.0.9",
+    "django-celery-beat>=2.9.0",
+    "django-cors-headers>=4.9.0",
+    "djangorestframework>=3.18.3",
+    "drf-spectacular>=0.30.0",
+    "drf-standardized-errors[openapi]>=0.16.0",
+    "gunicorn>=26.2.0",
+    "psycopg[binary,pool]>=3.3.6",
+    "redis>=8.1.0",
+    "whitenoise>=6.12.0",
+]
+
+[dependency-groups]
+dev = [
+    "celery-types>=0.26.0",
+    "django-stubs>=6.1.2",
+    "factory-boy>=3.3.3",
+    "faker>=40.43.0",
+    "flower>=2.2.0",
+    "ipython>=9.17.1",
+    "mypy>=2.4.0",
+    "pip-audit>=2.10.1",
+    "pytest>=9.1.1",
+    "pytest-cov>=7.1.0",
+    "pytest-django>=4.14.0",
+    "ruff>=0.17.0",
+]
+
+[tool.ruff]
+target-version = "py314"
+extend-exclude = ["**/migrations/**"]
+
+[tool.ruff.lint]
+# pycodestyle, pyflakes, isort, bugbear, pyupgrade, comprehensions, simplify,
+# flake8-django, bandit, pathlib, ruff-specific.
+select = ["E", "W", "F", "I", "B", "UP", "C4", "SIM", "DJ", "S", "PTH", "RUF"]
+ignore = ["E501"]  # line length is the formatter's job
+
+[tool.ruff.lint.per-file-ignores]
+"config/settings/*.py" = ["F403", "F405", "S105"]  # star imports; startproject's dev-only key
+"**/tests/**" = ["S101", "S106"]                  # assert, test passwords
+"**/test_*.py" = ["S101", "S106"]
+
+[tool.mypy]
+# No python_version: mypy checks against the interpreter it runs in (the project's own),
+# which follows the newest Python minor Django supports; nothing to keep in sync.
+strict = true
+plugins = ["mypy_django_plugin.main"]
+exclude = ['^\.venv/', '/migrations/']
+
+# django-stubs resolves the whole app registry for AUTH_USER_MODEL (users.User);
+# django-celery-beat and Django REST framework ship no type stubs / py.typed marker, so
+# they're untyped either way.
+[[tool.mypy.overrides]]
+module = ["django_celery_beat.*", "rest_framework.*"]
+ignore_missing_imports = true
+
+[tool.django-stubs]
+django_settings_module = "config.settings.development"
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "config.settings.testing"
+# --ds wins over the DJANGO_SETTINGS_MODULE variable the dev container exports
+addopts = "--strict-markers --ds=config.settings.testing"
+
+[tool.coverage.run]
+branch = true
+source = ["."]
+omit = [".venv/*", "*/migrations/*", "*/tests/*", "manage.py", "config/asgi.py", "config/wsgi.py"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
