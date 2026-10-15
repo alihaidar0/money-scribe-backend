@@ -20,7 +20,7 @@ feat/*  fix/*  docs/*  ci/*  chore/*  deps/*
        main    ← stable branch, protected: pull requests only
         │  push (the merge)
         ▼
-  release.yml (GitHub Release) + docker.yml (production image, only if PUBLISH_IMAGE is set)
+  release.yml (draft GitHub Release) + docker.yml (production image, only if PUBLISH_IMAGE is set)
 ```
 
 - Nobody pushes to `develop` or `main` directly (rulesets enforce it; the
@@ -30,6 +30,10 @@ feat/*  fix/*  docs/*  ci/*  chore/*  deps/*
 - When `develop` is verified, one pull request `develop` → `main` promotes it.
 - Both branches use **merge commits** (no squash, no rebase). Squashing into
   `main` rewrites `develop`'s commits and makes the next promotion conflict.
+- `develop` is the staging line and `main` the production line. A push to `develop`
+  refreshes the rolling draft release "Staging"; a push to `main` refreshes the draft
+  `v<version>`. Nothing is published automatically: you publish the production draft
+  yourself (section 8).
 
 A pull request into `main` from any branch other than `develop` fails the
 **Verify source branch** job. GitHub rulesets cannot restrict a pull request's
@@ -86,7 +90,7 @@ explicitly:
 | Workflow | Extra permission | Why |
 | --- | --- | --- |
 | `bootstrap-main.yml` | `contents: write` | create the `main` branch |
-| `release.yml` | `contents: write` (+ `actions: write` in a project) | publish the release; start `docker.yml` on the new tag |
+| `release.yml` | `contents: write` | template: publish the calendar release; project: create and refresh the draft releases and attach the API contract |
 | `labels.yml` | `issues: write` | create the labels |
 | `pr-labels.yml` | `pull-requests: write` | add labels from the PR title |
 | `docker.yml` | `id-token: write`, `packages: write`, `security-events: write` | keyless signing; push to ghcr.io (only when `PUBLISH_IMAGE=ghcr`); upload the scan |
@@ -135,6 +139,11 @@ stays readable from any branch):
 | --- | --- | --- | --- |
 | `production` | Selected branches → `main` only | Required reviewers (you or the team, once there is a second maintainer); Prevent self-review; Allow administrators to bypass **off** | the target's credentials and non-secret settings |
 | `staging` (optional) | Selected branches → `develop` | none | the staging credentials |
+
+The environment names mirror the branches: `develop` is staging and `main` is production. Deployment
+itself (the hosting target, the environments with their secrets and the deploy workflows) is a separate,
+later step that is deliberately not set up yet; the draft releases need none of it. The decision and
+its order are recorded in [`adr/0002-draft-releases-and-environments.md`](adr/0002-draft-releases-and-environments.md).
 
 Never commit a key, token or `.env` value; any file in the repository is
 readable by everyone who can read the repository.
@@ -280,8 +289,10 @@ each project that opts in (section 3).
    CodeQL (section 4).
 6. `image-contract.yml`, the template release job and the template guard are
    inert in a project (they only run where the repository is a template).
-   Delete them if you like. The `app-release` job of `release.yml` publishes a
-   GitHub Release for the `pyproject.toml` version when `main` changes.
+   Delete them if you like. The `app-draft` job of `release.yml` keeps two draft
+   releases current: the rolling "Staging" draft on every merge into `develop`, and
+   the `v<version>` draft (the `pyproject.toml` version) on every merge into `main`.
+   You publish the second one yourself.
 7. Optional: set `PUBLISH_IMAGE` (section 3) if the project should push its
    production image to a registry, and add a deployment workflow, an
    environment and its secrets once you know where the project runs.
@@ -329,12 +340,24 @@ git push -u origin fix/example-topic
 Every week: review the Dependabot pull requests (they target `develop`), merge
 the ones you want, then open **one** pull request `develop` → `main`
 (title `release: <summary>`) and merge it with a merge commit. That push runs
-**Docker** (publishes the production image) and **Release**. In a project,
-**Release** publishes a GitHub Release for the `version` in `pyproject.toml`
-(raise it in the release pull request, otherwise nothing is published) with
-notes grouped by pull request label. In the template repository it publishes a
-calendar-versioned release (`vYYYY.MM.DD`); a promotion that only changes
-documentation produces none.
+**Docker** (publishes the production image, when `PUBLISH_IMAGE` is set) and **Release**.
+
+In a project, **Release** never publishes by itself. It keeps two drafts, which only
+people with write access can see:
+
+- A merge into `develop` replaces the notes and files of the pre-release draft
+  **Staging** (tag `staging`). Never publish it.
+- A merge into `main` creates or refreshes the draft `v<version>` for the `version` in
+  `pyproject.toml`, with notes grouped by pull request label and the API contract attached
+  as `openapi.yaml`. When the version is final, open the draft on the Releases page and
+  click **Publish release**. That creates the tag `v<version>` (which starts **Docker** for
+  the `X.Y.Z` and `X.Y` image tags when publishing is on) and makes the release immutable:
+  raise the version to prepare the next one. Until then, every merge into `main` keeps
+  replacing the draft's files.
+
+In the template repository **Release** publishes a calendar-versioned release
+(`vYYYY.MM.DD`) on a merge into `main`; a promotion that only changes documentation
+produces none.
 
 Once a week **Image contract** (template repository only) compares the
 template with the `django-devcontainer` image: the PostgreSQL and Python
