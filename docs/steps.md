@@ -280,6 +280,8 @@ Each decision has a record in [`adr/`](adr/README.md). Settle the open ones befo
 - [x] Pagination: one keyset cursor class for every list, with filters and day totals,
   [ADR 0003](adr/0003-cursor-pagination.md)
 - [x] Django app split and model conventions, [ADR 0005](adr/0005-apps-and-model-conventions.md)
+- [x] The admin panel and a database email outbox for development and staging, with real email delivery and the admin
+  hardening left for the production step, [ADR 0010](adr/0010-admin-panel-and-email-outbox.md)
 - [x] Open questions answered with the Flutter developer: the balance rule for fixed items, built-in category keys, the
   `today` parameter, the replay window, day totals, the session fields, the email change, and the user's `time_zone` and
   `language` ([`api-fields.md`](api-fields.md))
@@ -301,7 +303,10 @@ the process is in [`api-workflow.md`](api-workflow.md).
 - [ ] **8.1 `feat/api-foundation`**: `/api/v1/` routing; the shared error handling with `409` documented, `Retry-After` on
   `429` and the error-code registry (ADR 0004); default permissions (authenticated, every query scoped to
   `request.user`); the bearer security scheme in the schema; a per-user isolation test helper;
-  `.github/CODEOWNERS` gets the client owner next to `/openapi/` and `/.spectral.yaml`
+  `.github/CODEOWNERS` gets the client owner next to `/openapi/` and `/.spectral.yaml`; **the admin panel**
+  (`ADMIN_URL`, staff only, the users admin ready, superuser creation with email and name); and **the email outbox**
+  (the `outbox` app: a database email backend, a read-only admin to copy a 4-digit code from, a daily purge, a deploy
+  check that fails if production uses it), with tests (ADR 0010)
 - [ ] **8.2 `feat/auth-register-signin`**: the `Session` model and the `device` object (ADR 0009); register, verify email
   (this call creates the session) and resend the code; sign in; refresh with the 30 second replay window; sign out; the
   session check on every request; throttling and the sign-in lock with `Retry-After`; hashed 4-digit codes, sent through
@@ -330,8 +335,9 @@ the process is in [`api-workflow.md`](api-workflow.md).
 - [ ] **9.1 Choose the staging hosting** and record it: it must run the app, PostgreSQL 18, Redis 8 and the Celery worker
   and Beat, with a public HTTPS address, environment variables, an image pulled from the registry, deploys by image
   digest, and a low cost
-- [ ] **9.2 Email delivery for staging**: the 4-digit codes must reach a real inbox (an SMTP provider or a sandbox inbox),
-  because Mailpit exists only in development
+- [ ] **9.2 Codes on staging through the outbox**: staging sends no real email yet. It uses the email outbox
+  (`EMAIL_BACKEND` set to the database backend), and you copy each 4-digit code from the emails in the admin panel at the
+  staging `ADMIN_URL` (ADR 0010). Real delivery is a separate step before production (section 12)
 - [ ] **9.3 The GitHub environment `staging`** (deployment branches: `develop`) with its own secrets and variables;
   image publishing on (`PUBLISH_IMAGE`); an image built from `develop` (tags `staging` and `sha-<short>`)
 - [ ] **9.4 The staging deploy workflow**: runs after **CI passed** on `develop`; deploys by image digest, runs `migrate`
@@ -342,7 +348,7 @@ the process is in [`api-workflow.md`](api-workflow.md).
   wait, if you prefer
 - [ ] **9.6 The first test in the app**: the staging flavor points at the staging address. Run this list and record the
   result:
-  - register, receive the code, verify, and land in the app; sign out and sign in again
+  - register, copy the code from the outbox in the admin panel, verify, and land in the app; sign out and sign in again
   - a wrong password, then the sign-in lock with its countdown (`Retry-After`)
   - the access token expires after 10 minutes and the app refreshes without asking the user
   - a lost response on refresh (airplane mode) recovers within 30 seconds
@@ -407,6 +413,11 @@ release candidate is stable.
   cookie settings. It is needed as soon as the web build is tested against staging
 - [ ] The production deploy workflow: on the published release or a merge into `main`; deploy by image digest, run
   `migrate` once, probe `/healthz`
+- [ ] Real email delivery: an SMTP provider behind the same `EMAIL_BACKEND` setting, with the sending domain
+  authenticated (SPF, DKIM and DMARC) so that mail is not marked as spam; production must not use the outbox
+  ([ADR 0010](adr/0010-admin-panel-and-email-outbox.md))
+- [ ] The admin panel hardened: login throttling or a network restriction (an allow-list or a private network at the
+  proxy), two-factor sign-in with a one-time code from an authenticator app, and a non-default `ADMIN_URL`
 - [ ] Secrets and production environment variables prepared (never in the repository)
 - [ ] Backups in place before production holds real financial data
 

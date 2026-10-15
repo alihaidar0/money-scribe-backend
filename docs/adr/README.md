@@ -14,6 +14,7 @@ A decision that changes gets a new record that supersedes the old one; the old f
 | [0007](0007-salary-calculation-on-the-server.md) | The server owns the salary calculation, its months and fixed items | accepted |
 | [0008](0008-money-on-the-wire.md) | Money on the wire: decimal string and currency | accepted |
 | [0009](0009-sessions-and-devices.md) | Session and device records, retention and privacy | accepted |
+| [0010](0010-admin-panel-and-email-outbox.md) | The admin panel and a database email outbox for development and staging | accepted |
 
 The fields and limits of each resource are in [`../api-fields.md`](../api-fields.md).
 

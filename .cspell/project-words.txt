@@ -27,6 +27,8 @@ usernamehw
 Argon
 autonumber
 cffi
+DKIM
+DMARC
 errorlens
 ghaction
 healthz
