@@ -300,13 +300,18 @@ applies), regenerate `openapi/schema.yaml`, and open the pull request with the `
 [`api-fields.md`](api-fields.md), [`api-conventions.md`](api-conventions.md) and the records in [`adr/`](adr/README.md);
 the process is in [`api-workflow.md`](api-workflow.md).
 
-- [ ] **8.1 `feat/api-foundation`**: `/api/v1/` routing; the shared error handling with `409` documented, `Retry-After` on
-  `429` and the error-code registry (ADR 0004); default permissions (authenticated, every query scoped to
-  `request.user`); the bearer security scheme in the schema; a per-user isolation test helper;
-  `.github/CODEOWNERS` gets the client owner next to `/openapi/` and `/.spectral.yaml`; **the admin panel**
+The Flutter developer tests only against staging, so **stage 2 starts right after step 8.2**: steps 8.3 to 8.5 are built
+while staging already runs, and each one deploys to staging by itself and is tested as it lands.
+
+- [ ] **8.1 `feat/api-foundation`**: `/api/v1/` routing; the shared error handling (the error-code registry, `409` through
+  `config.exceptions.conflict` and a per-operation `CONFLICT_RESPONSE`, `Retry-After` on `429`; ADR 0004); default
+  permissions (authenticated, JSON only, every query scoped to `request.user` through `OwnerScopedMixin`); the bearer
+  security scheme in the schema; the root test fixtures and the per-user isolation helper; **the admin panel**
   (`ADMIN_URL`, staff only, the users admin ready, superuser creation with email and name); and **the email outbox**
-  (the `outbox` app: a database email backend, a read-only admin to copy a 4-digit code from, a daily purge, a deploy
-  check that fails if production uses it), with tests (ADR 0010)
+  (the `outbox` app: a database email backend, a read-only admin to copy a 4-digit code from, a daily purge, and the
+  `APP_ENVIRONMENT` checks that refuse it in production), with tests (ADR 0010)
+- [x] `.github/CODEOWNERS` needs no change: the client repository's owner, `@alihaidar0`, is already listed for
+  `/openapi/` and `/.spectral.yaml`. Add another developer's handle to those two lines when one joins
 - [ ] **8.2 `feat/auth-register-signin`**: the `Session` model and the `device` object (ADR 0009); register, verify email
   (this call creates the session) and resend the code; sign in; refresh with the 30 second replay window; sign out; the
   session check on every request; throttling and the sign-in lock with `Retry-After`; hashed 4-digit codes, sent through
@@ -325,12 +330,13 @@ the process is in [`api-workflow.md`](api-workflow.md).
   needed only when the web build is tested against staging
 - [ ] `docs/` updated wherever a step changed a convention
 - [ ] Stage 1 is done when the five steps are merged, the schema covers every auth operation, and the Flutter developer
-  has the screens working against it locally
+  has the screens working against staging
 
 ## 9. Stage 2: staging deployment and the first test in the Flutter app
 
-`develop` is staging. Choose the simplest hosting that works for a phone and the web build; production comes later
-(section 12). Staging holds invented data only. Each choice gets a short record in [`adr/`](adr/README.md).
+`develop` is staging. Start it right after step 8.2, so the first test in the app happens early; steps 8.3 to 8.5 are then
+built while staging already runs. Choose the simplest hosting that works for a phone and the web build; production comes
+later (section 12). Staging holds invented data only. Each choice gets a short record in [`adr/`](adr/README.md).
 
 - [ ] **9.1 Choose the staging hosting** and record it: it must run the app, PostgreSQL 18, Redis 8 and the Celery worker
   and Beat, with a public HTTPS address, environment variables, an image pulled from the registry, deploys by image
@@ -352,8 +358,8 @@ the process is in [`api-workflow.md`](api-workflow.md).
   - a wrong password, then the sign-in lock with its countdown (`Retry-After`)
   - the access token expires after 10 minutes and the app refreshes without asking the user
   - a lost response on refresh (airplane mode) recovers within 30 seconds
-  - password reset, change password, change email, delete account
-  - a session ended from another device shows the reason from its `session_*` code
+  - password reset, change password, change email, delete account (once step 8.3 is deployed)
+  - a session ended from another device shows the reason from its `session_*` code (once step 8.4 is deployed)
 - [ ] Gate: start stage 3 only when the app works against staging. Fix what the test found first.
 
 ## 10. Stage 3: the features, one at a time (salary first)
