@@ -58,13 +58,13 @@ Apply these repository settings now, before the first clone (full tables and the
   - [x] Workflow permissions: **read repository contents and packages**; allow GitHub Actions to create and approve
     pull requests off
   - [x] Runners: GitHub-hosted only
-- [ ] Settings → Advanced Security:
+- [x] Settings → Advanced Security:
   - [x] Dependency graph, Dependabot alerts, Dependabot malware alerts, Dependabot security updates and grouped
     security updates on
   - [x] Private vulnerability reporting **on**
   - [x] Code scanning → CodeQL default setup, query suite **Default**, language **Actions** (Python is added in
     section 6)
-  - [ ] Secret scanning, push protection (**on**) and validity checks on
+  - [x] Secret scanning, push protection (**on**) and validity checks on
 
 ## 2. Clone and open in the container
 
@@ -87,37 +87,39 @@ Apply these repository settings now, before the first clone (full tables and the
 
 ## 3. Create the Django project (Container)
 
-- [ ] Decide the `User` fields now, before the first migration (email sign-in, display name); see 3.2
+- [x] Decide the `User` fields now, before the first migration: the client's spec is recorded in
+  [`adr/0001-user-model.md`](adr/0001-user-model.md); see 3.2
 
 ### 3.1 The first five commands
 
-- [ ] 1. Initialise uv
+- [x] 1. Initialise uv
 
   ```bash
   uv init --bare
   ```
 
-- [ ] 2. Production dependencies
+- [x] 2. Production dependencies
 
   ```bash
   uv add django djangorestframework "psycopg[binary,pool]" dj-database-url \
-         redis celery django-celery-beat gunicorn whitenoise drf-spectacular
+         redis celery django-celery-beat gunicorn whitenoise drf-spectacular django-cors-headers \
+         "drf-standardized-errors[openapi]"
   ```
 
-- [ ] 3. Dev and test dependencies
+- [x] 3. Dev and test dependencies
 
   ```bash
   uv add --dev pytest pytest-django pytest-cov factory-boy faker \
                mypy ruff django-stubs celery-types flower pip-audit ipython
   ```
 
-- [ ] 4. Scaffold Django (settings split, custom `users.User`, Celery, `/healthz`, tool config)
+- [x] 4. Scaffold Django (settings split, custom `users.User`, Celery, `/healthz`, tool config)
 
   ```bash
   bash scripts/init-django.sh
   ```
 
-- [ ] 5. Install the git hooks (pre-commit, commit-msg, pre-push; the container already installs them on creation, so
+- [x] 5. Install the git hooks (pre-commit, commit-msg, pre-push; the container already installs them on creation, so
   repeating it is harmless)
 
   ```bash
@@ -130,8 +132,9 @@ Command 4 already generated `users/migrations/0001_initial.py`. Swapping the use
 fields first and regenerate that one migration, before command 6 runs `migrate`. Fields added after command 6 need
 no regeneration; they are a normal follow-up migration.
 
-- [ ] Edit `users/models.py` (for example email as the sign-in field, `name`)
-- [ ] Regenerate the first migration:
+- [x] Edit `users/models.py`, `users/managers.py`, `users/admin.py`, `users/validators.py` and the password validators
+  in `config/settings/base.py` to match the spec
+- [x] Regenerate the first migration:
 
   ```bash
   rm users/migrations/0001_initial.py
@@ -157,7 +160,7 @@ Open a second terminal in the container (the first one runs the server).
 
 - [ ] `curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8000/healthz` prints `200`
 - [ ] `pmsu` creates a superuser; sign in at <http://localhost:8000/admin/>
-- [ ] `pytest` runs (exit 5, "no tests ran", is normal on a new project)
+- [ ] `pytest` passes (the user model tests; on a project with no tests, exit 5 "no tests ran" is normal)
 - [ ] `mypy .` prints `Success: no issues found`
 - [ ] `ruff check . && ruff format --check .` pass
 - [ ] `pre-commit run --all-files` passes every hook
@@ -183,13 +186,13 @@ What you should see:
 
 ## 4. Freeze the toolchain and write the README (Container)
 
-- [ ] Pin the dev image to an exact build (changes only `docker-compose.yml`):
+- [x] Pin the dev image to an exact build (changes only `docker-compose.yml`):
 
   ```bash
   bash scripts/pin-image.sh
   ```
 
-- [ ] Replace the template guide with this project's README:
+- [x] Replace the template guide with this project's README:
 
   ```bash
   bash scripts/init-readme.sh --description "Django REST backend for Money Scribe, a personal finance tracker."
@@ -203,28 +206,34 @@ What you should see:
 `develop` and `main` are protected, so the first commit goes on a topic branch. Stage explicit paths, never `git add -A`.
 
 - [ ] Review what changed: `git status --short`
-- [ ] Branch, identity check, stage, commit, push:
+- [ ] Branch, identity check, stage, commit, push (three logical commits):
 
   ```bash
   git switch develop && git pull --ff-only origin develop
-  git switch -c chore/initial-setup
+  git switch -c feat/initial-django-project
 
   git config user.name
   git config user.email
   git config --show-origin --get user.email
 
-  git add pyproject.toml uv.lock manage.py config users README.md docker-compose.yml \
-          .github/dependabot.yml docs/steps.md
+  git add docker-compose.yml
+  git commit -m "chore: pin the dev image"
+
+  git add README.md
+  git commit -m "docs: replace the template guide with the project README"
+
+  git add pyproject.toml uv.lock manage.py config users .github/dependabot.yml \
+          docs/adr/0001-user-model.md docs/steps.md
   git status --short
   git diff --cached --stat
+  git commit -m "feat: add Django project with an email-based user model"
 
-  git commit -m "chore: initial Django project"
-  git push -u origin chore/initial-setup
+  git push -u origin feat/initial-django-project
   ```
 
   If the commit stops because a hook fixed files, run `git add` for those paths again and commit again.
 
-- [ ] Pull request `chore/initial-setup` → `develop` opened (title in Conventional Commits form)
+- [ ] Pull request `feat/initial-django-project` → `develop` opened (title in Conventional Commits form)
 - [ ] **CI passed** is green (this is the first time the check exists)
 - [ ] Merged with **Create a merge commit**
 - [ ] Local clean-up after the merge: switch to `develop`, `git pull --ff-only origin develop`, delete the topic branch
