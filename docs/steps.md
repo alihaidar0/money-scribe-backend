@@ -271,7 +271,8 @@ These are listed as open in the project notes; settle each one before the endpoi
 - [ ] Token and auth scheme (session, token, JWT, ...)
 - [ ] Who owns the salary calculation: server or client
 - [ ] Push notification provider wiring (FCM device tokens)
-- [ ] Error `type` URIs for the RFC 9457 error body
+- [ ] Error status codes to document beyond the default 400, 401, 403, 404 and 429, for example `409` for a conflict
+  (`DRF_STANDARDIZED_ERRORS["ALLOWED_ERROR_STATUS_CODES"]`)
 - [ ] Pagination style per list
 - [ ] Django app split (suggested: `users`, `ledger`, `salary`, `debts`, `reports`, `preferences`, `notifications`)
 
@@ -280,11 +281,11 @@ These are listed as open in the project notes; settle each one before the endpoi
 Each item is its own branch and pull request. API work is contract-first: see [`api-workflow.md`](api-workflow.md) and
 [`api-conventions.md`](api-conventions.md).
 
-- [ ] `feat/api-foundation`: `/api/v1/` routing, the one pagination class, the RFC 9457 error handler, default
-  permissions (authenticated, every query scoped to `request.user`)
+- [ ] `feat/api-foundation`: `/api/v1/` routing, the one pagination class, the shared error body (`{type, errors[]}`,
+  see `api-conventions.md`), default permissions (authenticated, every query scoped to `request.user`)
 - [ ] `feat/money-core`: money value type (integer minor units, currency table, half-up rounding, cross-currency error)
   with unit tests
-- [ ] Test foundation: factory-boy factories, a per-user isolation test helper
+- [ ] Test foundation: a per-user isolation test helper (factory-boy is set up, with `UserFactory`)
 - [ ] First `openapi/schema.yaml` generated and committed on a topic branch with the first endpoint
   (`bash scripts/schema.sh generate`). This switches on the three API CI gates (schema current, style, breaking
   changes) and makes every release carry the schema as the `openapi.yaml` asset.
