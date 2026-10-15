@@ -45,6 +45,7 @@ ignore = ["E501"]  # line length is the formatter's job
 
 [tool.ruff.lint.per-file-ignores]
 "config/settings/*.py" = ["F403", "F405", "S105"]  # star imports; startproject's dev-only key
+"config/error_codes.py" = ["S105"]  # names such as TOKEN_EXPIRED are error codes, not passwords
 "**/tests/**" = ["S101", "S106"]                  # assert, test passwords
 "**/test_*.py" = ["S101", "S106"]
 

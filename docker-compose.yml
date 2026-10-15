@@ -59,6 +59,14 @@ x-dev-image: &dev-image
     CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://redis:6379/2}
     EMAIL_HOST: ${EMAIL_HOST:-mailpit}
     EMAIL_PORT: ${EMAIL_PORT:-1025}
+    # SMTP to Mailpit by default. outbox.backends.DatabaseEmailBackend saves each email to the database
+    # instead, so a code can be read in the admin; it is for development and staging only (ADR 0010).
+    EMAIL_BACKEND: ${EMAIL_BACKEND:-django.core.mail.backends.smtp.EmailBackend}
+    OUTBOX_RETENTION_HOURS: ${OUTBOX_RETENTION_HOURS:-24}
+    # Where this runs: development, staging or production. The outbox is refused in production.
+    APP_ENVIRONMENT: ${APP_ENVIRONMENT:-development}
+    # The path of the admin panel; staging and production use another one.
+    ADMIN_URL: ${ADMIN_URL:-admin}
     # First connection to github.com needs no manual "yes" prompt.
     GIT_SSH_COMMAND: ssh -o StrictHostKeyChecking=accept-new
   volumes:

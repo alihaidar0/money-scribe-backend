@@ -14,6 +14,7 @@ import os
 from pathlib import Path
 
 import dj_database_url
+from celery.schedules import crontab
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
@@ -158,7 +159,16 @@ INSTALLED_APPS += [
     "drf_standardized_errors",
     "django_celery_beat",
     "users",
+    "outbox",
 ]
+
+# Where this deployment runs: development, staging or production. Staging and production use the
+# same settings module and differ only in their environment variables, so this name is what
+# tells them apart (production.py defaults it to "production", the safe value).
+APP_ENVIRONMENT = os.environ.get("APP_ENVIRONMENT", "development")
+
+# The admin panel lives at a configurable path, so staging and production need not use /admin/.
+ADMIN_URL = os.environ.get("ADMIN_URL", "admin").strip("/") + "/"
 
 # A custom user model, in place from the first migration (users/models.py).
 # Django's own docs call swapping AUTH_USER_MODEL in later "a substantial
@@ -179,12 +189,22 @@ AUTH_USER_MODEL = "users.User"
 REST_FRAMEWORK: dict[str, object] = {
     "DEFAULT_SCHEMA_CLASS": "drf_standardized_errors.openapi.AutoSchema",
     "EXCEPTION_HANDLER": "drf_standardized_errors.handler.exception_handler",
+    # Bearer tokens only (config/authentication.py); every view needs a signed-in user unless it
+    # opts out, so a forgotten permission fails closed.
+    "DEFAULT_AUTHENTICATION_CLASSES": ["config.authentication.BearerAuthentication"],
+    "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.IsAuthenticated"],
+    # JSON in and out: no browsable API in any environment. A view that takes files adds its parser.
+    "DEFAULT_RENDERER_CLASSES": ["rest_framework.renderers.JSONRenderer"],
+    "DEFAULT_PARSER_CLASSES": ["rest_framework.parsers.JSONParser"],
+    "TEST_REQUEST_DEFAULT_FORMAT": "json",
     # Without this every operation would document a 404 for the ?format= query parameter.
     "URL_FORMAT_OVERRIDE": None,
 }
 DRF_STANDARDIZED_ERRORS = {
     # Document only the errors a client acts on; a project that adds a code here also adds
     # its enum to ENUM_NAME_OVERRIDES below (ErrorCode<status>Enum, e.g. 500 → ServerErrorEnum).
+    # 409 is NOT listed: the package would then document it on every operation. An operation that
+    # can conflict declares it with config.api_errors.CONFLICT_RESPONSE in @extend_schema.
     "ALLOWED_ERROR_STATUS_CODES": ["400", "401", "403", "404", "429"],
     # One shared 400 schema. The package's default documents every field's error codes per
     # operation, which makes generated clients grow by dozens of classes per endpoint.
@@ -245,6 +265,13 @@ MEDIA_URL = "media/"
 
 EMAIL_HOST = os.environ.get("EMAIL_HOST", "localhost")
 EMAIL_PORT = int(os.environ.get("EMAIL_PORT", "25"))
+# SMTP unless the environment says otherwise. Development and staging can use the database outbox
+# ("outbox.backends.DatabaseEmailBackend"), where the codes are read in the admin; the outbox app
+# refuses to start in production (ADR 0010).
+EMAIL_BACKEND = os.environ.get(
+    "EMAIL_BACKEND", "django.core.mail.backends.smtp.EmailBackend"
+)
+OUTBOX_RETENTION_HOURS = int(os.environ.get("OUTBOX_RETENTION_HOURS", "24"))
 
 # Celery (config/celery.py reads every CELERY_* setting)
 CELERY_BROKER_URL = os.environ.get("CELERY_BROKER_URL", "redis://localhost:6379/1")
@@ -252,6 +279,13 @@ CELERY_RESULT_BACKEND = os.environ.get(
     "CELERY_RESULT_BACKEND", "redis://localhost:6379/2"
 )
 CELERY_TIMEZONE = TIME_ZONE
+# Scheduled tasks; the beat service syncs these into django-celery-beat's database scheduler.
+CELERY_BEAT_SCHEDULE = {
+    "outbox-purge": {
+        "task": "outbox.tasks.purge_old_emails",
+        "schedule": crontab(minute=17, hour=3),
+    },
+}
 
 # Logs go to stdout — the container platform collects them.
 LOGGING = {
