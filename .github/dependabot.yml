@@ -119,6 +119,12 @@ updates:
     versioning-strategy: "increase-if-necessary"
     allow:
       - dependency-type: "all"
+    # django-celery-beat (2.9.0, the newest) requires Django<6.1, so a Django 6.1 update cannot
+    # resolve and fails the whole grouped update. Remove this entry when django-celery-beat
+    # supports Django 6.1 (pyproject.toml and uv.lock stay on 6.0.x until then).
+    ignore:
+      - dependency-name: "django"
+        versions: [">=6.1"]
     groups:
       python-minor-patch:
         applies-to: version-updates
