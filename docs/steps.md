@@ -308,20 +308,20 @@ while staging already runs, and each one deploys to staging by itself and is tes
   permissions (authenticated, JSON only, every query scoped to `request.user` through `OwnerScopedMixin`); the bearer
   security scheme in the schema; the root test fixtures and the per-user isolation helper; **the admin panel**
   (`ADMIN_URL`, staff only, the users admin ready, superuser creation with email and name); and **the email outbox**
-  (the `outbox` app: a database email backend, a read-only admin to copy a 4-digit code from, a daily purge, and the
+  (the `outbox` app: a database email backend, a read-only admin to copy a 6-digit code from, a daily purge, and the
   `APP_ENVIRONMENT` checks that refuse it in production), with tests (ADR 0010)
 - [x] `.github/CODEOWNERS` needs no change: the client repository's owner, `@alihaidar0`, is already listed for
   `/openapi/` and `/.spectral.yaml`. Add another developer's handle to those two lines when one joins
 - [ ] **8.2 `feat/auth-register-signin`**: the `Session` model and the `device` object (ADR 0009); register, verify email
   (this call creates the session) and resend the code; sign in; refresh with the 30 second replay window; sign out; the
-  session check on every request; throttling and the sign-in lock with `Retry-After`; hashed 4-digit codes, sent through
-  Mailpit in development; Argon2id password hashing; `language` and `time_zone` stored (where they live is decided in this
-  step; the proposal is a settings row of `preferences`, created with the user); the signing key, lifetimes and replay
-  window in `.env.example` and `docker-compose.yml`. **The first `openapi/schema.yaml` is generated and committed here**
+  session check on every request; throttling and the sign-in lock with `Retry-After`; hashed 6-digit codes, sent through
+  Mailpit in development; Argon2id password hashing and the NIST password policy (15 characters, no composition rules, a breach check); a registration that reveals nothing; limits that are atomic, per client and fail closed; the daily purge of unverified accounts; `language` and `time_zone` stored on the user (ADR 0001); the
+  read-only profile (`GET /api/v1/auth/profile/`), which the app needs after a restart; the signing key, lifetimes and
+  replay window in `.env.example` and `docker-compose.yml`. **The first `openapi/schema.yaml` is generated and committed here**
   (`bash scripts/schema.sh generate`), which switches on the three API CI gates (schema current, style, breaking changes)
   and makes the draft release carry the schema as `openapi.yaml`. The Flutter developer can start on the register and
   sign-in screens from this contract
-- [ ] **8.3 `feat/auth-account`**: profile (read, edit the name), change password, password reset (request, verify, set),
+- [ ] **8.3 `feat/auth-account`**: profile (edit the name; the read is in 8.2), change password, password reset (request, verify, set),
   email change (request, confirm, cancel) and delete account
 - [ ] **8.4 `feat/auth-sessions`**: the keyset cursor class (`config/pagination.py`, ADR 0003) with its tests; list the
   sessions, end one, end all others; the purge task for ended sessions (Celery Beat, 90 days); the new-device email
@@ -342,7 +342,7 @@ later (section 12). Staging holds invented data only. Each choice gets a short r
   and Beat, with a public HTTPS address, environment variables, an image pulled from the registry, deploys by image
   digest, and a low cost
 - [ ] **9.2 Codes on staging through the outbox**: staging sends no real email yet. It uses the email outbox
-  (`EMAIL_BACKEND` set to the database backend), and you copy each 4-digit code from the emails in the admin panel at the
+  (`EMAIL_BACKEND` set to the database backend), and you copy each 6-digit code from the emails in the admin panel at the
   staging `ADMIN_URL` (ADR 0010). Real delivery is a separate step before production (section 12)
 - [ ] **9.3 The GitHub environment `staging`** (deployment branches: `develop`) with its own secrets and variables;
   image publishing on (`PUBLISH_IMAGE`); an image built from `develop` (tags `staging` and `sha-<short>`)

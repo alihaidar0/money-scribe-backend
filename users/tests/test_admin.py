@@ -50,15 +50,15 @@ def test_add_form_creates_a_user_with_a_normalized_email(staff_client: Client) -
     assert created.check_password("a-fine-passphrase-7")
 
 
-def test_add_form_rejects_a_password_without_a_digit(staff_client: Client) -> None:
+def test_add_form_rejects_a_password_that_is_too_short(staff_client: Client) -> None:
     response = staff_client.post(
         reverse("admin:users_user_add"),
         {
             "email": "weak@example.com",
             "name": "Weak Password",
             "usable_password": "true",
-            "password1": "no-digits-in-here",
-            "password2": "no-digits-in-here",
+            "password1": "only-14-chars!",
+            "password2": "only-14-chars!",
         },
     )
 

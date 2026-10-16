@@ -5,7 +5,7 @@
 
 ## Context
 
-Registering and verifying an account sends a 4-digit code by email. Real email delivery is a separate step that needs a
+Registering and verifying an account sends a 6-digit code by email. Real email delivery is a separate step that needs a
 provider and a domain, but the sign-in and registration flows have to be tested first, on a developer machine and on
 staging, by copying the code from somewhere. The codes are stored hashed (ADR 0006), so no screen can show a stored one.
 Mailpit shows emails in development, but staging has no such service.

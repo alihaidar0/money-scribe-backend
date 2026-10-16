@@ -7,7 +7,7 @@ from django.db import models
 class OutgoingEmail(models.Model):
     """An email that the database backend saved instead of sending (ADR 0010).
 
-    Used on development and staging only, so that a 4-digit code can be copied from the admin before real
+    Used on development and staging only, so that a 6-digit code can be copied from the admin before real
     email delivery exists. A row holds the message in readable form, so it lives for a day (a scheduled task
     deletes older rows) and is visible to superuser accounts only.
     """

@@ -101,3 +101,71 @@ def test_email_verification_can_be_recorded() -> None:
     user.refresh_from_db()
 
     assert user.email_verified_at is not None
+
+
+def test_a_user_defaults_to_english_and_utc() -> None:
+    user = UserFactory.create()
+
+    assert (user.language, user.time_zone) == ("en", "UTC")
+
+
+def test_the_session_id_is_time_ordered() -> None:
+    from users.models import Session
+
+    first, second = Session().id, Session().id
+
+    assert first.version == 7
+    assert first < second
+
+
+def test_an_ended_session_must_carry_its_reason_and_a_live_one_must_not() -> None:
+    from datetime import timedelta
+
+    from users.models import Session
+
+    user = UserFactory.create()
+    now = timezone.now()
+
+    def make(**fields: object) -> Session:
+        return Session.objects.create(
+            user=user,
+            device_id=uuid.uuid4(),
+            device_name="Pixel 8",
+            platform="android",
+            app_version="1",
+            expires_at=now + timedelta(days=90),
+            refresh_hash="x",
+            **fields,
+        )
+
+    make()
+    make(ended_at=now, end_reason="signed_out")
+    for bad in ({"ended_at": now}, {"end_reason": "signed_out"}):
+        with pytest.raises(IntegrityError), transaction.atomic():
+            make(**bad)
+
+
+def test_deleting_the_user_deletes_their_sessions_and_codes() -> None:
+    from datetime import timedelta
+
+    from users.models import EmailCode, Session
+
+    user = UserFactory.create()
+    now = timezone.now()
+    Session.objects.create(
+        user=user,
+        device_id=uuid.uuid4(),
+        device_name="d",
+        platform="ios",
+        app_version="1",
+        expires_at=now + timedelta(days=1),
+        refresh_hash="x",
+    )
+    EmailCode.objects.create(
+        user=user, purpose="verify_email", code_hash="h", expires_at=now
+    )
+
+    user.delete()
+
+    assert Session.objects.count() == 0
+    assert EmailCode.objects.count() == 0

@@ -33,6 +33,9 @@ template ships it with [drf-standardized-errors](https://github.com/ghazi-git/dr
 - `errors` is a list. `code` is stable and meant for programs (`required`, `blank`, `not_found`,
   `permission_denied`, `throttled`, …); `detail` is human text; `attr` is the field the error belongs to
   (dotted for nested data) or `null` when it is about the request as a whole.
+- Three optional integer members exist, each on one code only: `attempts_left` on `code_invalid` (how many wrong tries the
+  email code still allows), `min_length` on `password_too_short` and `max_length` on `password_too_long`
+  ([ADR 0004](adr/0004-error-status-codes.md)).
 - This is **not** RFC 9457 problem details. The format is the package's own; what the contract
   gives a client is that it is documented and typed.
 
@@ -114,7 +117,12 @@ token** that rotates.
   The app and the API need one registrable domain.
 - Sign-in, the email-code verification that signs a new account in, and every refresh send a `device` object
   ([ADR 0009](adr/0009-sessions-and-devices.md)); registration and password reset send none.
-- Sign-in answers `429` with `Retry-After` while the account is locked.
+- Sign-in answers `429` with `Retry-After` while the account is locked, even for the right password. A browser reads
+  `Retry-After` because the API exposes it (`Access-Control-Expose-Headers`).
+- If the limit store is down, register, resend, verify and sign-in answer `503` with the code `service_unavailable` and
+  `Retry-After`; everything that needs no limit (a refresh, sign-out, any call with an access token) keeps working.
+- Sign-out accepts the bearer access token, or the refresh token in the body when the access token has expired.
+- `GET /api/v1/auth/profile/` returns the signed-in user's `id`, `name`, `email`, `language` and `time_zone`.
 - Which events end which sessions is a table in [ADR 0006](adr/0006-authentication-tokens.md).
 
 ## Money

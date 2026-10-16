@@ -3,6 +3,7 @@ name = "money-scribe-backend"
 version = "0.1.0"
 requires-python = ">=3.14"
 dependencies = [
+    "argon2-cffi>=25.1.0",
     "celery>=5.6.3",
     "dj-database-url>=3.1.2",
     "django>=6.0.9",
@@ -13,6 +14,7 @@ dependencies = [
     "drf-standardized-errors[openapi]>=0.16.0",
     "gunicorn>=26.2.0",
     "psycopg[binary,pool]>=3.3.6",
+    "pyjwt>=2.15.1",
     "redis>=8.1.0",
     "whitenoise>=6.12.0",
 ]
@@ -46,8 +48,8 @@ ignore = ["E501"]  # line length is the formatter's job
 [tool.ruff.lint.per-file-ignores]
 "config/settings/*.py" = ["F403", "F405", "S105"]  # star imports; startproject's dev-only key
 "config/error_codes.py" = ["S105"]  # names such as TOKEN_EXPIRED are error codes, not passwords
-"**/tests/**" = ["S101", "S106"]                  # assert, test passwords
-"**/test_*.py" = ["S101", "S106"]
+"**/tests/**" = ["S101", "S105", "S106"]          # assert, test passwords and token labels
+"**/test_*.py" = ["S101", "S105", "S106"]
 
 [tool.mypy]
 # No python_version: mypy checks against the interpreter it runs in (the project's own),

@@ -21,14 +21,24 @@ class ErrorCode(StrEnum):
     SESSION_EXPIRED = "session_expired"
     EMAIL_NOT_VERIFIED = "email_not_verified"
     SIGN_IN_LOCKED = "sign_in_locked"
+    THROTTLED = "throttled"
 
     # Email codes and account changes
     CODE_INVALID = "code_invalid"
     CODE_EXPIRED = "code_expired"
     CODE_ATTEMPTS_EXCEEDED = "code_attempts_exceeded"
     RESEND_TOO_SOON = "resend_too_soon"
+    RESEND_LIMIT_REACHED = "resend_limit_reached"
     EMAIL_ALREADY_REGISTERED = "email_already_registered"
     INVALID_PASSWORD = "invalid_password"
+    PASSWORD_TOO_SHORT = "password_too_short"
+    PASSWORD_TOO_LONG = "password_too_long"
+    PASSWORD_TOO_SIMILAR = "password_too_similar"
+    PASSWORD_COMPROMISED = "password_compromised"
+    PASSWORD_TOO_COMMON = "password_too_common"
+
+    # The server cannot do its job safely right now
+    SERVICE_UNAVAILABLE = "service_unavailable"
 
     # Money and data rules
     INVALID_AMOUNT = "invalid_amount"
