@@ -93,7 +93,9 @@ proxies from the right. Too low shares one address between all clients; too high
   deployed (the workflow checks this itself).
 - `https://<service>.onrender.com/<ADMIN_URL>/` opens the admin sign-in; sign in with the superuser. The saved emails
   (the codes) are under **Outgoing emails**.
-- `https://<service>.onrender.com/api/docs/` redirects to the same sign-in, then shows Swagger UI.
+- `https://<service>.onrender.com/api/docs/` shows Swagger UI once you are signed in to the admin panel in the same
+  browser. Without a staff session it answers `404`, on purpose: a redirect to the sign-in would reveal the secret
+  `ADMIN_URL` to any visitor. `/api/schema/` behaves the same and downloads the schema as a YAML file.
 - From the app: the test list of `docs/steps.md` step 9.7.
 
 ## Roll back or deploy a given commit

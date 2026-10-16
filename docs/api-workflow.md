@@ -84,7 +84,8 @@ docker compose -f .github/api-tools/docker-compose.yml run --rm -v /tmp:/base:ro
 ```
 
 `scripts/schema.sh` needs no database. The running application serves the schema and Swagger UI **only outside
-production** and only to staff accounts (`/api/schema/` and `/api/docs/`, sign in through the admin panel; use
+production** and only to staff accounts (`/api/schema/` and `/api/docs/`: sign in through the admin panel first, anyone
+else gets a `404` so that the secret admin path is never revealed; use
 **Authorize** in Swagger UI with an access token to try the authenticated operations). Production serves neither: its
 contract is the `openapi.yaml` attached to each release. The routes are in `config/api_docs.py`.
 
