@@ -30,6 +30,7 @@ cffi
 DKIM
 DMARC
 errorlens
+fetchone
 ghaction
 healthz
 imagetools
