@@ -35,6 +35,7 @@ healthz
 imagetools
 keychain
 keyset
+logformat
 Mailpit
 NFKC
 NIST
