@@ -87,17 +87,48 @@ DATABASES = {
 # Password validation
 # https://docs.djangoproject.com/en/6.0/ref/settings/#auth-password-validators
 
+# Password policy: NIST SP 800-63B-4. A password is the only factor here, so it needs 15 characters;
+# there are no composition rules (no digit or symbol requirement) and up to 128 characters are
+# accepted. It is refused when it resembles the user's own name or email, is a very common password,
+# or appears in a breach corpus (checked through the k-anonymity range API; if that service cannot be
+# reached the check is skipped, never the sign-up). The password is normalized to NFKC first
+# (users.validators.normalize_password).
+PASSWORD_MIN_LENGTH = 15
+PASSWORD_MAX_LENGTH = 128
 AUTH_PASSWORD_VALIDATORS = [
     {
         "NAME": "django.contrib.auth.password_validation.MinimumLengthValidator",
-        "OPTIONS": {"min_length": 8},
+        "OPTIONS": {"min_length": PASSWORD_MIN_LENGTH},
     },
     {
-        "NAME": "users.validators.DigitPasswordValidator",
+        "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator",
+        "OPTIONS": {"user_attributes": ("name", "email")},
     },
     {
         "NAME": "django.contrib.auth.password_validation.CommonPasswordValidator",
     },
+    {
+        "NAME": "users.validators.MaximumLengthPasswordValidator",
+        "OPTIONS": {"max_length": PASSWORD_MAX_LENGTH},
+    },
+    {
+        "NAME": "users.validators.CompromisedPasswordValidator",
+    },
+]
+# Set to False in tests and wherever outbound calls to api.pwnedpasswords.com are not allowed.
+PWNED_PASSWORD_CHECK = os.environ.get("PWNED_PASSWORD_CHECK", "True").lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
+PWNED_PASSWORD_TIMEOUT_SECONDS = 2
+
+# Argon2id first: new passwords use it. PBKDF2 stays so that existing hashes still verify and are
+# upgraded to Argon2id at the next sign-in (ADR 0006).
+PASSWORD_HASHERS = [
+    "django.contrib.auth.hashers.Argon2PasswordHasher",
+    "django.contrib.auth.hashers.PBKDF2PasswordHasher",
 ]
 
 
@@ -141,6 +172,9 @@ CORS_ALLOWED_ORIGINS = [
     for o in os.environ.get("CORS_ALLOWED_ORIGINS", "").split(",")
     if o.strip()
 ]
+# A browser hides every response header except a few unless it is exposed; the web app reads the
+# countdown of a 429 from this one.
+CORS_EXPOSE_HEADERS = ["Retry-After"]
 
 DATABASES = {
     "default": dict(
@@ -170,6 +204,62 @@ APP_ENVIRONMENT = os.environ.get("APP_ENVIRONMENT", "development")
 # The admin panel lives at a configurable path, so staging and production need not use /admin/.
 ADMIN_URL = os.environ.get("ADMIN_URL", "admin").strip("/") + "/"
 
+# Counters and cooldowns of the sign-in lock and the email-code limits live in Redis (ADR 0006); the
+# tests use an in-memory cache (testing.py).
+REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.redis.RedisCache",
+        "LOCATION": REDIS_URL,
+    }
+}
+
+# ── Authentication (ADR 0006, 0009) ──────────────────────────────────────
+# HS256 signing key for the access and refresh tokens: at least 32 random bytes, separate from
+# SECRET_KEY. The system check users.E001 refuses a missing or short key. To rotate it, give the new key
+# a new JWT_KEY_ID and list the old one in JWT_PREVIOUS_KEYS ("kid:key,kid:key") until its tokens expire.
+JWT_SIGNING_KEY = os.environ.get("JWT_SIGNING_KEY", "")
+JWT_KEY_ID = os.environ.get("JWT_KEY_ID", "k1")
+JWT_PREVIOUS_KEYS = dict(
+    pair.strip().split(":", 1)
+    for pair in os.environ.get("JWT_PREVIOUS_KEYS", "").split(",")
+    if ":" in pair
+)
+JWT_ISSUER = "money-scribe-backend"
+JWT_AUDIENCE = "money-scribe"
+ACCESS_TOKEN_LIFETIME_SECONDS = int(
+    os.environ.get("ACCESS_TOKEN_LIFETIME_SECONDS", "600")
+)
+REFRESH_TOKEN_LIFETIME_DAYS = int(os.environ.get("REFRESH_TOKEN_LIFETIME_DAYS", "30"))
+SESSION_ABSOLUTE_LIFETIME_DAYS = int(
+    os.environ.get("SESSION_ABSOLUTE_LIFETIME_DAYS", "90")
+)
+# A refresh token rotated less than this many seconds ago is accepted again as a retry.
+REFRESH_REPLAY_WINDOW_SECONDS = int(
+    os.environ.get("REFRESH_REPLAY_WINDOW_SECONDS", "30")
+)
+# A normal request refreshes the session's last-activity time at most this often.
+SESSION_ACTIVITY_INTERVAL_SECONDS = 300
+
+# The 6-digit email codes (NIST asks for at least 6): lifetime, wrong tries per code, the wait between
+# two sends and the sends per hour.
+EMAIL_CODE_LENGTH = 6
+EMAIL_CODE_LIFETIME_SECONDS = 600
+EMAIL_CODE_MAX_ATTEMPTS = 5
+EMAIL_CODE_RESEND_COOLDOWN_SECONDS = 60
+EMAIL_CODE_SENDS_PER_HOUR = 5
+
+# Sign-in lock. This many failures on one account from one client address lock that pair for this many
+# seconds, so someone who only knows an email address cannot lock the owner out from another address.
+# Failures from all addresses together are capped too, which stops a distributed guess (NIST allows
+# at most 100 consecutive failures).
+SIGN_IN_MAX_FAILURES = 5
+SIGN_IN_ACCOUNT_MAX_FAILURES = 50
+SIGN_IN_LOCK_SECONDS = 900
+
+# An account that never verifies its email is deleted, with its codes, after this many days.
+UNVERIFIED_ACCOUNT_RETENTION_DAYS = 7
+
 # A custom user model, in place from the first migration (users/models.py).
 # Django's own docs call swapping AUTH_USER_MODEL in later "a substantial
 # task" — a from-scratch migration history plus a data migration for every
@@ -187,7 +277,7 @@ AUTH_USER_MODEL = "users.User"
 # generated clients get a typed error model. Only errors raised inside DRF views are covered;
 # Django's own pages (a disallowed host, a 404 outside the API) keep their normal responses.
 REST_FRAMEWORK: dict[str, object] = {
-    "DEFAULT_SCHEMA_CLASS": "drf_standardized_errors.openapi.AutoSchema",
+    "DEFAULT_SCHEMA_CLASS": "config.api_errors.ApiAutoSchema",
     "EXCEPTION_HANDLER": "drf_standardized_errors.handler.exception_handler",
     # Bearer tokens only (config/authentication.py); every view needs a signed-in user unless it
     # opts out, so a forgotten permission fails closed.
@@ -199,8 +289,19 @@ REST_FRAMEWORK: dict[str, object] = {
     "TEST_REQUEST_DEFAULT_FORMAT": "json",
     # Without this every operation would document a 404 for the ?format= query parameter.
     "URL_FORMAT_OVERRIDE": None,
+    # Per client address, on top of the per-account limits of users.limits. Behind a reverse proxy set
+    # NUM_PROXIES to the number of proxies, or every client shares the proxy's address.
+    "NUM_PROXIES": int(os.environ.get("NUM_PROXIES", "0")),
+    "DEFAULT_THROTTLE_RATES": {
+        "sign_in": "20/min",
+        "register": "20/hour",
+        "resend_code": "20/hour",
+        "verify_email": "60/hour",
+    },
 }
 DRF_STANDARDIZED_ERRORS = {
+    # Adds the optional `attempts_left` to a `code_invalid` error (config/error_format.py).
+    "EXCEPTION_FORMATTER_CLASS": "config.error_format.ApiExceptionFormatter",
     # Document only the errors a client acts on; a project that adds a code here also adds
     # its enum to ENUM_NAME_OVERRIDES below (ErrorCode<status>Enum, e.g. 500 → ServerErrorEnum).
     # 409 is NOT listed: the package would then document it on every operation. An operation that
@@ -208,7 +309,15 @@ DRF_STANDARDIZED_ERRORS = {
     "ALLOWED_ERROR_STATUS_CODES": ["400", "401", "403", "404", "429"],
     # One shared 400 schema. The package's default documents every field's error codes per
     # operation, which makes generated clients grow by dozens of classes per endpoint.
-    "ERROR_SCHEMAS": {"400": "config.api_errors.Error400ResponseSerializer"},
+    # The other documented errors share one schema too: the package's own would list only its default
+    # codes, not ours (config/api_errors.py).
+    "ERROR_SCHEMAS": {
+        "400": "config.api_errors.Error400ResponseSerializer",
+        "401": "config.api_errors.ErrorResponseSerializer",
+        "403": "config.api_errors.ErrorResponseSerializer",
+        "404": "config.api_errors.ErrorResponseSerializer",
+        "429": "config.api_errors.ErrorResponseSerializer",
+    },
 }
 _ERROR_ENUMS = "drf_standardized_errors.openapi_serializers"
 SPECTACULAR_SETTINGS = {
@@ -224,10 +333,6 @@ SPECTACULAR_SETTINGS = {
     # drf-spectacular warnings, which fail scripts/schema.sh).
     "ENUM_NAME_OVERRIDES": {
         "ClientErrorEnum": f"{_ERROR_ENUMS}.ClientErrorEnum.choices",
-        "ErrorCode401Enum": f"{_ERROR_ENUMS}.ErrorCode401Enum.choices",
-        "ErrorCode403Enum": f"{_ERROR_ENUMS}.ErrorCode403Enum.choices",
-        "ErrorCode404Enum": f"{_ERROR_ENUMS}.ErrorCode404Enum.choices",
-        "ErrorCode429Enum": f"{_ERROR_ENUMS}.ErrorCode429Enum.choices",
     },
     # Replaces drf-spectacular's own enum hook (the package's hook calls the same logic).
     "POSTPROCESSING_HOOKS": [
@@ -284,6 +389,10 @@ CELERY_BEAT_SCHEDULE = {
     "outbox-purge": {
         "task": "outbox.tasks.purge_old_emails",
         "schedule": crontab(minute=17, hour=3),
+    },
+    "users-purge-unverified": {
+        "task": "users.tasks.purge_unverified_accounts",
+        "schedule": crontab(minute=37, hour=3),
     },
 }
 

@@ -84,15 +84,23 @@ Each ended session keeps its `end_reason` (ADR 0009), and its push token is remo
   and `api.<domain>`); `localhost` works in development. The domain for staging and production is chosen with the
   deployment step (`docs/steps.md`) and is needed before the web app is deployed.
 
-**Sign-in protection.** Sign-in is throttled per account and per client address, with counters in Redis. After too many
-failures the account is locked for a time, and the response is `429` with `Retry-After` (`sign_in_locked`, ADR 0004). The
-limits are set in the implementation. The 4-digit email codes are stored hashed, expire (10 minutes), allow a limited
-number of attempts, and have a resend cooldown that also answers `429` with `Retry-After`.
+**Sign-in protection.** Sign-in is throttled per account and per client address, with counters in Redis. Failures lock the
+pair of account and client address, so someone who only knows an email address cannot lock its owner out from another
+network; failures from all addresses together lock the account for everyone only far above that (NIST allows up to 100
+consecutive failures). The response is `429` with `Retry-After` (`sign_in_locked`, ADR 0004). The limits are set in the
+implementation. The 6-digit email codes (NIST asks for at least six) are stored hashed, expire (10 minutes), allow a limited
+number of attempts, and have a resend cooldown and an hourly limit that also answer `429` with `Retry-After`.
 
-**What the API reveals.** Registration, and changing the email, answer `409 email_already_registered` when the address is
-taken, because the client must show a clear message; both operations are throttled per address and per client. Signing in
-and requesting a password reset reveal nothing: `invalid_credentials` for any failure, and one fixed answer for a reset
-request whether the address exists or not.
+**Fail closed.** The limits live in Redis. If it is down, the calls that depend on a limit (register, resend, verify,
+sign-in) answer `503 service_unavailable` with `Retry-After` instead of running without their brake. Calls that need no limit
+keep working: a refresh, sign-out and every request with an access token.
+
+**What the API reveals.** As little as the client can live with (OWASP). Registration answers the same whether the address
+is new, pending or already registered: a verified address is not changed, and its owner gets an email that says someone
+tried, with no code; a pending one is registered again. Registering is throttled per address and per client, and a verified
+address spends the same time and the same budget as a new one. Signing in and requesting a password reset reveal nothing:
+`invalid_credentials` for any failure, and one fixed answer for a reset request whether the address exists or not. Changing
+the email, which needs a signed-in session and the password, still answers `409 email_already_registered`.
 
 **Passwords.** Argon2id is the first entry of `PASSWORD_HASHERS` (the `argon2-cffi` package); PBKDF2 stays in the list so
 that existing hashes still verify and are upgraded at the next sign-in. The password rules are in ADR 0001.
@@ -100,13 +108,51 @@ that existing hashes still verify and are upgraded at the next sign-in. The pass
 **Not chosen.** Server sessions with cookies for the mobile apps, and DRF's `TokenAuthentication` (tokens that never
 expire, one per user).
 
-## Open implementation choice
+## Implementation (step 8.2)
 
-The library is chosen in the authentication pull request and recorded there. It must meet every rule above: a pinned
-algorithm, single-use refresh tokens with the replay window and session-ending reuse detection, hashed storage, the
-`at+jwt` type, and the channel rule for cookies. The candidate is PyJWT with the `Session` model in `users`.
-`djangorestframework-simplejwt` is acceptable only if it can do all of it; as far as we know, its token blacklist alone
-does not cover the replay window or end the session on reuse, so that would need to be checked first.
+- **Library: PyJWT**, with our own `Session` model in `users`. `djangorestframework-simplejwt` was not chosen: its token
+  blacklist covers neither the replay window nor ending the session on reuse. The algorithm is pinned to HS256 in
+  `users/tokens.py` and the key ring is read by `kid`; expiry is checked against `timezone.now()` rather than inside the
+  library, so one clock drives the sessions and the tests.
+- **Deterministic refresh token.** Its `jti` and `iat` come from the session id, the rotation counter and the time of the
+  rotation, so a retry inside the replay window rebuilds the same successor without storing it. Only its SHA-256 hash is
+  stored. Its life is 30 days from the rotation, never past the session's 90 day limit.
+- **Key rotation.** `JWT_KEY_ID` names the current key and `JWT_PREVIOUS_KEYS` (`kid:key,kid:key`) lists the keys that
+  still verify. The system check `users.E001` refuses a missing or shorter than 32 byte `JWT_SIGNING_KEY`.
+- **A missing session or an inactive user** answers `401 token_invalid`: there is no ended session to name a reason (an
+  account deletion removes its sessions). An ended session answers its own `session_*` code.
+- **Sign-out** accepts the bearer access token, or the refresh token in the body when the access token has expired, so a
+  device can end its session without refreshing first. With neither valid it answers `401 token_invalid`.
+- **A code that is dead or unknown.** After too many wrong tries a code is dead and the answer is `429
+  code_attempts_exceeded`; `Retry-After` is the wait before a new code may be requested. An address with nothing to verify
+  is answered by the same counter, so it cannot be told apart from a real one.
+- **Limits** are counted in the cache (Redis; in-memory in tests) by normalized email, whether or not an account exists,
+  and per client address through an atomic throttle (`NUM_PROXIES` must be set behind a proxy). Counts are one atomic
+  increment and a cooldown is one `SET NX`, never a read followed by a write, so parallel requests cannot slip past a limit
+  together; the windows are fixed windows, which allow a short burst at a window boundary. Five failed sign-ins from one
+  address lock that account for that address for 15 minutes, 50 from all addresses lock it for everyone, and a locked
+  account answers `429 sign_in_locked` even for the right password. A code has 6 digits, lives 10 minutes, allows 5 wrong
+  tries, may be sent again after 60 seconds and at most 5 times an hour; a refused attempt does not count as a send.
+- **The client behind a limit** is an IPv4 address or an IPv6 /64 (one customer owns the whole /64, so choosing another
+  address inside it must not start the count again). The address comes from `REMOTE_ADDR`, or from `X-Forwarded-For` when
+  `NUM_PROXIES` is set to the number of trusted reverse proxies in front of the app (DRF counts that many from the right,
+  so a spoofed header is ignored). It is 0 in development; the hosting step sets it, and the proxy must append to the
+  header. Many users behind one shared address (an office, a mobile carrier) share its limits: an attacker there can lock
+  an account only for that address, never for users on other networks.
+- **Verifying cannot tell who has registered.** For every address the server keeps the same state: when a code was last
+  sent, and the wrong tries since. A real pending account, an unknown address and an already registered one therefore
+  answer alike at every step: `code_expired` when no code was sent in the last ten minutes, `code_invalid` with
+  `attempts_left` counting down, `429 code_attempts_exceeded` with the same `Retry-After`, and a new code starts over
+  (a test runs one long story against all three). Register and resend draw on one budget keyed by the address, so their
+  `429` answers are the same for every address too. A residual difference is time: resend sends an email only for a
+  pending account. It disappears when email delivery becomes asynchronous with the real delivery step (docs/steps.md), which
+  must keep the plain code out of task arguments and logs.
+- **Redis down** is `503` for the limited calls (see Fail closed). A refresh, a sign-out and every request with an access
+  token read only the database and never answer it. The event is reported like any server error.
+- **Registration** takes the same time for a new, a pending and a verified address: all three hash the password, and all
+  three send one email.
+- **Data minimisation.** An unverified account is deleted with its codes after seven days of inactivity (ADR 0001).
+- **Browsers** read `Retry-After` because it is listed in `CORS_EXPOSE_HEADERS`.
 
 ## Consequences
 

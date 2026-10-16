@@ -1,5 +1,10 @@
 from rest_framework import status
-from rest_framework.exceptions import APIException, Throttled
+from rest_framework.exceptions import (
+    APIException,
+    ErrorDetail,
+    Throttled,
+    ValidationError,
+)
 
 from .error_codes import ErrorCode
 
@@ -27,3 +32,45 @@ def throttled(code: ErrorCode, wait: int, detail: str | None = None) -> Throttle
     The error handler sends ``wait`` as the ``Retry-After`` header, in whole seconds (ADR 0004).
     """
     return Throttled(wait=wait, detail=detail, code=code.value)
+
+
+class CodeInvalid(ValidationError):  # type: ignore[misc]
+    """The 6-digit email code is wrong (HTTP 400, field ``code``).
+
+    ``attempts_left`` is how many wrong tries the code still allows. The exception handler adds it to
+    the ``code_invalid`` item of the error body (``config.exception_handler``).
+    """
+
+    def __init__(self, attempts_left: int) -> None:
+        self.attempts_left = attempts_left
+        super().__init__(
+            {
+                "code": [
+                    ErrorDetail(
+                        "The code is not correct.", code=ErrorCode.CODE_INVALID.value
+                    )
+                ]
+            }
+        )
+
+
+class ServiceUnavailable(APIException):  # type: ignore[misc]
+    """A safety control cannot run, so the request is refused rather than let through (HTTP 503).
+
+    The sign-in lock and the code limits live in Redis. If it is down, accepting the request would
+    switch off the brake against password and code guessing, so those calls fail closed. The error
+    handler sends ``wait`` as ``Retry-After``.
+    """
+
+    status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+    default_detail = "The service is temporarily unavailable. Try again shortly."
+    default_code = ErrorCode.SERVICE_UNAVAILABLE.value
+
+    def __init__(self, wait: int = 30) -> None:
+        super().__init__()
+        self.wait = wait
+
+
+def service_unavailable(wait: int = 30) -> ServiceUnavailable:
+    """Build the ``503`` that a failed safety control answers with."""
+    return ServiceUnavailable(wait=wait)

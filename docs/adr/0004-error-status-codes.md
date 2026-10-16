@@ -27,6 +27,7 @@ conflict says so with the shared response, `@extend_schema(responses={..., 409: 
 | 404 | not found | also the answer for another user's object, so its existence is not revealed |
 | 409 | a valid request that conflicts with the current state | not a field error; `attr` is `null` |
 | 429 | rate limit, sign-in lock or a cooldown | always sends `Retry-After` with the remaining whole seconds (RFC 9110) |
+| 503 | a safety control cannot run | sent with `Retry-After`, only by the calls that depend on a limit; not documented per operation, like any server error |
 
 Rules:
 
@@ -52,19 +53,40 @@ Initial registry:
 | `session_token_reuse` | 401 | a used refresh token was replayed, so the session was ended |
 | `session_expired` | 401 | the session reached its 90 day limit |
 | `email_not_verified` | 403 | the credentials are right but the email is not verified |
-| `sign_in_locked` | 429 | too many failed sign-ins; `Retry-After` gives the remaining time |
-| `code_invalid` | 400 | the 4-digit code is wrong |
-| `code_expired` | 400 | the 4-digit code has expired |
-| `code_attempts_exceeded` | 429 | too many wrong codes; `Retry-After` |
-| `resend_too_soon` | 429 | the code cooldown has not passed; `Retry-After` |
-| `email_already_registered` | 409 | at registration or when changing the email |
+| `sign_in_locked` | 429 | too many failed sign-ins; `Retry-After` gives the remaining time, even for the right password |
+| `throttled` | 429 | too many requests from one client address; `Retry-After` |
+| `code_invalid` | 400 | the 6-digit code is wrong; the error item also carries `attempts_left` (see below) |
+| `code_expired` | 400 | the 6-digit code has expired |
+| `code_attempts_exceeded` | 429 | too many wrong codes, so the code is dead; `Retry-After` is the wait before a new one may be requested |
+| `resend_too_soon` | 429 | the 60 second cooldown has not passed; `Retry-After` |
+| `resend_limit_reached` | 429 | the limit of 5 codes per hour is used up; `Retry-After` is up to an hour |
+| `email_already_registered` | 409 | when changing the email (registration does not reveal it) |
 | `invalid_password` | 400 | the current password is wrong (`attr`: `current_password`) |
+| `password_too_short` | 400 | a new password under 15 characters (`attr`: `password`) |
+| `password_too_long` | 400 | a new password over 128 characters |
+| `password_too_similar` | 400 | a new password that resembles the user's name or email |
+| `password_too_common` | 400 | a new password on the common-password list |
+| `password_compromised` | 400 | a new password that appears in a known data breach |
+| `service_unavailable` | 503 | a safety control (the limit store) is down, so the request is refused; `Retry-After` |
 | `invalid_amount` | 400 | not a valid amount for the currency (ADR 0008) |
 | `currency_mismatch` | 400 | a fixed item carries a currency other than its month's |
 | `exceeds_remaining` | 400 | a repayment is larger than the remaining debt (`attr`: `amount`) |
 | `account_has_transactions` | 409 | deleting an account that still has transactions |
 | `category_has_transactions` | 409 | deleting a category that still has transactions |
 | `category_is_builtin` | 403 | changing or deleting a built-in category |
+
+**Extra members.** An error item is `{code, detail, attr}`. Three optional integer members exist, each sent with one code
+only and documented in the shared error schema: `attempts_left` on `code_invalid` (the wrong tries the 6-digit code still
+allows), `min_length` on `password_too_short` and `max_length` on `password_too_long` (the limits the server enforces,
+read from the settings). With them a client words "at least {n} characters" from the server's own value, so a change of
+password policy needs no app release, and it enforces no rule of its own. A client that meets a `password_*` code it does
+not know shows the English `detail`. A new optional member is not a breaking change.
+
+**The schema.** `code` is a plain string, not an enum, so a client survives a code it does not know yet. The registry
+is written into the description of the `code` field, generated from `config.error_codes.ErrorCode`, so the contract and
+the code cannot drift. Every documented error status shares the same two error schemas (`config/api_errors.py`). The
+operations that need no token declare their own `401` and `403`, because the package documents those only for
+operations that declare authentication.
 
 ## Consequences
 

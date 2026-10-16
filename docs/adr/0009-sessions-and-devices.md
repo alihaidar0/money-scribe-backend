@@ -70,6 +70,7 @@ These emails are throttled.
 | truncated IP address | show and investigate sign-ins | same |
 | user agent (web) | show the user their sessions | same |
 | sign-in, last-active and end times and the end reason | show the user their sessions | same |
+| the first five characters of the SHA-1 hash of a new password | the server asks the Pwned Passwords breach service whether the password is known (k-anonymity: the password, the full hash and the user are never sent) | not stored; sent at registration and at later password changes |
 
 Not collected: GPS or any device location, advertising ids, hardware ids, contacts. This data is for account security
 only. It is not analytics, and no financial data is stored with it.
