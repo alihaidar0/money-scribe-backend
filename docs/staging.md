@@ -23,22 +23,27 @@ Use the same region for all three services (for example Frankfurt), or every que
    `money_scribe_staging` that it owns, the **direct** connection string (pooling off, no `-pooler` in the host), and the
    three commands that test the connection, apply the migrations and create the admin account. The string holds the
    database password: it goes into a password manager and is read silently by every command.
-2. **Render Key Value.** Create a free instance in the chosen region. Copy its **internal** address
-   (`redis://...`); only services in the same Render workspace and region can reach it.
+2. **Render Key Value.** Follow [`staging-render.md`](staging-render.md), which has every name and screen: the account
+   and the workspace `money-scribe` (Hobby plan), then the free instance `money-scribe-staging-redis` in the chosen
+   region. A card must be on file for the form to create it. Copy its **internal** address (`redis://...`); only services
+   in the same Render workspace and region can reach it, and no inbound rule is added.
 3. **GitHub, before the first deploy:**
    - Settings, Secrets and variables, Actions, **Variables**: `PUBLISH_IMAGE` = `ghcr`.
    - Merge a change into `develop` so the Docker workflow publishes the first image, then open the repository's
      **Packages**, select the package, and set its visibility to **Public**.
-   - Settings, **Environments**: create `staging`, with deployment branches limited to `develop`.
+   - Settings, **Environments**: create `staging`, with deployment branches limited to `develop`
+     ([`staging-render.md`](staging-render.md), step 6, has every setting).
 4. **Render web service.** Create a new web service from an **existing image**: `ghcr.io/<owner>/<repo>` (lower case),
    free instance, the chosen region, health check path `/healthz`. Add the environment variables below.
 5. **The deploy hook.** In the service's Settings copy the **Deploy Hook** URL; it contains a key and is a secret. In the
-   GitHub environment `staging` add:
+   GitHub environment `staging` add (details and screens in [`staging-render.md`](staging-render.md), step 6; copy the
+   hook with its copy icon and never open the link, because that starts a deploy):
    - secret `RENDER_DEPLOY_HOOK_URL`: the hook URL
    - variable `STAGING_URL`: `https://<service>.onrender.com`
 6. **Deploy once.** Actions, **Deploy staging**, **Run workflow**, with the commit of the image you want (the first 7
    characters are enough). The run ends when `/healthz` reports the release it deployed.
-7. **Switch the automatic deploy on.** Add the repository variable `DEPLOY_STAGING` = `true`. From then on every merge
+7. **Switch the automatic deploy on (optional).** Staging may stay manual, deployed with step 6 when you decide; the
+   repository variable is then simply not set. To go automatic, add the repository variable `DEPLOY_STAGING` = `true`. From then on every merge
    into `develop` is deployed by the Docker workflow, in its job "Deploy to staging". Until the variable is set that job
    is skipped, so a merge never fails for lack of a service.
 8. **The admin account** exists already if you did step 8 of [`staging-neon.md`](staging-neon.md); the tables are there
@@ -75,7 +80,7 @@ The limits and the session record use the client address. DRF takes it from `X-F
 proxies from the right. Too low shares one address between all clients; too high lets a client choose its own address.
 
 1. Add to the service's environment, temporarily:
-   `GUNICORN_CMD_ARGS=--bind=0.0.0.0:$PORT --threads=4 --timeout=120 --access-logfile=- --error-logfile=- --access-logformat='%(h)s xff=%({x-forwarded-for}i)s %(r)s %(s)s'`
+   `GUNICORN_CMD_ARGS=--bind=0.0.0.0:$PORT --threads=4 --timeout=120 --access-logfile=- --error-logfile=- --no-control-socket --access-logformat='%(h)s xff=%({x-forwarded-for}i)s %(r)s %(s)s'`
 2. Call `https://<service>.onrender.com/healthz` from your phone on mobile data, and read the line in the Render logs.
 3. Find your phone's address in `xff=` (a list separated by commas). Count from the right end of the list up to and
    including your phone's address: that number is `NUM_PROXIES`. If `xff=203.0.113.9` the number is 1; if

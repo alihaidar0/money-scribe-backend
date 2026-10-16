@@ -357,7 +357,8 @@ listed at the end of this section. Each step is its own branch and pull request.
   staff accounts (the admin sign-in), with the UI bundled in the image and no CDN, tested; the committed
   `openapi/schema.yaml` is unchanged
 - [ ] **9.5 The services and the first deploy** (the owner, by hand, following [`staging.md`](staging.md)): the Neon
-  project ([`staging-neon.md`](staging-neon.md)), the Render Key Value instance and web service, the environment variables, the GitHub environment `staging`
+  project ([`staging-neon.md`](staging-neon.md)), the Render Key Value instance and web service
+  ([`staging-render.md`](staging-render.md)), the environment variables, the GitHub environment `staging`
   (deployment branches: `develop`) with its secret `RENDER_DEPLOY_HOOK_URL` and variable `STAGING_URL`, the first deploy
   by hand, then the repository variable `DEPLOY_STAGING=true` that switches the automatic deploy on, the superuser, the
   uptime monitor, and `NUM_PROXIES` measured
