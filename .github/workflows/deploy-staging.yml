@@ -1,0 +1,79 @@
+# ============================================================
+#  .github/workflows/deploy-staging.yml
+#
+#  Deploys the staging image to Render and waits until it is live (ADR 0011,
+#  docs/staging.md). Nothing here builds anything: docker.yml has already built
+#  and published the image of the commit that was merged into develop, after the
+#  pull request passed CI.
+#
+#    - Called by docker.yml (job "Deploy to staging") right after it publishes the
+#      image on develop, with the commit and the digest of that very build.
+#    - Run by hand (Actions, Deploy staging, Run workflow) for a rollback or to
+#      deploy an older build: it then finds the digest by the tag sha-<short>.
+#    - scripts/deploy-staging.sh calls the Render deploy hook pinned to the digest
+#      and waits until /healthz reports the same commit in its X-Release header.
+#      The summary shows the digest.
+#
+#  The GitHub environment `staging` (deployment branches: develop) holds the only
+#  things this needs: the SECRET RENDER_DEPLOY_HOOK_URL and the VARIABLE STAGING_URL.
+#  The script checks every input; nothing from a pull request is executed here.
+# ============================================================
+
+name: Deploy staging
+
+on:
+  workflow_call:
+    inputs:
+      commit:
+        description: "Commit to deploy (7 to 40 hex characters)"
+        required: true
+        type: string
+      digest:
+        description: "Digest of the image built for that commit (sha256:...)"
+        required: false
+        type: string
+        default: ""
+  workflow_dispatch:
+    inputs:
+      commit:
+        description: "Commit to deploy (7 to 40 hex characters); empty = the latest commit of the branch"
+        required: false
+        type: string
+
+permissions: {}
+
+concurrency:
+  group: deploy-staging
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy to staging
+    runs-on: ubuntu-26.04
+    timeout-minutes: 25
+    environment:
+      name: staging
+      url: ${{ vars.STAGING_URL }}
+    permissions:
+      contents: read
+      packages: read   # find the digest even if the package is private
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Sign in to the registry
+        env:
+          REGISTRY_USER: ${{ github.actor }}
+          REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: echo "$REGISTRY_TOKEN" | docker login ghcr.io --username "$REGISTRY_USER" --password-stdin
+
+      - name: Deploy and wait for the release
+        env:
+          IMAGE_REPOSITORY: ${{ github.repository }}
+          COMMIT: ${{ inputs.commit || github.sha }}
+          IMAGE_DIGEST: ${{ inputs.digest }}
+          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+          STAGING_URL: ${{ vars.STAGING_URL }}
+        run: bash scripts/deploy-staging.sh
