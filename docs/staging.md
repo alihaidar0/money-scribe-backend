@@ -18,8 +18,11 @@ How staging is built, set up once, deployed, checked and rolled back. The decisi
 
 Use the same region for all three services (for example Frankfurt), or every query pays for the distance.
 
-1. **Neon.** Create a project with PostgreSQL 18. Copy the **direct** connection string (the host without `-pooler`).
-   It ends with `?sslmode=require`. It is a secret.
+1. **Neon.** Follow [`staging-neon.md`](staging-neon.md), which has every name and command: the project
+   `money-scribe-staging` (AWS Europe Central 1, Frankfurt, PostgreSQL 18), the app role `money_scribe_app`, the database
+   `money_scribe_staging` that it owns, the **direct** connection string (pooling off, no `-pooler` in the host), and the
+   three commands that test the connection, apply the migrations and create the admin account. The string holds the
+   database password: it goes into a password manager and is read silently by every command.
 2. **Render Key Value.** Create a free instance in the chosen region. Copy its **internal** address
    (`redis://...`); only services in the same Render workspace and region can reach it.
 3. **GitHub, before the first deploy:**
@@ -38,14 +41,10 @@ Use the same region for all three services (for example Frankfurt), or every que
 7. **Switch the automatic deploy on.** Add the repository variable `DEPLOY_STAGING` = `true`. From then on every merge
    into `develop` is deployed by the Docker workflow, in its job "Deploy to staging". Until the variable is set that job
    is skipped, so a merge never fails for lack of a service.
-8. **Create the superuser** from your development container, against Neon. The tables exist after the first deploy,
-   because the container runs the migrations when it starts. Put the Neon string in the shell only, never in a file:
-
-   ```bash
-   DATABASE_URL='<the Neon direct connection string>' python manage.py createsuperuser
-   ```
-
-   The email, the name and a password of at least 15 characters are asked for.
+8. **The admin account** exists already if you did step 8 of [`staging-neon.md`](staging-neon.md); the tables are there
+   once `migrate` has run (step 7 of that page, or the first deploy, because the container runs the migrations when it
+   starts). Otherwise create it now with the command of that step. The password must pass the same policy as every
+   user's: at least 15 characters, not similar to the email or the name, not a common or leaked one.
 9. **An uptime monitor** (any free one): call `https://<service>.onrender.com/healthz` every five minutes, so the free
    instance does not sleep between your tests.
 

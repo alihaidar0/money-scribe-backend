@@ -180,12 +180,15 @@ Every label Dependabot applies exists in [`labels.yml`](labels.yml).
 Inside the dev container:
 
 ```bash
-pre-commit run --all-files     # ruff, django-upgrade, file hygiene
+pre-commit run --all-files     # ruff, django-upgrade, file hygiene, and the Lint workflow's cspell, markdownlint,
+                               # ShellCheck, actionlint, zizmor (offline) and hadolint
 pytest                         # once the project exists
 mypy .
 ```
 
-Repository linters (from any machine with Docker):
+The hooks above install their own tools on the first run, which takes a few minutes. They do not cover
+`docker compose config` or the online audits of zizmor, so **Lint** on GitHub stays the gate. The same linters from
+any machine with Docker:
 
 ```bash
 docker run --rm -i hadolint/hadolint hadolint - < docker/Dockerfile.prod
