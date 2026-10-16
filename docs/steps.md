@@ -419,6 +419,21 @@ next. A decision a feature needs gets its record first. The order below is the o
 - [ ] `python manage.py check --deploy` passes with production settings
 - [ ] Production image builds and answers `/healthz` (CI smoke test is green)
 - [ ] Staging has run the same build, and the Flutter app has been tested against it
+- [ ] **Rate limiting by address and by account, across the whole API.** The authentication operations are limited
+  already ([ADR 0006](adr/0006-authentication-tokens.md): sign-in, registration, code resend and verification, per
+  account and per client address, counters in Redis, `429` with `Retry-After`). Before production, give every other
+  operation default limits too: per signed-in user, and per client address for requests without a token; stricter ones
+  for the costly operations (reports, CSV export and import, from stage 3). The numbers and the reasons go into an ADR;
+  each limit is documented as a `429` in the schema and tested; `NUM_PROXIES` is the proxy count measured on staging and
+  re-checked for the production topology, because a wrong count either shares one address between all clients or lets a
+  client choose its own
+- [ ] **App attestation.** Decide with the Flutter developer whether the server requires proof that a request comes from
+  the genuine, unmodified app on a real device: Play Integrity on Android and App Attest on iOS, or Firebase App Check,
+  which wraps both. The server would verify the proof on the operations that start a session (register, sign-in,
+  refresh) and refuse a failing one with a documented error code; roll it out in a monitoring-only mode first, then
+  enforce, and keep a way to switch it off. It needs work in both repositories and its own ADR. A plain API key in the
+  app is **not** used: it can be read out of the app, so it would identify no one and protect nothing the tokens do not
+  already protect
 - [ ] `version` in `pyproject.toml` is the version to release (the draft release is named after it)
 - [ ] One pull request `develop` → `main`, titled `release: <summary>`, merged with a merge commit
 - [ ] The privacy policy and the Google Play Data safety form list exactly what
