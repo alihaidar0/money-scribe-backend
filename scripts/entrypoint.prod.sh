@@ -20,7 +20,8 @@ fi
 
 if [[ "${1:-}" == "gunicorn" ]]; then
     # Explicit GUNICORN_CMD_ARGS wins; otherwise sensible container defaults.
-    export GUNICORN_CMD_ARGS="${GUNICORN_CMD_ARGS:---bind=0.0.0.0:${PORT:-8080} --threads=4 --timeout=120 --access-logfile=- --error-logfile=-}"
+    # --no-control-socket: the control socket lives under $HOME, and the image's user has no home directory.
+    export GUNICORN_CMD_ARGS="${GUNICORN_CMD_ARGS:---bind=0.0.0.0:${PORT:-8080} --threads=4 --timeout=120 --access-logfile=- --error-logfile=- --no-control-socket}"
     echo "▶ Starting Gunicorn on :${PORT:-8080} (${WEB_CONCURRENCY:-2} workers)"
 fi
 
