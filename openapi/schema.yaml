@@ -1,0 +1,668 @@
+openapi: 3.0.3
+info:
+  title: API
+  version: 0.1.0
+  description: The HTTP API of this project, generated from its code.
+paths:
+  /api/v1/auth/profile/:
+    get:
+      operationId: auth_profile
+      description: The name and email of the signed-in user, and the `language` and
+        `time_zone` stored from the device they last signed in on (read-only here).
+        The app reads it after a restart, because the tokens carry no profile.
+      summary: Read the profile
+      tags:
+      - auth
+      security:
+      - bearerAuth: []
+      responses:
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error400Response'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Profile'
+          description: ''
+  /api/v1/auth/refresh/:
+    post:
+      operationId: auth_refresh
+      description: 'Trades the single-use refresh token for a new access token and
+        a new refresh token. If the answer is lost, the same refresh token sent again
+        within 30 seconds of the rotation returns the same new pair; an older used
+        token ends the session. Errors: `401` `token_invalid`, `session_expired`,
+        `session_signed_out`, `session_revoked_by_user`, `session_password_changed`,
+        `session_email_changed` or `session_token_reuse`; all are final, so sign in
+        again.'
+      summary: Refresh the tokens
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshRequest'
+        required: true
+      responses:
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error400Response'
+          description: ''
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RefreshResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Not authenticated, or the credentials, token or session are
+            not valid; the `code` says which.
+  /api/v1/auth/register/:
+    post:
+      operationId: auth_register
+      description: 'Creates an unverified account and emails a 6-digit code. No session
+        is created: the code is verified with `auth_verify_email`, which signs the
+        user in. The answer is the same whether the address is new, pending or already
+        registered, so it reveals nothing: a pending address is registered again (the
+        new name and password replace the earlier ones), and the owner of a registered
+        address gets an email saying someone tried, with no code. Errors: `400` field
+        errors (password: `password_too_short`, `password_too_long`, `password_too_similar`,
+        `password_too_common`, `password_compromised`; `invalid` for an email), `429`
+        `resend_too_soon` or `resend_limit_reached` or `throttled`, each with `Retry-After`.'
+      summary: Register an account
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+        required: true
+      responses:
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error400Response'
+          description: ''
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegisterResponse'
+          description: ''
+  /api/v1/auth/resend-code/:
+    post:
+      operationId: auth_resend_code
+      description: 'Emails a new code, which replaces every earlier one. The answer
+        is the same for every address, so it reveals nothing. Errors: `429` `resend_too_soon`
+        (the 60 second cooldown), `resend_limit_reached` (5 codes per hour) or `throttled`,
+        each with `Retry-After`.'
+      summary: Send a new code
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResendCodeRequest'
+        required: true
+      responses:
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error400Response'
+          description: ''
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CodeSent'
+          description: ''
+  /api/v1/auth/sign-in/:
+    post:
+      operationId: auth_sign_in
+      description: 'Starts a session. Errors: `401` `invalid_credentials` (an unknown
+        email and a wrong password look the same), `403` `email_not_verified` (only
+        after the right password; the app opens the verify screen), `429` `sign_in_locked`
+        (even the right password, while locked; `Retry-After` is the remaining lock
+        time) or `throttled`.'
+      summary: Sign in
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignInRequest'
+        required: true
+      responses:
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error400Response'
+          description: ''
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SignedInResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Not authenticated, or the credentials, token or session are
+            not valid; the `code` says which.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The credentials are right but the request is not allowed; the
+            `code` says why.
+  /api/v1/auth/sign-out/:
+    post:
+      operationId: auth_sign_out
+      description: 'Ends the session at once. Send the bearer access token, or, when
+        it has expired, the `refresh_token` in the body, so the device need not refresh
+        first. Errors: `401` `token_invalid` when neither is valid.'
+      summary: Sign out
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignOutRequest'
+      security:
+      - bearerAuth: []
+      - {}
+      responses:
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error400Response'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '204':
+          description: No response body
+  /api/v1/auth/verify-email/:
+    post:
+      operationId: auth_verify_email
+      description: 'A correct code verifies the address and starts the session, so
+        the app goes straight in. Errors: `400` `code_invalid` (the error item carries
+        `attempts_left`) or `code_expired`, `429` `code_attempts_exceeded` (the code
+        is dead; `Retry-After` is the wait before a new one may be requested) or `throttled`.'
+      summary: Verify the email and sign in
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VerifyEmailRequest'
+        required: true
+      responses:
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error400Response'
+          description: ''
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SignedInResponse'
+          description: ''
+components:
+  schemas:
+    ClientErrorEnum:
+      enum:
+      - client_error
+      type: string
+      description: '* `client_error` - Client Error'
+    CodeSent:
+      type: object
+      properties:
+        code_expires_in:
+          type: integer
+          description: Seconds until the code expires.
+        resend_available_in:
+          type: integer
+          description: Seconds until a new code may be requested.
+      required:
+      - code_expires_in
+      - resend_available_in
+    DeviceRequest:
+      type: object
+      description: The label of the device, for the user's own "active sessions" screen
+        (ADR 0009).
+      properties:
+        device_id:
+          type: string
+          format: uuid
+          description: A random UUID the app creates once at install and keeps in
+            secure storage.
+        device_name:
+          type: string
+          minLength: 1
+          description: A readable model name such as `Pixel 8`.
+          maxLength: 100
+        platform:
+          $ref: '#/components/schemas/PlatformEnum'
+        os_version:
+          type: string
+          default: ''
+          maxLength: 50
+        app_version:
+          type: string
+          minLength: 1
+          description: For example `1.0.0+1`.
+          maxLength: 50
+      required:
+      - app_version
+      - device_id
+      - device_name
+      - platform
+    Error400Response:
+      type: object
+      description: '``validation_error``: invalid input. ``client_error``: an unreadable
+        request body.'
+      properties:
+        type:
+          $ref: '#/components/schemas/Error400ResponseTypeEnum'
+        errors:
+          type: array
+          items:
+            $ref: '#/components/schemas/ErrorItem'
+      required:
+      - errors
+      - type
+    Error400ResponseTypeEnum:
+      enum:
+      - validation_error
+      - client_error
+      type: string
+      description: |-
+        * `validation_error` - Validation Error
+        * `client_error` - Client Error
+    ErrorItem:
+      type: object
+      properties:
+        code:
+          type: string
+          description: 'A stable, machine-readable code; act on it, not on `detail`.
+            Registered codes: `invalid_credentials`, `token_expired`, `token_invalid`,
+            `session_signed_out`, `session_revoked_by_user`, `session_password_changed`,
+            `session_email_changed`, `session_token_reuse`, `session_expired`, `email_not_verified`,
+            `sign_in_locked`, `throttled`, `code_invalid`, `code_expired`, `code_attempts_exceeded`,
+            `resend_too_soon`, `resend_limit_reached`, `email_already_registered`,
+            `invalid_password`, `password_too_short`, `password_too_long`, `password_too_similar`,
+            `password_compromised`, `password_too_common`, `service_unavailable`,
+            `invalid_amount`, `currency_mismatch`, `exceeds_remaining`, `account_has_transactions`,
+            `category_has_transactions`, `category_is_builtin`. Codes raised by the
+            framework for malformed or incomplete input: `required`, `blank`, `null`,
+            `invalid`, `max_length`, `min_length`, `parse_error`, `authentication_failed`,
+            `not_authenticated`, `permission_denied`, `not_found`, `method_not_allowed`,
+            `not_acceptable`, `unsupported_media_type`. A client treats a code it
+            does not know as a generic failure of the status.'
+        detail:
+          type: string
+          description: Human-readable text; not for display.
+        attr:
+          type: string
+          nullable: true
+          description: The field the error belongs to, or null for the request as
+            a whole.
+        attempts_left:
+          type: integer
+          minimum: 0
+          description: 'Only on `code_invalid`: how many wrong tries the email code
+            still allows.'
+        min_length:
+          type: integer
+          minimum: 1
+          description: 'Only on `password_too_short`: the shortest password the server
+            accepts.'
+        max_length:
+          type: integer
+          minimum: 1
+          description: 'Only on `password_too_long`: the longest password the server
+            accepts.'
+      required:
+      - attr
+      - code
+      - detail
+    ErrorResponse:
+      type: object
+      description: '``client_error``: a 401, 403, 404, 409 or 429 answer; ``Retry-After``
+        accompanies a 429.'
+      properties:
+        type:
+          $ref: '#/components/schemas/ClientErrorEnum'
+        errors:
+          type: array
+          items:
+            $ref: '#/components/schemas/ErrorItem'
+      required:
+      - errors
+      - type
+    LanguageEnum:
+      enum:
+      - en
+      - ar
+      type: string
+      description: |-
+        * `en` - English
+        * `ar` - Arabic
+    PlatformEnum:
+      enum:
+      - android
+      - ios
+      - web
+      type: string
+      description: |-
+        * `android` - Android
+        * `ios` - iOS
+        * `web` - Web
+    Profile:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        name:
+          type: string
+          readOnly: true
+        email:
+          type: string
+          format: email
+          readOnly: true
+          title: Email address
+        language:
+          allOf:
+          - $ref: '#/components/schemas/LanguageEnum'
+          readOnly: true
+        time_zone:
+          type: string
+          readOnly: true
+      required:
+      - email
+      - id
+      - language
+      - name
+      - time_zone
+    RefreshRequest:
+      type: object
+      properties:
+        refresh_token:
+          type: string
+          minLength: 1
+          maxLength: 2048
+        device:
+          $ref: '#/components/schemas/DeviceRequest'
+      required:
+      - device
+      - refresh_token
+    RefreshResponse:
+      type: object
+      properties:
+        access_token:
+          type: string
+          description: 'Send it as `Authorization: Bearer`.'
+        refresh_token:
+          type: string
+          description: Single-use. Absent when the web form of the tokens carries
+            it in a cookie.
+        token_type:
+          type: string
+          description: Always `Bearer`.
+        expires_in:
+          type: integer
+          description: Seconds the access token lives (600).
+      required:
+      - access_token
+      - expires_in
+      - token_type
+    RegisterRequest:
+      type: object
+      description: '``language`` and ``time_zone``: the device the user signs in on
+        decides them.'
+      properties:
+        language:
+          allOf:
+          - $ref: '#/components/schemas/LanguageEnum'
+          description: |-
+            `en` or `ar`; the app sends `en` when the device language is neither.
+
+            * `en` - English
+            * `ar` - Arabic
+        time_zone:
+          type: string
+          minLength: 1
+          description: An IANA name such as `Europe/Moscow`. Leave it out when the
+            device cannot read it.
+          maxLength: 64
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        email:
+          type: string
+          format: email
+          minLength: 1
+          maxLength: 254
+        password:
+          type: string
+          writeOnly: true
+          minLength: 1
+          description: At least 15 characters; no other composition rule. It must
+            not resemble the name or email, be a very common password or appear in
+            a known data breach.
+      required:
+      - email
+      - name
+      - password
+    RegisterResponse:
+      type: object
+      properties:
+        code_expires_in:
+          type: integer
+          description: Seconds until the code expires.
+        resend_available_in:
+          type: integer
+          description: Seconds until a new code may be requested.
+        email:
+          type: string
+          format: email
+      required:
+      - code_expires_in
+      - email
+      - resend_available_in
+    ResendCodeRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+          minLength: 1
+          maxLength: 254
+      required:
+      - email
+    SignInRequest:
+      type: object
+      description: '``language`` and ``time_zone``: the device the user signs in on
+        decides them.'
+      properties:
+        language:
+          allOf:
+          - $ref: '#/components/schemas/LanguageEnum'
+          description: |-
+            `en` or `ar`; the app sends `en` when the device language is neither.
+
+            * `en` - English
+            * `ar` - Arabic
+        time_zone:
+          type: string
+          minLength: 1
+          description: An IANA name such as `Europe/Moscow`. Leave it out when the
+            device cannot read it.
+          maxLength: 64
+        email:
+          type: string
+          format: email
+          minLength: 1
+          maxLength: 254
+        password:
+          type: string
+          writeOnly: true
+          minLength: 1
+        device:
+          $ref: '#/components/schemas/DeviceRequest'
+      required:
+      - device
+      - email
+      - password
+    SignOutRequest:
+      type: object
+      properties:
+        refresh_token:
+          type: string
+          minLength: 1
+          description: Lets a device whose access token has expired end its own session
+            without refreshing first.
+          maxLength: 2048
+    SignedInResponse:
+      type: object
+      properties:
+        access_token:
+          type: string
+          description: 'Send it as `Authorization: Bearer`.'
+        refresh_token:
+          type: string
+          description: Single-use. Absent when the web form of the tokens carries
+            it in a cookie.
+        token_type:
+          type: string
+          description: Always `Bearer`.
+        expires_in:
+          type: integer
+          description: Seconds the access token lives (600).
+        user:
+          $ref: '#/components/schemas/UserSummary'
+      required:
+      - access_token
+      - expires_in
+      - token_type
+      - user
+    UserSummary:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        name:
+          type: string
+          readOnly: true
+        email:
+          type: string
+          format: email
+          readOnly: true
+          title: Email address
+      required:
+      - email
+      - id
+      - name
+    VerifyEmailRequest:
+      type: object
+      description: '``language`` and ``time_zone``: the device the user signs in on
+        decides them.'
+      properties:
+        language:
+          allOf:
+          - $ref: '#/components/schemas/LanguageEnum'
+          description: |-
+            `en` or `ar`; the app sends `en` when the device language is neither.
+
+            * `en` - English
+            * `ar` - Arabic
+        time_zone:
+          type: string
+          minLength: 1
+          description: An IANA name such as `Europe/Moscow`. Leave it out when the
+            device cannot read it.
+          maxLength: 64
+        email:
+          type: string
+          format: email
+          minLength: 1
+          maxLength: 254
+        code:
+          type: string
+          minLength: 1
+          description: The 6-digit code from the email.
+          pattern: ^[0-9]{6}$
+        device:
+          $ref: '#/components/schemas/DeviceRequest'
+      required:
+      - code
+      - device
+      - email
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

@@ -29,6 +29,7 @@ mode="${1:-}"
 # network or a database are enough, so the same file comes out on every machine.
 export DJANGO_SETTINGS_MODULE="${DJANGO_SETTINGS_MODULE:-config.settings.testing}"
 export SECRET_KEY="${SECRET_KEY:-schema-generation-only-not-a-real-secret-key-0123456789}"
+export JWT_SIGNING_KEY="${JWT_SIGNING_KEY:-schema-generation-only-not-a-real-signing-key-0123456789}"
 export DATABASE_URL="${DATABASE_URL:-sqlite:////tmp/schema-generation.db}"
 
 generate_to() { # output file

@@ -67,6 +67,21 @@ x-dev-image: &dev-image
     APP_ENVIRONMENT: ${APP_ENVIRONMENT:-development}
     # The path of the admin panel; staging and production use another one.
     ADMIN_URL: ${ADMIN_URL:-admin}
+    # Signs the access and refresh tokens (HS256): at least 32 random bytes, never SECRET_KEY, and a real one
+    # on staging and production (`openssl rand -hex 32`). JWT_KEY_ID names it; JWT_PREVIOUS_KEYS ("kid:key,...")
+    # keeps the keys that still verify after a rotation.
+    JWT_SIGNING_KEY: ${JWT_SIGNING_KEY:-dev-only-signing-key-change-in-production-0123456789abcdef}
+    JWT_KEY_ID: ${JWT_KEY_ID:-k1}
+    JWT_PREVIOUS_KEYS: ${JWT_PREVIOUS_KEYS:-}
+    ACCESS_TOKEN_LIFETIME_SECONDS: ${ACCESS_TOKEN_LIFETIME_SECONDS:-600}
+    REFRESH_TOKEN_LIFETIME_DAYS: ${REFRESH_TOKEN_LIFETIME_DAYS:-30}
+    SESSION_ABSOLUTE_LIFETIME_DAYS: ${SESSION_ABSOLUTE_LIFETIME_DAYS:-90}
+    REFRESH_REPLAY_WINDOW_SECONDS: ${REFRESH_REPLAY_WINDOW_SECONDS:-30}
+    # Checks new passwords against known breaches through the Pwned Passwords range API (k-anonymity).
+    PWNED_PASSWORD_CHECK: ${PWNED_PASSWORD_CHECK:-True}
+    # Proxies in front of the app (0 in development). Behind a reverse proxy set the real number, or every
+    # client shares the proxy's address in the per-client limits.
+    NUM_PROXIES: ${NUM_PROXIES:-0}
     # First connection to github.com needs no manual "yes" prompt.
     GIT_SSH_COMMAND: ssh -o StrictHostKeyChecking=accept-new
   volumes:

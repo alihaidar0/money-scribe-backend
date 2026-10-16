@@ -307,6 +307,7 @@ jobs:
     env:
       DJANGO_SETTINGS_MODULE: config.settings.production
       SECRET_KEY: ci-deploy-check-only-not-a-real-secret-key-0123456789
+      JWT_SIGNING_KEY: ci-deploy-check-only-not-a-real-signing-key-0123456789
       DATABASE_URL: sqlite:////tmp/check.db
       ALLOWED_HOSTS: localhost
     steps:
@@ -420,6 +421,7 @@ jobs:
         run: |
           docker run -d --name app -p 8080:8080 \
             -e SECRET_KEY=ci-smoke-only-not-a-real-secret-key-0123456789 \
+            -e JWT_SIGNING_KEY=ci-smoke-only-not-a-real-signing-key-0123456789 \
             -e DATABASE_URL=sqlite:////tmp/smoke.db \
             -e ALLOWED_HOSTS=example.com \
             project:ci

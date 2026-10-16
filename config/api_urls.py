@@ -1,9 +1,10 @@
 """The routes under ``/api/v1/``.
 
-Each app adds its routes here as its endpoints are built, for example
-``path("auth/", include("users.urls"))``. There are none yet.
+Each app adds its routes here as its endpoints are built.
 """
 
-from django.urls import URLPattern, URLResolver
+from django.urls import URLPattern, URLResolver, include, path
 
-urlpatterns: list[URLPattern | URLResolver] = []
+urlpatterns: list[URLPattern | URLResolver] = [
+    path("auth/", include("users.urls")),
+]

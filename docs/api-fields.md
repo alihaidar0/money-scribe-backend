@@ -141,8 +141,9 @@ permission stay on the device and have no field.
   when it cannot read it; the server then keeps the stored value, or `UTC`.
 - `language` is used for the push text and for the emails (codes and the new-device notice), so they read correctly in
   English and Arabic. The app sends the resulting `en` or `ar`; a device language that is neither falls back to `en`.
-- **Who sets them.** Registration and every sign-in send `language` and `time_zone`, and the server stores them: the device
-  the user signs in on decides, so a new device never leaves a stale value. Afterwards the app sends only changes, with a
+- **Who sets them.** Registration, the email-code verification and every sign-in send `language` and `time_zone`, and the
+  server stores them on the user ([ADR 0001](adr/0001-user-model.md)): the device the user signs in on decides, so a new
+  device never leaves a stale value. A request that leaves one out keeps the stored value. Afterwards the app sends only changes, with a
   `PATCH` of the settings when the user changes the language or when the time zone differs from the stored one.
 
 ## Push notifications
@@ -158,21 +159,40 @@ the session ends ([ADR 0009](adr/0009-sessions-and-devices.md)). The endpoints c
 | --- | --- |
 | `name` | text, 1 to 100 characters, trimmed ([ADR 0001](adr/0001-user-model.md)) |
 | `email` | the sign-in identity; changed only through the confirmed flow below |
-| register | `name`, `email`, `password` (8 or more characters with a digit), `language`, `time_zone`; no `device`, because no session exists yet |
-| verify email | the 4-digit code and `device`; this call creates the session and returns the tokens, so the app goes straight into the app |
+| register | `name`, `email`, `password`, `language`, `time_zone`; no `device`, because no session exists yet. The answer is the same for a new, a pending and an already registered address (see below). The password has 15 to 128 characters and no other composition rule (no digit or symbol is required); it must not resemble the name or email, be a very common password or appear in a known data breach; each failed rule is its own error code (`password_too_short`, `password_too_long`, `password_too_similar`, `password_too_common`, `password_compromised`, `attr` `password`) |
+| verify email | `email`, the 6-digit code and `device`; this call creates the session and returns the tokens, so the app goes straight into the app. A wrong code carries `attempts_left` |
 | sign in | `email`, `password`, `device`, `language`, `time_zone` |
 | refresh | the refresh token and `device`, so `app_version`, `os_version` and `last_active_at` stay current |
-| email code | 4 digits, to verify the email or to reset the password; resend allowed with a cooldown |
+| sign out | the bearer access token, or the `refresh_token` in the body when the access token has expired |
+| profile (read) | `GET /api/v1/auth/profile/`: `id`, `name`, `email`, and the stored `language` and `time_zone` (read-only here); editing the name comes with the account step |
+| email code | 6 digits, to verify the email or to reset the password; resend allowed with a cooldown |
 | reset password | email, then the code, then the new password; it ends at the sign-in screen and needs no `device` |
 | change password | the current password and the new password |
 | delete account | the password must be sent to confirm |
 
+**Passwords** follow NIST SP 800-63B-4: at least 15 characters because a password is the only factor, up to 128 (counted
+in Unicode code points, after normalization), no composition rules, spaces and any Unicode text allowed and never trimmed,
+normalized to NFKC on the server before it is checked, hashed or compared (so visually identical Arabic typed on different
+keyboards is one password), and checked
+against the user's own name and email, a list of very common passwords and a breach corpus (only a five-character hash
+prefix leaves the server; if that service is unreachable the check is skipped). Sign-in does not apply these rules, only
+registration and the later password changes. The policy lives only on the server: a client enforces no password rule,
+words each `password_*` code itself, takes the numbers from `min_length` (on `password_too_short`) and `max_length` (on
+`password_too_long`), and shows the English `detail` for a `password_*` code it does not know. Every email code (verify,
+reset, email change) has 6 digits and is kept as text, so a leading zero survives.
+
+**Registration reveals nothing.** The answer is `201` with the same body whether the address is new, pending or already
+registered. A pending address is registered again (the new name, password, `language` and `time_zone` replace the old
+ones) and gets a new code. A verified address is left untouched and its owner gets an email saying someone tried, with no
+code. The app shows its "enter the code" screen either way; if no code arrives, it suggests signing in or resetting the
+password. `resend_too_soon` and `resend_limit_reached` apply to all three cases alike.
+
 **Email change** (agreed shapes, finished in the request issues): the name is a plain update of the profile (`PATCH`).
-Changing the email is `POST` of the new email and the current password, which sends a 4-digit code to the **new** address
+Changing the email is `POST` of the new email and the current password, which sends a 6-digit code to the **new** address
 while the old one stays active, then `POST` of the code, which switches the email, ends all other sessions, keeps the
 current one, sends a notice to the old address, and returns the updated profile. A new request replaces the earlier
 pending change, and the pending change can be cancelled (`DELETE`). Codes expire, attempts and resends are limited, and
-the answers use `429` with `Retry-After`; a taken address answers `409 email_already_registered`.
+the answers use `429` with `Retry-After`; a taken address answers `409 email_already_registered` (only here: the caller is signed in and has proved the password).
 
 ## Reports and read models
 

@@ -7,3 +7,9 @@ DEBUG = True
 EMAIL_BACKEND = os.environ.get(
     "EMAIL_BACKEND", "django.core.mail.backends.smtp.EmailBackend"
 )
+# A key for local work only, so `manage.py` runs in a container that predates the compose variable.
+# Never in base.py or production.py: staging and production must set their own (users.E001).
+JWT_SIGNING_KEY = (
+    os.environ.get("JWT_SIGNING_KEY")
+    or "dev-only-signing-key-change-in-production-0123456789abcdef"
+)
