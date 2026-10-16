@@ -48,6 +48,8 @@ def breach_count(password: str) -> int | None:
     the password leave this server, never the password or its full hash. The padding header makes
     every answer the same size, so the response does not hint at the prefix.
     """
+    # SHA-1 is what the Pwned Passwords range protocol defines; it is a lookup key here, not how passwords are
+    # stored (those use Argon2id), and only its first five characters leave this server.
     digest = hashlib.sha1(password.encode(), usedforsecurity=False).hexdigest().upper()
     prefix, suffix = digest[:5], digest[5:]
     request = urllib.request.Request(  # noqa: S310 - a fixed https URL

@@ -1,4 +1,3 @@
-import hashlib
 import logging
 import urllib.error
 from typing import Any
@@ -18,9 +17,16 @@ from users.validators import (
 PASSWORD = "correct horse battery staple"
 
 
-def sha1_parts(password: str) -> tuple[str, str]:
-    digest = hashlib.sha1(password.encode(), usedforsecurity=False).hexdigest().upper()
-    return digest[:5], digest[5:]
+# Known answers: the SHA-1 of each text split after five characters, the way the range API wants it.
+# Fixed values, not computed here, so the tests check the implementation instead of repeating it.
+SHA1_PARTS = {
+    "password": ("5BAA6", "1E4C9B93F3F0682250B6CF8331B7EE68FD8"),
+    PASSWORD: ("ABF7A", "AD6438836DBE526AA231ABDE2D0EEF74D42"),
+}
+
+
+def sha1_parts(text: str) -> tuple[str, str]:
+    return SHA1_PARTS[text]
 
 
 class FakePwnedService:
