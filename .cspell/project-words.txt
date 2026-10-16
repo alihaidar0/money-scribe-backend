@@ -37,6 +37,7 @@ keychain
 keyset
 logformat
 Mailpit
+neondb
 NFKC
 NIST
 oasdiff

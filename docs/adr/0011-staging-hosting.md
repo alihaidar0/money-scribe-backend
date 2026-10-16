@@ -13,8 +13,10 @@ split into what staging needs now and what it can do without until later.
 
 Facts checked on 2026-10-16 (free tiers change often; check the provider's pricing page before relying on a number):
 
-- Neon offers PostgreSQL 18, generally available since May 2026. Its free plan has 0.5 GB of storage and 100 compute
-  hours a month, and the compute suspends when idle.
+- Neon offers PostgreSQL 18, generally available since May 2026. The free plan, as the project-creation dialog showed it
+  on 2026-10-16 for the region AWS Europe Central 1 (Frankfurt): 1 GB of storage, the compute scales to zero when
+  inactive, autoscaling up to 2 CU, and 10 branches per project. Third-party pages quote a monthly allowance of compute
+  hours that the dialog did not show, so the plan's page is the place to check it.
 - Render deploys a prebuilt image from a registry, and a deploy hook accepts `imgURL` to pin a tag or a digest. An
   image-backed service does not redeploy by itself when a new image is pushed, so the hook is how a deploy starts.
 - A Render free web service sleeps after about 15 minutes without traffic and needs about a minute to wake. It has no
