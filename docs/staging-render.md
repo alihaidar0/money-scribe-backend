@@ -157,7 +157,7 @@ environment variables (step 5) **before** the first click on **Deploy web servic
    | Project / environment | `money-scribe` / `staging` |
    | Region | Frankfurt (EU Central) (the page says "1 existing service": the Key Value instance) |
    | Compute | **$0 / month, 0.1 CPU, 512 MB RAM, Free**. **Render pre-selects a paid plan** ($7 / month, 0.5 CPU): select the Free row and check that the bar at the bottom says $0 / month |
-   | Health Check Path (under **Advanced**) | `/healthz`. The grey text in the field is only a hint: type it |
+   | Health Check Path (under **Advanced**) | `/healthz`. The grey text in the field is only a hint, **not a value**: click the field and type it. The first deploy of staging went out with the field empty, and the service's Settings showed it empty until it was typed |
    | Docker Command | Empty: the image starts itself |
    | Pre-Deploy Command | Empty and locked on the Free plan; the container runs the migrations when it starts |
    | Secret Files | Not used |
@@ -217,9 +217,15 @@ Lines after that are requests, and the warnings among them are normal:
 | `HEAD / ... 301` from `127.0.0.1`, agent `Go-http-client` | Render probing the port. The 301 is the redirect to HTTPS |
 | `GET / ... 404` and `WARNING django.request: Not Found: /` | Someone opened the bare address (Render's probe, or your browser). The API has no page at `/`; the paths are `/api/v1/...`, `/api/docs/` and the admin |
 | `GET /favicon.ico ... 404` | The browser asks for an icon. There is none |
-| `GET /healthz ... 200` | The health check |
+| `GET /healthz ... 200`, agent `Render/1.0`, from a private `10.x` address, every 5 seconds | Render's own health check. It appears only once the Health Check Path is saved; before that the log has no such line |
 
-One **error** line appears at start-up and is harmless:
+Saving a setting such as the Health Check Path **redeploys** the service. The log of that restart (about 35 seconds from
+`Starting service...` to `Your service is live`) showed the migrations, the Gunicorn start, the two probes of `/` and then
+the health checks every 5 seconds. A redeploy pulls the image tag `staging` again, so it can change the running version to
+the newest build of `develop`: check the `x-release` header afterwards. (Whether a redeploy after a deploy by the workflow
+keeps the pinned digest is not verified.)
+
+Before the Gunicorn fix, the start-up also showed one **error** line, harmless:
 
 ```text
 [ERROR] Control server error: [Errno 13] Permission denied: '/home/app'
@@ -247,7 +253,9 @@ the address of the service live in a GitHub **environment** called `staging`, so
 ### The Render side
 
 1. Open the service `money-scribe-staging`, then **Settings**.
-2. **Health Check Path** must read `/healthz` (type it and save if the field is empty).
+2. Under **Health Checks**, the **Health Check Path** must read `/healthz`. If the field is empty, click **Edit**, type
+   `/healthz` and save (Render may redeploy). Without a path Render only checks that the port opens, so a deploy can be
+   called successful before the app answers; with it, a new version goes live only once `/healthz` answers `200`.
 3. **Deploy Hook** has a copy icon. Use only the icon. **Never open the link:** opening it starts a deploy, and the URL
    holds a key, so it is a secret ("Your deploy hook URL is a secret!", Render's documentation). If it ever leaks, use
    **Regenerate Hook** and update the GitHub secret.
@@ -348,6 +356,7 @@ Taken from Render's documentation on 2026-10-16 and from the console; check both
 | The instance is created in the wrong region | The region cannot be changed: delete the instance and create it again |
 | The web service cannot reach `REDIS_URL` | A different region or workspace, or the External URL was copied instead of the Internal one |
 | A shown price is not $0 | A paid compute plan was selected: delete the instance (staging holds nothing) and create it again on **Free** |
+| The service's Settings show an empty Health Check Path | The path was never saved (the form's grey text is only a hint): **Settings**, **Health Checks**, **Edit**, `/healthz` |
 | The web service form shows $7 / month | Render pre-selects a paid plan: select the **$0 / month** row before deploying |
 | The log stops with a missing variable (`KeyError`) | A key is misspelled or missing: compare with the table of step 5 and edit the variable (a change redeploys) |
 | The admin sign-in answers 400 | `ALLOWED_HOSTS` does not match the service's address: use the address shown at the top of the service page |
