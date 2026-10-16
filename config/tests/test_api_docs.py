@@ -36,31 +36,42 @@ def user_client() -> Client:
 
 
 @pytest.mark.parametrize("path", [DOCS, SCHEMA])
-def test_an_anonymous_visitor_is_sent_to_the_admin_sign_in(
+def test_an_anonymous_visitor_gets_a_404_not_the_admin_address(
     client: Client, path: str
 ) -> None:
+    """A redirect to the admin sign-in would reveal the secret ADMIN_URL to anyone."""
     response = client.get(path)
 
-    assert response.status_code == 302
-    assert response["Location"].startswith(reverse("admin:login"))
-    assert f"next={path}" in response["Location"]
+    assert response.status_code == 404
+    assert "Location" not in response
 
 
 @pytest.mark.parametrize("path", [DOCS, SCHEMA])
-def test_a_signed_in_user_who_is_not_staff_is_refused_too(
+def test_a_signed_in_user_who_is_not_staff_gets_a_404_too(
     user_client: Client, path: str
 ) -> None:
     response = user_client.get(path)
 
-    assert response.status_code == 302
-    assert response["Location"].startswith(reverse("admin:login"))
+    assert response.status_code == 404
+    assert "Location" not in response
+
+
+@pytest.mark.parametrize("path", [DOCS, SCHEMA])
+def test_an_inactive_staff_account_gets_a_404(path: str) -> None:
+    client = Client()
+    user = UserFactory.create(is_staff=True)
+    client.force_login(user)
+    user.is_active = False
+    user.save(update_fields=["is_active"])
+
+    assert client.get(path).status_code == 404
 
 
 def test_a_bearer_token_does_not_open_the_docs(api_client: Any, user: User) -> None:
     """The docs are not an API operation: an access token is not a staff session."""
     response = api_client.get(DOCS, headers={"Authorization": "Bearer anything"})
 
-    assert response.status_code == 302
+    assert response.status_code == 404
 
 
 # --- what staff see ---------------------------------------------------------------------------

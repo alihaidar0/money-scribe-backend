@@ -354,7 +354,8 @@ listed at the end of this section. Each step is its own branch and pull request.
   in its summary. One pull request, because the deploy is called from `docker.yml`. The repository variable
   `PUBLISH_IMAGE=ghcr` is set and the package is public
 - [ ] **9.4 `feat/api-docs`: Swagger UI**: `/api/docs/` and `/api/schema/`, served only outside production and only to
-  staff accounts (the admin sign-in), with the UI bundled in the image and no CDN, tested; the committed
+  staff accounts (signed in through the admin panel; anyone else gets a `404`, never a redirect that would reveal the
+  admin path), with the UI bundled in the image and no CDN, tested; the committed
   `openapi/schema.yaml` is unchanged
 - [ ] **9.5 The services and the first deploy** (the owner, by hand, following [`staging.md`](staging.md)): the Neon
   project ([`staging-neon.md`](staging-neon.md)), the Render Key Value instance and web service
