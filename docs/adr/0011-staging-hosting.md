@@ -21,6 +21,12 @@ Facts checked on 2026-10-16 (free tiers change often; check the provider's prici
   image-backed service does not redeploy by itself when a new image is pushed, so the hook is how a deploy starts.
 - A Render free web service sleeps after about 15 minutes without traffic and needs about a minute to wake. It has no
   free background worker; a worker is a paid instance.
+- Render gives each workspace 750 free instance hours a month, and one free Key Value instance and one free Postgres
+  database. The free Key Value instance has 25 MB, 50 connections and no persistence, runs Valkey 8.1 (Redis-compatible)
+  and is not reachable from the internet until an inbound rule is added. Its creation form required a payment method on
+  file (seen on 2026-10-16; Render's documentation does not say so). The Hobby plan costs $0 plus paid compute; usage over
+  its allowances (5 GB of bandwidth, 500 build minutes) is billed once a card is on file. Details and screens are in
+  [`../staging-render.md`](../staging-render.md).
 
 ## Decision
 

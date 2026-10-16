@@ -58,6 +58,7 @@ stoplight
 tini
 tufin
 upsert
+Valkey
 Upstash
 winget
 zizmor
@@ -81,6 +82,8 @@ viewset
 addopts
 allkeys
 gsub
+gthread
+gunicornc
 isready
 keygen
 maxmemory
