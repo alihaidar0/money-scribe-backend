@@ -141,7 +141,7 @@ Everything here is free or open source. Prices and limits change, so check the v
 | The contract | OpenAPI 3 from `drf-spectacular` | **available**: `scripts/schema.sh` |
 | Style, breaking changes | Spectral, oasdiff | **available**: CI jobs, run as pinned containers |
 | Request and review | issue form, pull request template, CODEOWNERS | **available** |
-| Interactive docs (Swagger UI) | a static page built from the schema | *planned*: published to GitHub Pages (free for public repositories) or Cloudflare Pages (free; works for private repositories) |
+| Interactive docs (Swagger UI) | served by the app at `/api/docs/`, bundled, staff only | **available** in development and staging, never in production (`api-workflow.md`); a public static page (GitHub Pages or Cloudflare Pages) stays *planned* |
 | Postman | import `openapi/schema.yaml`; commit environment files with invented values | *planned*; the contract is in git, so nothing depends on a shared workspace. Postman's free-plan limits have changed repeatedly: check postman.com/pricing |
 | Test the real API against the schema | Schemathesis | optional; recommended once real endpoints exist |
 | The contract for the client | `openapi.yaml`, attached to every published project release (drafts are visible to maintainers only) | **available**: see [`consuming-the-api.md`](consuming-the-api.md) |
