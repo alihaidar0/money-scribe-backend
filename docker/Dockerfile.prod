@@ -61,6 +61,11 @@ RUN apt-get update \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
+# The running container installs nothing: the dependencies are already in /app/.venv. Removing the base image's pip
+# also removes the copies of urllib3, msgpack and setuptools that pip carries inside itself, which image scanners
+# report although nothing in the application uses them, and leaves no installer for an attacker to reuse.
+RUN python -m pip uninstall --yes pip
+
 RUN groupadd --gid 1001 app \
     && useradd --uid 1001 --gid app --no-create-home --shell /usr/sbin/nologin app
 
