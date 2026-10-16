@@ -39,7 +39,8 @@ been updated. It fails when the Staging release has been published by mistake, b
 
 ## Not decided here: deployment
 
-Deployment is a separate, later step. It needs choices that are not made yet and none of it is required for drafts:
+Staging hosting is decided in [ADR 0011](0011-staging-hosting.md). Production deployment is a separate, later step. It
+needs choices that are not made yet and none of it is required for drafts:
 
 - the hosting target for the app, PostgreSQL, Redis and the Celery worker and Beat, with separate staging and
   production instances;

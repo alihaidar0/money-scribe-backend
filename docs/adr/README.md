@@ -15,8 +15,9 @@ A decision that changes gets a new record that supersedes the old one; the old f
 | [0008](0008-money-on-the-wire.md) | Money on the wire: decimal string and currency | accepted |
 | [0009](0009-sessions-and-devices.md) | Session and device records, retention and privacy | accepted |
 | [0010](0010-admin-panel-and-email-outbox.md) | The admin panel and a database email outbox for development and staging | accepted |
+| [0011](0011-staging-hosting.md) | Staging on free tiers: Neon, Render and the GitHub Container Registry; what is deferred | accepted |
 
 The fields and limits of each resource are in [`../api-fields.md`](../api-fields.md).
 
-Still open: push notification wiring and the hosting target, with the shared domain for the web app and the API. All
-three belong to later steps (`docs/steps.md`).
+Still open: push notification wiring, production hosting, and the shared domain for the web app and the API. All three
+belong to later steps (`docs/steps.md`). The setup and operation of staging are in [`../staging.md`](../staging.md).

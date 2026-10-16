@@ -108,11 +108,16 @@ without pushing it anywhere. Publishing the image to a registry is **opt-in**,
 chosen per project with one repository variable (Settings → Secrets and
 variables → Actions → Variables):
 
-| `PUBLISH_IMAGE` | What happens on a merge into `main` | What to add |
+| `PUBLISH_IMAGE` | What happens on a merge into `main` (and into `develop`: the `staging` image) | What to add |
 | --- | --- | --- |
 | *(unset — the default)* | nothing is published; `docker.yml` ends green with a notice | nothing |
 | `ghcr` | the image goes to GitHub Container Registry, `ghcr.io/<owner>/<repo>` | nothing: it signs in with the automatic token. Set the package visibility under the repository's *Packages* if you want it public |
 | `dockerhub` | the image goes to `docker.io/<DOCKERHUB_USERNAME>/<repo>`, and the README is synced to the Docker Hub page | variable `DOCKERHUB_USERNAME` (your namespace) and secret `DOCKERHUB_TOKEN` (an access token, Read & Write) |
+
+A merge into `develop` also builds the image when publishing is on, with the tags `staging` and `sha-<short>` (never
+`latest`); `main` and the `v*.*.*` tags keep their own tags. A project that deploys a staging environment adds the GitHub
+environment `staging` (deployment branches: `develop`) with the secrets and variables of its host; this project's are
+in [`staging.md`](staging.md).
 
 Any other value fails the run on purpose, so a typo is noticed. A different
 registry or host: replace the `publish` job in `docker.yml` and add the
