@@ -1,7 +1,8 @@
 # ============================================================
 #  .github/workflows/docker.yml
 #
-#  Publishes the project's PRODUCTION image — OPT-IN, off by default.
+#  Publishes the project's image — OPT-IN, off by default. A merge into main builds
+#  the production image; a merge into develop builds the staging image.
 #
 #  The template only VERIFIES the image: CI ("Production image") builds
 #  docker/Dockerfile.prod and smoke-tests it on every pull request, pushing
@@ -22,6 +23,10 @@
 #  Triggers:
 #    - Push to main (a merge develop → main builds the image; the release itself
 #                    stays a draft until the owner publishes it)
+#    - Push to develop            → the staging image: tags `staging` and `sha-<short>`,
+#                                   never `latest`; the job "Deploy to staging" then
+#                                   calls deploy-staging.yml with the digest of this
+#                                   very build (docs/staging.md, ADR 0011)
 #    - Tag v*.*.*                 → adds the semver tags (publishing the release draft
 #                                   creates the tag as the owner, which starts this)
 #    - Manual dispatch
@@ -35,13 +40,16 @@
 #             amd64 + arm64 builds, SBOM, Sigstore-signed provenance.
 #             Tags: latest · sha-<short> · <version> + <major>.<minor> on v* tags
 #    scan     Trivy scan of the pushed digest → Security tab (informational)
+#    deploy-staging  develop only, ghcr only, and only once the repository variable
+#                    DEPLOY_STAGING is `true` (set it after the services exist,
+#                    docs/staging.md): deploys that digest to staging
 # ============================================================
 
 name: Docker
 
 on:
   push:
-    branches: [main]
+    branches: [main, develop]
     tags: ["v*.*.*"]
   workflow_dispatch:
 
@@ -130,8 +138,12 @@ jobs:
       set-meta-labels: true
       set-meta-annotations: true
       meta-images: ${{ needs.ready.outputs.image }}
+      # The commit goes into the image (APP_RELEASE), so that /healthz can say which build is running.
+      build-args: |
+        GIT_SHA=${{ github.sha }}
       meta-tags: |
         type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+        type=raw,value=staging,enable=${{ github.ref == 'refs/heads/develop' }}
         type=sha,prefix=sha-,format=short
         type=semver,pattern={{version}}
         type=semver,pattern={{major}}.{{minor}}
@@ -181,9 +193,10 @@ jobs:
           META_JSON: ${{ needs.publish.outputs.meta-json }}
           VERIFY: ${{ needs.publish.outputs.cosign-verify-commands }}
           SHA: ${{ github.sha }}
+          REF_NAME: ${{ github.ref_name }}
         run: |
           {
-            echo "## 🐳 Published production image"
+            echo "## 🐳 Published image (${REF_NAME})"
             echo ""
             echo "| Field | Value |"
             echo "|-------|-------|"
@@ -198,3 +211,17 @@ jobs:
             echo "$VERIFY"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
+
+  deploy-staging:
+    name: Deploy to staging
+    needs: [ready, publish]
+    # Only the staging image, only when it went to ghcr (the deploy pulls it from there), and only once the owner has
+    # created the services and switched the deploy on (repository variable DEPLOY_STAGING=true).
+    if: ${{ !cancelled() && needs.publish.result == 'success' && github.ref == 'refs/heads/develop' && needs.ready.outputs.registry == 'ghcr.io' && vars.DEPLOY_STAGING == 'true' }}
+    permissions:
+      contents: read
+      packages: read
+    uses: ./.github/workflows/deploy-staging.yml
+    with:
+      commit: ${{ github.sha }}
+      digest: ${{ needs.publish.outputs.digest }}
