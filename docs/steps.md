@@ -288,8 +288,9 @@ Each decision has a record in [`adr/`](adr/README.md). Settle the open ones befo
 - [ ] The web cookie needs a shared domain: the developer agrees in principle and waits for the owner's choice of domain
   (sections 9 and 12)
 - [ ] Push notification provider wiring (FCM device tokens): later, with the `notifications` feature
-- [ ] Staging hosting and email delivery: decided in stage 2 (section 9). Production hosting and the shared domain of the
-  web app and the API: later (section 12)
+- [ ] Staging hosting: Neon, Render and the GitHub Container Registry on free tiers, with the worker and Beat deferred,
+  [ADR 0011](adr/0011-staging-hosting.md). Email delivery on staging: the outbox. Production hosting, real email delivery
+  and the shared domain of the web app and the API: later (section 12)
 
 ## 8. Stage 1: the auth layer (one topic branch per step)
 
@@ -312,7 +313,7 @@ while staging already runs, and each one deploys to staging by itself and is tes
   `APP_ENVIRONMENT` checks that refuse it in production), with tests (ADR 0010)
 - [x] `.github/CODEOWNERS` needs no change: the client repository's owner, `@alihaidar0`, is already listed for
   `/openapi/` and `/.spectral.yaml`. Add another developer's handle to those two lines when one joins
-- [ ] **8.2 `feat/auth-register-signin`**: the `Session` model and the `device` object (ADR 0009); register, verify email
+- [x] **8.2 `feat/auth-register-signin`**: the `Session` model and the `device` object (ADR 0009); register, verify email
   (this call creates the session) and resend the code; sign in; refresh with the 30 second replay window; sign out; the
   session check on every request; throttling and the sign-in lock with `Retry-After`; hashed 6-digit codes, sent through
   Mailpit in development; Argon2id password hashing and the NIST password policy (15 characters, no composition rules, a breach check); a registration that reveals nothing; limits that are atomic, per client and fail closed; the daily purge of unverified accounts; `language` and `time_zone` stored on the user (ADR 0001); the
@@ -335,25 +336,37 @@ while staging already runs, and each one deploys to staging by itself and is tes
 ## 9. Stage 2: staging deployment and the first test in the Flutter app
 
 `develop` is staging. Start it right after step 8.2, so the first test in the app happens early; steps 8.3 to 8.5 are then
-built while staging already runs. Choose the simplest hosting that works for a phone and the web build; production comes
-later (section 12). Staging holds invented data only. Each choice gets a short record in [`adr/`](adr/README.md).
+built while staging already runs. Staging runs on free tiers (Neon for PostgreSQL 18, a Render web service for the
+image, a Render Key Value instance for Redis), chosen in [ADR 0011](adr/0011-staging-hosting.md); the one-time setup, the
+checks and the rollback are in [`staging.md`](staging.md). Staging holds invented data only. What it does not do yet is
+listed at the end of this section. Each step is its own branch and pull request.
 
-- [ ] **9.1 Choose the staging hosting** and record it: it must run the app, PostgreSQL 18, Redis 8 and the Celery worker
-  and Beat, with a public HTTPS address, environment variables, an image pulled from the registry, deploys by image
-  digest, and a low cost
+- [ ] **9.1 Staging hosting recorded**: [ADR 0011](adr/0011-staging-hosting.md) (Neon, Render, the Render Key Value
+  instance, the `onrender.com` address, the image from the GitHub Container Registry, the worker and Beat deferred)
 - [ ] **9.2 Codes on staging through the outbox**: staging sends no real email yet. It uses the email outbox
   (`EMAIL_BACKEND` set to the database backend), and you copy each 6-digit code from the emails in the admin panel at the
   staging `ADMIN_URL` (ADR 0010). Real delivery is a separate step before production (section 12)
-- [ ] **9.3 The GitHub environment `staging`** (deployment branches: `develop`) with its own secrets and variables;
-  image publishing on (`PUBLISH_IMAGE`); an image built from `develop` (tags `staging` and `sha-<short>`)
-- [ ] **9.4 The staging deploy workflow**: runs after **CI passed** on `develop`; deploys by image digest, runs `migrate`
-  once, probes `/healthz`, and shows the deployed digest in its summary
-- [ ] **9.5 The first contract release**: check that `version` in `pyproject.toml` is the version to release, open the
+- [ ] **9.3 `ci/staging-deploy`: the staging image and its deploy**: `docker.yml` also builds on every merge into
+  `develop` (tags `staging` and `sha-<short>`, never `latest`) with the commit as a build argument, so `/healthz` reports
+  it in the `X-Release` header; its job "Deploy to staging" then calls the reusable workflow `deploy-staging.yml` with the
+  digest of that build (and the same workflow runs by hand for a rollback or an older commit). `scripts/deploy-staging.sh`
+  calls the Render deploy hook pinned to the digest, waits until `/healthz` reports the same release, and shows the digest
+  in its summary. One pull request, because the deploy is called from `docker.yml`. The repository variable
+  `PUBLISH_IMAGE=ghcr` is set and the package is public
+- [ ] **9.4 `feat/api-docs`: Swagger UI**: `/api/docs/` and `/api/schema/`, served only outside production and only to
+  staff accounts (the admin sign-in), with the UI bundled in the image and no CDN, tested; the committed
+  `openapi/schema.yaml` is unchanged
+- [ ] **9.5 The services and the first deploy** (the owner, by hand, following [`staging.md`](staging.md)): the Neon
+  project, the Render Key Value instance and web service, the environment variables, the GitHub environment `staging`
+  (deployment branches: `develop`) with its secret `RENDER_DEPLOY_HOOK_URL` and variable `STAGING_URL`, the first deploy
+  by hand, then the repository variable `DEPLOY_STAGING=true` that switches the automatic deploy on, the superuser, the
+  uptime monitor, and `NUM_PROXIES` measured
+- [ ] **9.6 The first contract release**: check that `version` in `pyproject.toml` is the version to release, open the
   release pull request (`develop` → `main`), check the draft `v<version>` (notes and the `openapi.yaml` asset), and
   publish it so the Flutter developer pins that tag ([`consuming-the-api.md`](consuming-the-api.md)); or pin a commit and
   wait, if you prefer
-- [ ] **9.6 The first test in the app**: the staging flavor points at the staging address. Run this list and record the
-  result:
+- [ ] **9.7 The first test in the app**: the staging flavor points at the staging address. First check the admin panel and
+  Swagger UI on staging ([`staging.md`](staging.md)), then run this list and record the result:
   - register, copy the code from the outbox in the admin panel, verify, and land in the app; sign out and sign in again
   - a wrong password, then the sign-in lock with its countdown (`Retry-After`)
   - the access token expires after 10 minutes and the app refreshes without asking the user
@@ -361,6 +374,16 @@ later (section 12). Staging holds invented data only. Each choice gets a short r
   - password reset, change password, change email, delete account (once step 8.3 is deployed)
   - a session ended from another device shows the reason from its `session_*` code (once step 8.4 is deployed)
 - [ ] Gate: start stage 3 only when the app works against staging. Fix what the test found first.
+
+Not on staging yet (ADR 0011 has the reasons):
+
+- The Celery worker and Beat. The two daily purges (old outbox emails, unverified accounts) do not run, and the leftovers
+  are invented data. Add a paid worker running `celery worker -B` when a job matters (step 8.4, stage 3); production has
+  its own worker and Beat (section 12).
+- Real email delivery, backups and the hardened admin panel: section 12.
+- The web build and its token cookie: they need the owner's own domain shared by the web app and the API (steps 8.5 and
+  12), because `onrender.com` is a public suffix. Staging is for the mobile app only.
+- Migrations as a separate release step: the container runs them when it starts, which is safe for one instance.
 
 ## 10. Stage 3: the features, one at a time (salary first)
 
@@ -411,14 +434,17 @@ refreshes the rolling draft "Staging", which is never published. See
 `main` is production. Nothing here is set up yet. It follows the staging deployment of section 9 and is done when a
 release candidate is stable.
 
-- [ ] Production hosting chosen, with its own PostgreSQL, Redis, Celery worker and Beat, separate from staging
+- [ ] Production hosting chosen, with its own PostgreSQL, Redis, Celery worker and exactly one Beat, separate from staging.
+  A free tier is not a production platform (it sleeps and has no backups worth the name); staging's choice
+  ([ADR 0011](adr/0011-staging-hosting.md)) does not carry over
 - [ ] The GitHub environment `production` (deployment branches: `main`; a required reviewer once there is a second
   maintainer; administrators cannot bypass) with its own secrets and variables
 - [ ] One registrable domain shared by the web app and the API (for example `app.<domain>` and `api.<domain>`), for staging
   and for production, because the web refresh cookie is `SameSite=Strict` (ADR 0006); then the allowed origins and the
   cookie settings. It is needed as soon as the web build is tested against staging
 - [ ] The production deploy workflow: on the published release or a merge into `main`; deploy by image digest, run
-  `migrate` once, probe `/healthz`
+  `migrate` once as a release step when more than one instance runs (`RUN_MIGRATIONS=false` on the instances), probe
+  `/healthz` for the expected release. `NUM_PROXIES` set to the measured proxy count
 - [ ] Real email delivery: an SMTP provider behind the same `EMAIL_BACKEND` setting, with the sending domain
   authenticated (SPF, DKIM and DMARC) so that mail is not marked as spam; production must not use the outbox
   ([ADR 0010](adr/0010-admin-panel-and-email-outbox.md))
