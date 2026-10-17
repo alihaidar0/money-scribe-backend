@@ -30,14 +30,19 @@ cffi
 DKIM
 DMARC
 errorlens
+fetchone
 ghaction
 healthz
+imagetools
 keychain
 keyset
+logformat
 Mailpit
+neondb
 NFKC
 NIST
 oasdiff
+onrender
 OWASP
 pgcli
 pgsql
@@ -52,7 +57,10 @@ spectacular
 stoplight
 tini
 tufin
+Unbilled
 upsert
+Upstash
+Valkey
 winget
 zizmor
 zizmorcore
@@ -74,7 +82,10 @@ viewset
 # Environment variables, options, shell
 addopts
 allkeys
+dbname
 gsub
+gthread
+gunicornc
 isready
 keygen
 maxmemory
@@ -85,6 +96,7 @@ sshkey
 sslmode
 tolower
 toupper
+PGDATABASE
 PYTHONDONTWRITEBYTECODE
 PYTHONUNBUFFERED
 USERPROFILE

@@ -1,5 +1,9 @@
 # ============================================================
-#  .pre-commit-config.yaml — pure Python hooks (no Node.js)
+#  .pre-commit-config.yaml — the same checks as the Lint workflow, plus the Python ones
+#
+#  Nothing to install in the dev container: pre-commit keeps every tool in its own cache, including the
+#  Node.js that cspell and markdownlint need. The first run installs them (a few minutes); later runs only
+#  check the files being committed.
 #
 #  Install once, after `uv init` (all hook types in one go):
 #    pre-commit install
@@ -66,6 +70,41 @@ repos:
     hooks:
       - id: check-github-workflows
       - id: check-dependabot
+
+  # The checks of .github/workflows/lint.yml, run before the commit instead of after the push. Same configuration
+  # files (cspell.json, .markdownlint-cli2.jsonc, .hadolint.yaml, .github/actionlint.yaml, .github/zizmor.yml).
+  # Not here: `docker compose config` (needs Docker, which the dev container does not have) and the online audits
+  # of zizmor (they need a GitHub token), so a green commit is not a promise that Lint passes: CI stays the gate.
+  - repo: https://github.com/streetsidesoftware/cspell-cli
+    rev: v10.3.0
+    hooks:
+      - id: cspell
+
+  - repo: https://github.com/DavidAnson/markdownlint-cli2
+    rev: v0.23.3
+    hooks:
+      - id: markdownlint-cli2
+
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.11.0.1
+    hooks:
+      - id: shellcheck
+
+  - repo: https://github.com/Mateusz-Grzelinski/actionlint-py
+    rev: v1.7.12.25
+    hooks:
+      - id: actionlint
+
+  - repo: https://github.com/zizmorcore/zizmor-pre-commit
+    rev: v1.31.1
+    hooks:
+      - id: zizmor
+        args: [--persona=regular, --offline, --no-progress]
+
+  - repo: https://github.com/AleksaC/hadolint-py
+    rev: v2.15.1
+    hooks:
+      - id: hadolint
 
   - repo: https://github.com/compilerla/conventional-pre-commit
     rev: v4.4.0

@@ -190,6 +190,7 @@ INSTALLED_APPS += [
     "corsheaders",
     "rest_framework",
     "drf_spectacular",
+    "drf_spectacular_sidecar",
     "drf_standardized_errors",
     "django_celery_beat",
     "users",
@@ -325,6 +326,16 @@ SPECTACULAR_SETTINGS = {
     "DESCRIPTION": "The HTTP API of this project, generated from its code.",
     "VERSION": "0.1.0",  # the API contract version, not the app's release
     "SERVE_INCLUDE_SCHEMA": False,
+    # Swagger UI ships inside the image (drf-spectacular-sidecar): no CDN, so the page works under a strict CSP.
+    # The routes themselves are in config/api_docs.py (staff only, never in production).
+    "SWAGGER_UI_DIST": "SIDECAR",
+    "SWAGGER_UI_FAVICON_HREF": "SIDECAR",
+    "SWAGGER_UI_SETTINGS": {
+        "deepLinking": True,
+        "displayRequestDuration": True,
+        "persistAuthorization": True,
+        "tryItOutEnabled": True,
+    },
     # Separate request and response components: what client generators expect.
     "COMPONENT_SPLIT_REQUEST": True,
     # Keep /api/v1/ out of operation ids and tags (path versioning).
