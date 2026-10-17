@@ -362,7 +362,8 @@ listed at the end of this section. Each step is its own branch and pull request.
   ([`staging-render.md`](staging-render.md)), the environment variables, the GitHub environment `staging`
   (deployment branches: `develop`) with its secret `RENDER_DEPLOY_HOOK_URL` and variable `STAGING_URL`, the first deploy
   by hand, then the repository variable `DEPLOY_STAGING=true` that switches the automatic deploy on, the superuser, the
-  uptime monitor, and `NUM_PROXIES` measured
+  `NUM_PROXIES` measured (`3`), and, optionally, an uptime monitor (deferred: without it staging sleeps after 15 minutes
+  idle and the first request takes about a minute)
 - [ ] **9.6 The first contract release**: check that `version` in `pyproject.toml` is the version to release, open the
   release pull request (`develop` → `main`), check the draft `v<version>` (notes and the `openapi.yaml` asset), and
   publish it so the Flutter developer pins that tag ([`consuming-the-api.md`](consuming-the-api.md)); or pin a commit and
@@ -452,8 +453,24 @@ refreshes the rolling draft "Staging", which is never published. See
 release candidate is stable.
 
 - [ ] Production hosting chosen, with its own PostgreSQL, Redis, Celery worker and exactly one Beat, separate from staging.
-  A free tier is not a production platform (it sleeps and has no backups worth the name); staging's choice
-  ([ADR 0011](adr/0011-staging-hosting.md)) does not carry over
+  A free tier is not a platform for real financial data (it sleeps and has no backups worth the name), so the free start
+  described in the next item is a pre-launch stage only; staging's choice ([ADR 0011](adr/0011-staging-hosting.md)) does
+  not carry over as it is, because production gets its own workspace, database and Redis
+- [ ] **Production starts on free tiers, in its own Render workspace** (direction chosen on 2026-10-17; ADR 0012 records
+  it, with prices checked at that time, when this section is reached). It is a pre-launch stage: the owner and a few
+  trusted testers, no real users' financial data. What it needs and accepts:
+  - its own workspace, project and free Key Value instance (a workspace has one free Key Value instance and 750 free
+    instance hours, so it cannot share staging's), and its own Neon project, never staging's
+  - email over an HTTPS API of a provider, not SMTP: a free Render web service cannot use the outbound ports 25, 465 and
+    587, so the email backend of [ADR 0010](adr/0010-admin-panel-and-email-outbox.md) changes for production
+  - no Celery worker (a worker is a paid instance), so the daily purges, the ended-session purge and, from stage 3, the
+    reminders and pushes do not run until a worker is paid for
+  - the limits of free instances: it sleeps after 15 minutes without a request (a monitor keeps it awake and uses 720
+    to 744 of the 750 hours), a slow 0.1 CPU, restarts at any time, no zero-downtime deploys
+  - Neon free keeps only a **6-hour** history and one manual snapshot: no real backups (the manual `pg_dump` procedure
+    in [`staging-neon.md`](staging-neon.md) is a stop-gap, not a backup strategy). **Upgrade before real financial
+    data is stored**: the web service to a paid type, the Key Value instance to a paid one, Neon to a paid plan (all
+    possible in place), and the backups item below done
 - [ ] The GitHub environment `production` (deployment branches: `main`; a required reviewer once there is a second
   maintainer; administrators cannot bypass) with its own secrets and variables
 - [ ] One registrable domain shared by the web app and the API (for example `app.<domain>` and `api.<domain>`), for staging

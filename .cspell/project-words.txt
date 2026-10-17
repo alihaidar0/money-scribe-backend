@@ -57,9 +57,10 @@ spectacular
 stoplight
 tini
 tufin
+Unbilled
 upsert
-Valkey
 Upstash
+Valkey
 winget
 zizmor
 zizmorcore
@@ -81,6 +82,7 @@ viewset
 # Environment variables, options, shell
 addopts
 allkeys
+dbname
 gsub
 gthread
 gunicornc
@@ -94,6 +96,7 @@ sshkey
 sslmode
 tolower
 toupper
+PGDATABASE
 PYTHONDONTWRITEBYTECODE
 PYTHONUNBUFFERED
 USERPROFILE

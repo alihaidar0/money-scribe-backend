@@ -56,7 +56,8 @@ a free service has one instance, so they cannot race.
 **What the free tiers mean in practice.**
 
 - The first request after a pause takes about a minute. A free uptime monitor that calls `/healthz` every five minutes
-  keeps the service awake; that endpoint does not touch the database, so Neon can still suspend.
+  keeps the service awake (and uses 720 to 744 of the workspace's 750 free hours); that endpoint does not touch the
+  database, so Neon can still suspend. The monitor is optional and was deferred: staging sleeps when idle.
 - The first query after Neon suspends is slower than the rest.
 - The service runs one instance, with a small number of Gunicorn workers.
 - The address behind Render's proxies must be counted correctly (`NUM_PROXIES`, ADR 0006). Render's chain of proxies is
