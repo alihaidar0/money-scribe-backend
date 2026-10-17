@@ -50,8 +50,10 @@ Use the same region for all three services (for example Frankfurt), or every que
    once `migrate` has run (step 7 of that page, or the first deploy, because the container runs the migrations when it
    starts). Otherwise create it now with the command of that step. The password must pass the same policy as every
    user's: at least 15 characters, not similar to the email or the name, not a common or leaked one.
-9. **An uptime monitor** (any free one): call `https://<service>.onrender.com/healthz` every five minutes, so the free
-   instance does not sleep between your tests.
+9. **An uptime monitor (optional, deferred on staging).** Any free one (UptimeRobot and StatusCake state a 5-minute
+   interval on their free plans): call `https://<service>.onrender.com/healthz` every five minutes, so the free instance
+   does not sleep between your tests. Without it, the service sleeps after 15 minutes without a request and the first
+   request takes about a minute. With it, staging is awake all month and uses 720 to 744 of the 750 free hours.
 
 ## Environment variables of the web service
 
@@ -67,7 +69,7 @@ Use the same region for all three services (for example Frankfurt), or every que
 | `CSRF_TRUSTED_ORIGINS` | `https://<service>.onrender.com` |
 | `ADMIN_URL` | a random path, not `admin` (for example the output of `openssl rand -hex 6`) |
 | `EMAIL_BACKEND` | `outbox.backends.DatabaseEmailBackend` |
-| `NUM_PROXIES` | `1` at first; measure it (below) |
+| `NUM_PROXIES` | `3` on Render and Cloudflare (measured; start with `1` and measure it, below) |
 | `WEB_CONCURRENCY` | `1` (the free instance has 512 MB) |
 | `PWNED_PASSWORD_CHECK` | `True` |
 
@@ -80,12 +82,18 @@ The limits and the session record use the client address. DRF takes it from `X-F
 proxies from the right. Too low shares one address between all clients; too high lets a client choose its own address.
 
 1. Add to the service's environment, temporarily:
-   `GUNICORN_CMD_ARGS=--bind=0.0.0.0:$PORT --threads=4 --timeout=120 --access-logfile=- --error-logfile=- --no-control-socket --access-logformat='%(h)s xff=%({x-forwarded-for}i)s %(r)s %(s)s'`
+   `GUNICORN_CMD_ARGS=--threads=4 --timeout=120 --access-logfile=- --error-logfile=- --no-control-socket --access-logformat='%(h)s xff=%({x-forwarded-for}i)s %(r)s %(s)s'`
+   (no `--bind`: an environment variable is not expanded, so `$PORT` would stay literal, and Gunicorn binds to
+   `0.0.0.0:$PORT` by itself when `PORT` is set. This value replaces the entrypoint's defaults, hence the other flags)
 2. Call `https://<service>.onrender.com/healthz` from your phone on mobile data, and read the line in the Render logs.
 3. Find your phone's address in `xff=` (a list separated by commas). Count from the right end of the list up to and
    including your phone's address: that number is `NUM_PROXIES`. If `xff=203.0.113.9` the number is 1; if
    `xff=203.0.113.9, 10.0.0.4` it is 2.
 4. Set `NUM_PROXIES`, and **delete** `GUNICORN_CMD_ARGS` again (the log line holds client addresses).
+
+On staging the list held three entries (the phone, a Cloudflare server, Render's internal proxy), so the value is `3`.
+[`staging-render.md`](staging-render.md), step 7, explains `GUNICORN_CMD_ARGS` flag by flag and records the check with a
+forged header.
 
 ## Check a deploy
 
@@ -112,5 +120,5 @@ that was built before. The workflow finds that image by its tag `sha-<short>` an
 | The hook answers 401 | The secret `RENDER_DEPLOY_HOOK_URL` is old: the hook was regenerated |
 | `/healthz` never shows the new release | The new container does not start: read the service's logs (a missing variable, a bad `DATABASE_URL`, `users.E001` for the signing key) |
 | Register or sign-in answers `503` | The Key Value instance is unreachable: check `REDIS_URL` and the region |
-| The first call after a pause is very slow | The free instance was asleep, or Neon was suspended: expected; the monitor avoids the first |
+| The first call after a pause is very slow | The free instance was asleep, or Neon was suspended: expected; an uptime monitor (step 9) avoids the first |
 | The admin sign-in page loops or answers 403 | `ALLOWED_HOSTS` or `CSRF_TRUSTED_ORIGINS` does not match the address |

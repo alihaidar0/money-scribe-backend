@@ -189,7 +189,7 @@ openssl rand -hex 6                                            # ADMIN_URL
 | `CSRF_TRUSTED_ORIGINS` | `https://money-scribe-staging.onrender.com` | Typed |
 | `ADMIN_URL` | the third generated value | Generated, password manager; the secret path of the admin panel |
 | `EMAIL_BACKEND` | `outbox.backends.DatabaseEmailBackend` | Typed |
-| `NUM_PROXIES` | `1` | Typed; measured after the first deploy ([`staging.md`](staging.md)) |
+| `NUM_PROXIES` | `1` at first, then **`3`** | Typed; `1` was a guess, `3` is the measured value of step 7 |
 | `WEB_CONCURRENCY` | `1` | Typed; the free instance has 512 MB |
 | `PWNED_PASSWORD_CHECK` | `True` | Typed |
 
@@ -334,12 +334,206 @@ To switch the automatic deploy on later, add the repository variable `DEPLOY_STA
 variables, Actions, **Variables**). Every merge into `develop` is then deployed by `docker.yml`. Delete the variable to
 go back to manual deploys.
 
+## Step 7: measure `NUM_PROXIES` with a temporary `GUNICORN_CMD_ARGS`
+
+The app protects sign-in and registration with limits per client address, and the sessions list records a truncated
+address. The request does not reach the app directly: it passes servers that each append the address they received it
+from to the header `X-Forwarded-For`. `NUM_PROXIES` is the number of those servers that we trust. DRF counts that many
+entries **from the right** and takes that entry as the client. The entries on the left can be written by the caller, so
+they are never believed.
+
+| `NUM_PROXIES` | Effect |
+| --- | --- |
+| Too low | The app reads a proxy's address: all users look like one client, so one tester's failures lock everyone and the sessions list shows the proxy |
+| Too high | The app reads an entry the caller wrote: a cheater picks a new address each time and is never limited |
+| Right | Each phone is its own client, whatever its country; phones that really share a public address (one Wi-Fi, some mobile carriers) still share that address's limits |
+
+The number depends on the hosting, so it is measured on the real chain, once, and measured again if the hosting
+changes. Staging started with the guess `1`.
+
+### What `GUNICORN_CMD_ARGS` is
+
+Gunicorn reads extra command-line options from the environment variable `GUNICORN_CMD_ARGS`. Our entrypoint
+(`scripts/entrypoint.prod.sh`) sets it to the defaults below **only when it is not set**, so a value set on Render
+**replaces all of the defaults**: the temporary value has to repeat the flags that must stay.
+
+The default value (when nothing is set on Render):
+
+```text
+--bind=0.0.0.0:$PORT --threads=4 --timeout=120 --access-logfile=- --error-logfile=- --no-control-socket
+```
+
+The temporary value used for the measurement:
+
+```text
+--threads=4 --timeout=120 --access-logfile=- --error-logfile=- --no-control-socket --access-logformat='%(h)s xff=%({x-forwarded-for}i)s %(r)s %(s)s'
+```
+
+| Part | What it does | Why it is in the temporary value |
+| --- | --- | --- |
+| `--threads=4` | Four request threads per worker | Same as the default |
+| `--timeout=120` | A worker silent for 120 seconds is restarted | Same as the default; the free instance is slow |
+| `--access-logfile=-` | Writes one line per request to the log | Same as the default |
+| `--error-logfile=-` | Writes Gunicorn's own messages to the log | Same as the default |
+| `--no-control-socket` | No control socket under the home directory (the image's user has none) | Same as the default; without it the start logs an error |
+| `--access-logformat='…'` | Changes what a request line contains | **The point of the measurement.** `%(h)s` is the address of the direct connection, `%({x-forwarded-for}i)s` is the whole `X-Forwarded-For` header, `%(r)s` is the request (`GET /healthz HTTP/1.1`), `%(s)s` is the status. The line reads `<peer> xff=<list> GET /healthz HTTP/1.1 200` |
+| (no `--bind`) | | An environment variable is not expanded, so `--bind=0.0.0.0:$PORT` would bind to the literal text `$PORT` and the service would not start. Gunicorn binds to `0.0.0.0:$PORT` by itself when `PORT` is set |
+
+### The steps
+
+1. Service, **Environment**: add `GUNICORN_CMD_ARGS` with the temporary value, then save and deploy and wait for
+   **Live**. A redeploy pulls the image tag `staging` again, so the running release may become the newest build of
+   `develop`.
+2. On a phone with **Wi-Fi off** (mobile data), note the phone's public address (any "what is my IP" page) and open
+   `https://money-scribe-staging.onrender.com/healthz`. It shows `ok`.
+3. **Logs**: find the `GET /healthz` line that holds the phone's address. Lines from Render's own health check come
+   from a `10.x` address and show `xff=-`.
+4. Count the entries of the list after `xff=` from the **right end** up to and including the phone's address. That
+   count is `NUM_PROXIES`.
+5. Check that a fake entry cannot move the count: send one request with a forged header and read its line.
+
+   ```bash
+   curl -sS -H 'X-Forwarded-For: 203.0.113.7' https://money-scribe-staging.onrender.com/healthz
+   ```
+
+   The forged address stays the **first** entry and the servers' entries stay on the right, so counting from the right
+   still finds the real caller.
+6. In one save: set `NUM_PROXIES` to the number and **delete** `GUNICORN_CMD_ARGS` (the log line holds client
+   addresses, and the variable replaces the defaults). Save, deploy, wait for **Live**.
+
+### What staging showed
+
+| Entry of `xff=` (from the left) | What it was |
+| --- | --- |
+| 1st | The phone |
+| 2nd | A Cloudflare server (a public address in a Cloudflare range such as `172.64.0.0/13`, for example `172.68.x.x` or `172.69.x.x`; the exact server changes between requests) |
+| 3rd | Render's internal proxy (a private `10.x.x.x` address, which also changes) |
+
+So there are two trusted servers on the right of the client, and the phone is the **3rd from the right**:
+**`NUM_PROXIES = 3`**. The request with a forged address showed four entries (`203.0.113.7`, the caller, a Cloudflare
+server, Render's proxy), so the forged entry stayed at the far left and the third from the right was still the caller.
+`172.16.x.x` to `172.31.x.x` are the private ranges; `172.68.x.x` is not one of them.
+
+Measure again after any change of hosting (a custom domain behind another proxy, another Cloudflare setting, a move
+off Render) and for production, which has its own chain. The value is a variable on the service, so it is a one-minute
+change.
+
+## Step 8: check a deploy
+
+What was run on staging after the first deploy, and what it showed. All values are invented examples; the real
+`ADMIN_URL`, passwords, codes and tokens never go in a screenshot or a chat.
+
+### The health check
+
+```bash
+curl -sS -D - https://money-scribe-staging.onrender.com/healthz
+```
+
+`HTTP/2 200`, the body `ok`, and `x-release` with the full commit of the image. It must equal the commit that was
+deployed. `GET` and `HEAD` both answer `200`, so any monitor works.
+
+### The admin panel
+
+Open `https://money-scribe-staging.onrender.com/<ADMIN_URL>/` and sign in with the superuser created on Neon. It shows
+a styled page ("Money Scribe administration", so static files are served by the image) with these apps: Groups, **Outbox**
+(Outgoing emails, view only: the 6-digit codes are read here), the Periodic tasks of `django_celery_beat` (nothing runs
+them on staging) and **Users**. Users lists one account, the superuser, active and staff, with an empty "Email verified
+at" (a superuser made on the command line is not verified through the API). The default path `/admin/` answers `404`.
+
+### The docs and the schema: staff only, and a 404 for everyone else
+
+`/api/docs/` (Swagger UI) opens in a browser that is signed in to the admin. `/api/schema/` downloads the OpenAPI
+document as a YAML file (that is its content type, so a browser saves it). Without a staff session both answer a plain
+`404` with no `Location` header. They used to redirect to the admin sign-in, and that redirect revealed the secret
+`ADMIN_URL` to any visitor; the redirect was removed for that reason.
+
+### A full round trip through Swagger
+
+Use invented data and a throwaway password of 15 to 128 characters that is not common and not in a known breach (four
+unrelated words and a number work). The tokens in a response are secrets: blur them in any screenshot.
+
+1. **`POST /api/v1/auth/register/`**, **Try it out**, replace the example body:
+
+   ```json
+   {
+     "language": "en",
+     "time_zone": "Europe/Berlin",
+     "name": "Staging Tester",
+     "email": "staging.test1@example.com",
+     "password": "<your throwaway password>"
+   }
+   ```
+
+   `201` with `email`, `code_expires_in` (600) and `resend_available_in` (60). The answer holds no code.
+2. In the admin, **Outbox**, **Outgoing emails**: the newest email has the 6-digit code.
+3. **`POST /api/v1/auth/verify-email/`**. Make a UUID for `device_id` (`python -c "import uuid; print(uuid.uuid4())"`)
+   and keep it for the later calls:
+
+   ```json
+   {
+     "language": "en",
+     "time_zone": "Europe/Berlin",
+     "email": "staging.test1@example.com",
+     "code": "<the 6 digits>",
+     "device": {
+       "device_id": "<the UUID>",
+       "device_name": "Swagger test",
+       "platform": "android",
+       "app_version": "0.0.1"
+     }
+   }
+   ```
+
+   `200` with `access_token`, `refresh_token`, `token_type` `Bearer`, `expires_in` 600 and `user`. Use the platform
+   `android` so the tokens come in the body; `web` would carry the refresh token in a cookie.
+4. **Authorize** (top right): paste the access token only, without the word `Bearer`, which Swagger adds. Swagger does
+   not check the token; it only stores it, so a damaged token still shows "Authorized" and fails on the first call.
+5. **`GET /api/v1/auth/profile/`**: `200` with `id`, `name`, `email`, `language` and `time_zone`.
+6. **`POST /api/v1/auth/refresh/`** with `refresh_token` and the same `device` block: `200` with a **new** pair. The
+   refresh token is single use; the old access token keeps working until it expires, because a refresh does not end the
+   session. The old refresh token sent again within 30 seconds returns the same new pair (a lost answer is recoverable);
+   later it ends the whole session with `session_token_reuse`.
+7. **`POST /api/v1/auth/sign-out/`** with the body `{}` and the access token: `204`, no body.
+8. After the sign-out, the profile call with the same access token and a refresh with the newest refresh token both
+   answer `401`, with the code `session_signed_out`. The server checks the session on every request, so ending it
+   cuts access at once, whatever the token's expiry. Signing out an already ended session answers the same `401`; a client
+   treats it as "already signed out".
+
+**The trap that cost a round trip: copy tokens with the copy icon.** A token contains `-` and `_` characters, so a
+double-click selects only part of it, and a selection from the JSON line brings the quotes and the comma. A damaged
+token answers `401 token_invalid` ("The token is not valid."). An expired access token (10 minutes) answers a different
+code, `token_expired`, and a header with more than one `Bearer` answers `token_invalid` with the text "The access token
+is not valid.".
+
+### Changing `ADMIN_URL`
+
+The path is a secret that hides the admin panel, so change it if it was ever shown or sent. Order matters, because a
+change of a variable redeploys the service and a redeploy pulls the image tag `staging` again:
+
+1. Deploy the version you want by hand first (Step 6), so the redeploy does not surprise you.
+2. Generate the new value in the development container (`openssl rand -hex 6`), copy it into the password manager and
+   run `clear`.
+3. Service, **Environment**: replace the value of `ADMIN_URL` (12 characters, no `/`), save and deploy, wait for **Live**.
+4. Check: the new address signs in; the **old** address and `/admin/` answer `404`; `/api/docs/` in a private window
+   answers `404`.
+
 ## What the free plan does
 
 Taken from Render's documentation on 2026-10-16 and from the console; check both before relying on a number.
 
 - **Instance hours**: 750 free instance hours per workspace per calendar month. A service that is asleep does not use
-  hours. One service that is always awake uses about 720 hours, so the free hours of this workspace are for staging only.
+  hours. One service that is always awake uses 720 hours in a 30-day month and 744 in a 31-day month (24 hours times the
+  days), so the 750 hours cover **one** always-awake free web service and nothing more. Two such services would need
+  about 1,440 to 1,488 hours; when the hours run out, Render suspends **all** free web services of the workspace until the
+  next month, and the hours do not roll over. The documentation counts only free web services; it does not say whether
+  the free Key Value instance uses hours. An uptime monitor would keep staging awake and use almost all of them; none is set up (deferred), so staging sleeps
+  when idle and uses few hours.
+- **Where to see the usage:** the web service's **Settings**, block **General**, the purple banner under **Instance
+  Type** with the link "See remaining free usage". It opens the workspace's **Monthly Included Usage**: Free Instance
+  Hours (x / 750), Included Bandwidth (x / 5 GB), Included Pipeline Minutes (x / 500), Included Services (x / 25) and
+  Included Custom Domains (x / 2), followed by **Unbilled Charges** with the projected total of the month. The numbers
+  seem to update with a delay (on the first day it showed 0.78 hours and 0 MB of bandwidth after many requests), so
+  compare two days apart. The page warns that usage beyond the included limits is charged.
 - **One free Key Value instance** and one free Postgres database per workspace. We use only the first.
 - **No persistence**: a restart of the Key Value instance empties it. The effect is that an active sign-in lock or code
   cooldown is forgotten, which is acceptable on staging.
