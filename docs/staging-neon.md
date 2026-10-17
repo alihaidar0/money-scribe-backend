@@ -159,10 +159,81 @@ sign-in comes later.
   restoring. That is enough for invented data and not a backup strategy; production needs real backups before it holds real
   data.
 
+## Back up by hand with `pg_dump` (the free plan has no backups)
+
+The free plan keeps a **6-hour** history for going back in time, one manual snapshot, and no scheduled snapshots, so
+nothing here is a backup you can rely on for real data. A `pg_dump` file is a stop-gap you control: a complete copy of
+the database that you keep as long as you like. It does not replace backups on a paid plan, which production needs
+before it holds real financial data (`docs/steps.md`, section 12).
+
+**What is needed.** `pg_dump` and `pg_restore` of **PostgreSQL 18 or newer** (the development container has 18.6, the
+same as Neon's 18.6; an older client refuses to dump a newer server). The commands were tested on two scratch
+databases of the local server (a dump of 19 tables that restored without an error and with the same row counts); they
+were **not** run against Neon.
+
+**A dump holds everything**: the emails, the password hashes and, once the app is used, the financial data. Treat the
+file like a secret: keep it **outside the repository folder**, never commit it, and keep it in an encrypted place (an
+encrypted drive or archive).
+
+### Make a dump
+
+The direct connection string is read silently, like in the steps above. `--dbname="$NEON_URL"` is expanded by the shell,
+so the string is not saved in the history; it is visible to other users of the same machine while the command runs,
+which is only you in the development container. (Putting the string in the `PGDATABASE` variable does **not** work:
+`pg_dump` takes it for a database name.)
+
+```bash
+read -rs -p "Neon direct connection string: " NEON_URL; echo
+pg_dump --dbname="$NEON_URL" --format=custom --no-owner --no-privileges \
+  --file="$HOME/money_scribe_staging_$(date +%Y-%m-%d).dump"
+unset NEON_URL
+```
+
+| Option | Meaning |
+| --- | --- |
+| `--format=custom` | A compressed file that `pg_restore` can read, in whole or in parts |
+| `--no-owner`, `--no-privileges` | Leave out who owns what and the grants, because the restoring role is a different one |
+| `--file=...` | Where the dump goes: a dated name, outside the repository |
+
+The first call can take a few seconds while the compute wakes. Nothing is printed when it works.
+
+### Check the dump
+
+```bash
+pg_restore --list "$HOME/money_scribe_staging_2026-10-17.dump" | grep -c "TABLE DATA"
+```
+
+It prints the number of tables that hold data (19 on a database with only our migrations). `0`, or an error, means a
+bad file.
+
+### Restore it into an empty database
+
+A backup that has never been restored is not a backup, so try it on an **empty, new** database. Never restore over the
+live one. In the Neon console create a database (**Databases**, **Add database**), for example
+`money_scribe_restore_test`, owned by the app role. Then:
+
+```bash
+read -rs -p "Direct connection string of the NEW empty database: " RESTORE_URL; echo
+pg_restore --no-owner --no-privileges --exit-on-error --dbname="$RESTORE_URL" \
+  "$HOME/money_scribe_staging_2026-10-17.dump"
+unset RESTORE_URL
+```
+
+No output and no error means it worked. Compare a count to be sure, for example the number of rows of
+`django_migrations` in the source and in the restored database (they were both 42 in the local test). Delete the test
+database afterwards.
+
+### How often
+
+Before every risky change (a migration that changes or removes data), and on a schedule you keep (for example every
+week) once the database holds anything you would miss. The 6-hour history still covers mistakes noticed within hours.
+
 ## If something fails
 
 | Symptom | Likely cause |
 | --- | --- |
+| `pg_dump: error: ... No such file or directory` and a socket path | The connection string was given in a variable that `pg_dump` does not read as a string: use `--dbname="$VARIABLE"` |
+| `server version mismatch` or `aborting because of server version mismatch` | The client is older than the server: use `pg_dump` 18 or newer |
 | `password authentication failed` | The password was copied wrongly, or the string is an old one. Reset the role's password, copy the new string |
 | `database "money_scribe_staging" does not exist` | The database was not created, or the string names another one |
 | `permission denied` while migrating | The database is not owned by `money_scribe_app` (step 4) |
