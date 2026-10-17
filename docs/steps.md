@@ -304,7 +304,7 @@ the process is in [`api-workflow.md`](api-workflow.md).
 The Flutter developer tests only against staging, so **stage 2 starts right after step 8.2**: steps 8.3 to 8.5 are built
 while staging already runs, and each one deploys to staging by itself and is tested as it lands.
 
-- [ ] **8.1 `feat/api-foundation`**: `/api/v1/` routing; the shared error handling (the error-code registry, `409` through
+- [x] **8.1 `feat/api-foundation`**: `/api/v1/` routing; the shared error handling (the error-code registry, `409` through
   `config.exceptions.conflict` and a per-operation `CONFLICT_RESPONSE`, `Retry-After` on `429`; ADR 0004); default
   permissions (authenticated, JSON only, every query scoped to `request.user` through `OwnerScopedMixin`); the bearer
   security scheme in the schema; the root test fixtures and the per-user isolation helper; **the admin panel**
@@ -341,28 +341,28 @@ image, a Render Key Value instance for Redis), chosen in [ADR 0011](adr/0011-sta
 checks and the rollback are in [`staging.md`](staging.md). Staging holds invented data only. What it does not do yet is
 listed at the end of this section. Each step is its own branch and pull request.
 
-- [ ] **9.1 Staging hosting recorded**: [ADR 0011](adr/0011-staging-hosting.md) (Neon, Render, the Render Key Value
+- [x] **9.1 Staging hosting recorded**: [ADR 0011](adr/0011-staging-hosting.md) (Neon, Render, the Render Key Value
   instance, the `onrender.com` address, the image from the GitHub Container Registry, the worker and Beat deferred)
 - [ ] **9.2 Codes on staging through the outbox**: staging sends no real email yet. It uses the email outbox
   (`EMAIL_BACKEND` set to the database backend), and you copy each 6-digit code from the emails in the admin panel at the
   staging `ADMIN_URL` (ADR 0010). Real delivery is a separate step before production (section 12)
-- [ ] **9.3 `ci/staging-deploy`: the staging image and its deploy**: `docker.yml` also builds on every merge into
+- [x] **9.3 `ci/staging-deploy`: the staging image and its deploy**: `docker.yml` also builds on every merge into
   `develop` (tags `staging` and `sha-<short>`, never `latest`) with the commit as a build argument, so `/healthz` reports
   it in the `X-Release` header; its job "Deploy to staging" then calls the reusable workflow `deploy-staging.yml` with the
   digest of that build (and the same workflow runs by hand for a rollback or an older commit). `scripts/deploy-staging.sh`
   calls the Render deploy hook pinned to the digest, waits until `/healthz` reports the same release, and shows the digest
   in its summary. One pull request, because the deploy is called from `docker.yml`. The repository variable
   `PUBLISH_IMAGE=ghcr` is set and the package is public
-- [ ] **9.4 `feat/api-docs`: Swagger UI**: `/api/docs/` and `/api/schema/`, served only outside production and only to
+- [x] **9.4 `feat/api-docs`: Swagger UI**: `/api/docs/` and `/api/schema/`, served only outside production and only to
   staff accounts (signed in through the admin panel; anyone else gets a `404`, never a redirect that would reveal the
   admin path), with the UI bundled in the image and no CDN, tested; the committed
   `openapi/schema.yaml` is unchanged
-- [ ] **9.5 The services and the first deploy** (the owner, by hand, following [`staging.md`](staging.md)): the Neon
+- [x] **9.5 The services and the first deploy** (the owner, by hand, following [`staging.md`](staging.md)): the Neon
   project ([`staging-neon.md`](staging-neon.md)), the Render Key Value instance and web service
   ([`staging-render.md`](staging-render.md)), the environment variables, the GitHub environment `staging`
   (deployment branches: `develop`) with its secret `RENDER_DEPLOY_HOOK_URL` and variable `STAGING_URL`, the first deploy
-  by hand, then the repository variable `DEPLOY_STAGING=true` that switches the automatic deploy on, the superuser, the
-  `NUM_PROXIES` measured (`3`), and, optionally, an uptime monitor (deferred: without it staging sleeps after 15 minutes
+  by hand (deploys stay manual for now; the repository variable `DEPLOY_STAGING=true` would switch the automatic deploy
+  on), the superuser, the `NUM_PROXIES` measured (`3`), and, optionally, an uptime monitor (deferred: without it staging sleeps after 15 minutes
   idle and the first request takes about a minute)
 - [ ] **9.6 The first contract release**: check that `version` in `pyproject.toml` is the version to release, open the
   release pull request (`develop` → `main`), check the draft `v<version>` (notes and the `openapi.yaml` asset), and
