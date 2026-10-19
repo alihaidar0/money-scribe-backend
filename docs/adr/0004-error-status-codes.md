@@ -27,7 +27,7 @@ conflict says so with the shared response, `@extend_schema(responses={..., 409: 
 | 404 | not found | also the answer for another user's object, so its existence is not revealed |
 | 409 | a valid request that conflicts with the current state | not a field error; `attr` is `null` |
 | 429 | rate limit, sign-in lock or a cooldown | always sends `Retry-After` with the remaining whole seconds (RFC 9110) |
-| 503 | a safety control cannot run | sent with `Retry-After`, only by the calls that depend on a limit; not documented per operation, like any server error |
+| 503 | a safety control cannot run | sent with `Retry-After`, only by the calls that depend on a limit; those four operations declare it (`config.api_errors.SERVICE_UNAVAILABLE_RESPONSE`), with `type` `server_error` |
 
 Rules:
 
