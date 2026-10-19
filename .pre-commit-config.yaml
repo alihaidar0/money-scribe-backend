@@ -44,7 +44,7 @@ repos:
         args: [--branch, main, --branch, develop]
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.16.10
+    rev: v0.17.0
     hooks:
       - id: ruff-check
         args: [--fix, --output-format=full]
@@ -60,7 +60,7 @@ repos:
 
   # Keeps uv.lock in sync whenever pyproject.toml changes.
   - repo: https://github.com/astral-sh/uv-pre-commit
-    rev: 0.12.23
+    rev: 0.13.0
     hooks:
       - id: uv-lock
 
