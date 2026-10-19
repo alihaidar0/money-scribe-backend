@@ -56,7 +56,7 @@ operation that can conflict declares it with `CONFLICT_RESPONSE` in `@extend_sch
   transactions). It is not a field error: `attr` is `null` and `code` is stable and specific. A rule on one field, such
   as a repayment above the remaining debt, is a `400` on that field.
 - `429` always sends `Retry-After` with the remaining time in whole seconds, for throttling, the sign-in lock and the
-  code resend cooldown.
+  code resend cooldown. The header is declared on every `429` response of the schema (an integer, in seconds).
 - Error `code` values are a contract. Renaming or removing one is a breaking change. The initial list is in
   [ADR 0004](adr/0004-error-status-codes.md) and grows here with each endpoint.
 
@@ -119,9 +119,13 @@ token** that rotates.
   ([ADR 0009](adr/0009-sessions-and-devices.md)); registration and password reset send none.
 - Sign-in answers `429` with `Retry-After` while the account is locked, even for the right password. A browser reads
   `Retry-After` because the API exposes it (`Access-Control-Expose-Headers`).
-- If the limit store is down, register, resend, verify and sign-in answer `503` with the code `service_unavailable` and
-  `Retry-After`; everything that needs no limit (a refresh, sign-out, any call with an access token) keeps working.
-- Sign-out accepts the bearer access token, or the refresh token in the body when the access token has expired.
+- If the limit store is down, register, resend, verify and sign-in answer `503` with the code `service_unavailable`, the body `type` `server_error` and
+  `Retry-After`; the schema declares the `503` on those four operations only; everything that needs no limit (a refresh, sign-out, any call with an access token) keeps working.
+- Sign-out accepts the bearer access token, or the refresh token in the body when the access token has expired. With the
+  access token only, it answers `401` with `token_expired`, `token_invalid` or the code of the session's end
+  (`session_signed_out`, `session_revoked_by_user`, `session_password_changed`, `session_email_changed`,
+  `session_token_reuse`, `session_expired`); with the refresh token in the body, an ended session is a `204` and the
+  only `401` is `token_invalid`.
 - `GET /api/v1/auth/profile/` returns the signed-in user's `id`, `name`, `email`, `language` and `time_zone`.
 - Which events end which sessions is a table in [ADR 0006](adr/0006-authentication-tokens.md).
 

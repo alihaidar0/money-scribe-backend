@@ -9,10 +9,12 @@ registry (``config.error_codes.ErrorCode``, ADR 0004) is written into its descri
 contract lists every code the server can send.
 """
 
-from drf_spectacular.utils import OpenApiExample, OpenApiResponse
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import OpenApiExample, OpenApiParameter, OpenApiResponse
 from drf_standardized_errors.openapi import AutoSchema
 from drf_standardized_errors.openapi_serializers import (
     ClientErrorEnum,
+    ServerErrorEnum,
     ValidationErrorEnum,
 )
 from rest_framework import serializers
@@ -89,12 +91,40 @@ class ErrorResponseSerializer(serializers.Serializer):  # type: ignore[misc]
     errors = ErrorItemSerializer(many=True)
 
 
+class ServerErrorResponseSerializer(serializers.Serializer):  # type: ignore[misc]
+    """``server_error``: a 503 answer, always with ``Retry-After``; its one code is ``service_unavailable``."""
+
+    type = serializers.ChoiceField(choices=ServerErrorEnum.choices)
+    errors = ErrorItemSerializer(many=True)
+
+
 # 409 is documented per operation, not through ALLOWED_ERROR_STATUS_CODES, which would add it to every
 # operation. An operation that can conflict says so:
 #   @extend_schema(responses={204: None, 409: CONFLICT_RESPONSE})
 CONFLICT_RESPONSE = OpenApiResponse(
     response=ErrorResponseSerializer,
     description="The request conflicts with the current state; the `code` says what conflicts.",
+)
+
+# The limited calls (register, resend-code, verify-email, sign-in) fail closed when the limit store is
+# down (ADR 0006), so they declare it per operation. No other operation can answer a 503.
+#   @extend_schema(parameters=[RETRY_AFTER_HEADER], responses={..., 503: SERVICE_UNAVAILABLE_RESPONSE})
+SERVICE_UNAVAILABLE_RESPONSE = OpenApiResponse(
+    response=ServerErrorResponseSerializer,
+    description=(
+        "A safety control (the rate-limit store) cannot run, so the request is refused before it "
+        "changes anything; try again after `Retry-After`. The `code` is `service_unavailable`."
+    ),
+)
+
+# The package documents the 429 of every operation but cannot describe its header; the operations that
+# send one list this parameter (a `response` parameter is a response header, not a request one).
+RETRY_AFTER_HEADER = OpenApiParameter(
+    name="Retry-After",
+    type=OpenApiTypes.INT,
+    location=OpenApiParameter.HEADER,
+    response=[429, 503],
+    description="Whole seconds to wait before the request may be repeated; at least 1.",
 )
 
 # For the operations that need no token (so the package would not document a 401 or 403 for them) but

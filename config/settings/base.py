@@ -344,6 +344,7 @@ SPECTACULAR_SETTINGS = {
     # drf-spectacular warnings, which fail scripts/schema.sh).
     "ENUM_NAME_OVERRIDES": {
         "ClientErrorEnum": f"{_ERROR_ENUMS}.ClientErrorEnum.choices",
+        "ServerErrorEnum": f"{_ERROR_ENUMS}.ServerErrorEnum.choices",
     },
     # Replaces drf-spectacular's own enum hook (the package's hook calls the same logic).
     "POSTPROCESSING_HOOKS": [
