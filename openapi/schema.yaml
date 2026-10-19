@@ -84,7 +84,8 @@ paths:
         address gets an email saying someone tried, with no code. Errors: `400` field
         errors (password: `password_too_short`, `password_too_long`, `password_too_similar`,
         `password_too_common`, `password_compromised`; `invalid` for an email), `429`
-        `resend_too_soon` or `resend_limit_reached` or `throttled`, each with `Retry-After`.'
+        `resend_too_soon` or `resend_limit_reached` or `throttled`, each with `Retry-After`;
+        `503` `service_unavailable` while the limit store is down, with `Retry-After`.'
       summary: Register an account
       tags:
       - auth
@@ -102,6 +103,12 @@ paths:
                 $ref: '#/components/schemas/Error400Response'
           description: ''
         '429':
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+              description: Whole seconds to wait before the request may be repeated;
+                at least 1.
           content:
             application/json:
               schema:
@@ -113,13 +120,28 @@ paths:
               schema:
                 $ref: '#/components/schemas/RegisterResponse'
           description: ''
+        '503':
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+              description: Whole seconds to wait before the request may be repeated;
+                at least 1.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServerErrorResponse'
+          description: A safety control (the rate-limit store) cannot run, so the
+            request is refused before it changes anything; try again after `Retry-After`.
+            The `code` is `service_unavailable`.
   /api/v1/auth/resend-code/:
     post:
       operationId: auth_resend_code
       description: 'Emails a new code, which replaces every earlier one. The answer
         is the same for every address, so it reveals nothing. Errors: `429` `resend_too_soon`
         (the 60 second cooldown), `resend_limit_reached` (5 codes per hour) or `throttled`,
-        each with `Retry-After`.'
+        each with `Retry-After`; `503` `service_unavailable` while the limit store
+        is down, with `Retry-After`.'
       summary: Send a new code
       tags:
       - auth
@@ -137,6 +159,12 @@ paths:
                 $ref: '#/components/schemas/Error400Response'
           description: ''
         '429':
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+              description: Whole seconds to wait before the request may be repeated;
+                at least 1.
           content:
             application/json:
               schema:
@@ -148,6 +176,20 @@ paths:
               schema:
                 $ref: '#/components/schemas/CodeSent'
           description: ''
+        '503':
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+              description: Whole seconds to wait before the request may be repeated;
+                at least 1.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServerErrorResponse'
+          description: A safety control (the rate-limit store) cannot run, so the
+            request is refused before it changes anything; try again after `Retry-After`.
+            The `code` is `service_unavailable`.
   /api/v1/auth/sign-in/:
     post:
       operationId: auth_sign_in
@@ -155,7 +197,8 @@ paths:
         email and a wrong password look the same), `403` `email_not_verified` (only
         after the right password; the app opens the verify screen), `429` `sign_in_locked`
         (even the right password, while locked; `Retry-After` is the remaining lock
-        time) or `throttled`.'
+        time) or `throttled`; `503` `service_unavailable` while the limit store is
+        down, with `Retry-After`.'
       summary: Sign in
       tags:
       - auth
@@ -173,6 +216,12 @@ paths:
                 $ref: '#/components/schemas/Error400Response'
           description: ''
         '429':
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+              description: Whole seconds to wait before the request may be repeated;
+                at least 1.
           content:
             application/json:
               schema:
@@ -198,12 +247,34 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
           description: The credentials are right but the request is not allowed; the
             `code` says why.
+        '503':
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+              description: Whole seconds to wait before the request may be repeated;
+                at least 1.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServerErrorResponse'
+          description: A safety control (the rate-limit store) cannot run, so the
+            request is refused before it changes anything; try again after `Retry-After`.
+            The `code` is `service_unavailable`.
   /api/v1/auth/sign-out/:
     post:
       operationId: auth_sign_out
       description: 'Ends the session at once. Send the bearer access token, or, when
         it has expired, the `refresh_token` in the body, so the device need not refresh
-        first. Errors: `401` `token_invalid` when neither is valid.'
+        first. Signing out a session that has already ended is not an error when the
+        `refresh_token` is sent: it answers `204`, and so does a second call with
+        the same `refresh_token`. Errors: `401`, and the `code` depends on what was
+        sent. With the access token only: `token_expired` (refresh, or send the `refresh_token`),
+        `token_invalid`, or the code of the session''s end (`session_signed_out`,
+        `session_revoked_by_user`, `session_password_changed`, `session_email_changed`,
+        `session_token_reuse` or `session_expired`; the session is over, so the device
+        is already signed out). With a `refresh_token` in the body: only `token_invalid`,
+        when neither token is valid. It never answers `503`.'
       summary: Sign out
       tags:
       - auth
@@ -236,7 +307,8 @@ paths:
       description: 'A correct code verifies the address and starts the session, so
         the app goes straight in. Errors: `400` `code_invalid` (the error item carries
         `attempts_left`) or `code_expired`, `429` `code_attempts_exceeded` (the code
-        is dead; `Retry-After` is the wait before a new one may be requested) or `throttled`.'
+        is dead; `Retry-After` is the wait before a new one may be requested) or `throttled`;
+        `503` `service_unavailable` while the limit store is down, with `Retry-After`.'
       summary: Verify the email and sign in
       tags:
       - auth
@@ -254,6 +326,12 @@ paths:
                 $ref: '#/components/schemas/Error400Response'
           description: ''
         '429':
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+              description: Whole seconds to wait before the request may be repeated;
+                at least 1.
           content:
             application/json:
               schema:
@@ -265,6 +343,20 @@ paths:
               schema:
                 $ref: '#/components/schemas/SignedInResponse'
           description: ''
+        '503':
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+              description: Whole seconds to wait before the request may be repeated;
+                at least 1.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServerErrorResponse'
+          description: A safety control (the rate-limit store) cannot run, so the
+            request is refused before it changes anything; try again after `Retry-After`.
+            The `code` is `service_unavailable`.
 components:
   schemas:
     ClientErrorEnum:
@@ -541,6 +633,25 @@ components:
           maxLength: 254
       required:
       - email
+    ServerErrorEnum:
+      enum:
+      - server_error
+      type: string
+      description: '* `server_error` - Server Error'
+    ServerErrorResponse:
+      type: object
+      description: '``server_error``: a 503 answer, always with ``Retry-After``; its
+        one code is ``service_unavailable``.'
+      properties:
+        type:
+          $ref: '#/components/schemas/ServerErrorEnum'
+        errors:
+          type: array
+          items:
+            $ref: '#/components/schemas/ErrorItem'
+      required:
+      - errors
+      - type
     SignInRequest:
       type: object
       description: '``language`` and ``time_zone``: the device the user signs in on

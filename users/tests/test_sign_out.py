@@ -141,3 +141,55 @@ def test_an_access_token_is_not_accepted_as_the_refresh_token(
 
     assert first_error(response)["code"] == "token_invalid"
     assert Session.objects.get().ended_at is None
+
+
+def test_an_ended_session_with_the_access_token_only_answers_its_session_code(
+    api_client: APIClient,
+) -> None:
+    _, body = start_session(api_client)
+    api_client.post(SIGN_OUT, headers=bearer(body["access_token"]))
+
+    response = api_client.post(SIGN_OUT, headers=bearer(body["access_token"]))
+
+    assert response.status_code == 401
+    assert first_error(response)["code"] == "session_signed_out"
+
+
+@pytest.mark.parametrize(
+    ("reason", "code"),
+    [
+        (EndReason.REVOKED_BY_USER, "session_revoked_by_user"),
+        (EndReason.PASSWORD_CHANGED, "session_password_changed"),
+        (EndReason.EMAIL_CHANGED, "session_email_changed"),
+        (EndReason.TOKEN_REUSE, "session_token_reuse"),
+        (EndReason.EXPIRED, "session_expired"),
+    ],
+)
+def test_every_session_end_reason_is_its_own_401_code_for_the_access_token(
+    api_client: APIClient, reason: EndReason, code: str
+) -> None:
+    _, body = start_session(api_client)
+    session = Session.objects.get()
+    session.end_reason = reason
+    session.ended_at = session.created_at
+    session.save()
+
+    response = api_client.post(SIGN_OUT, headers=bearer(body["access_token"]))
+
+    assert response.status_code == 401
+    assert first_error(response)["code"] == code
+
+
+def test_an_ended_session_with_the_refresh_token_in_the_body_is_a_204(
+    api_client: APIClient,
+) -> None:
+    _, body = start_session(api_client)
+    api_client.post(SIGN_OUT, headers=bearer(body["access_token"]))
+
+    response = api_client.post(
+        SIGN_OUT,
+        {"refresh_token": body["refresh_token"]},
+        headers=bearer(body["access_token"]),
+    )
+
+    assert response.status_code == 204

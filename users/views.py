@@ -11,6 +11,8 @@ from rest_framework.views import APIView
 
 from config.api_errors import (
     FORBIDDEN_RESPONSE,
+    RETRY_AFTER_HEADER,
+    SERVICE_UNAVAILABLE_RESPONSE,
     UNAUTHORIZED_RESPONSE,
 )
 from config.authentication import PublicAuthentication
@@ -99,10 +101,11 @@ class RegisterView(PublicAuthView):
             "Errors: `400` field errors (password: `password_too_short`, `password_too_long`, "
             "`password_too_similar`, `password_too_common`, `password_compromised`; `invalid` for an "
             "email), `429` `resend_too_soon` or `resend_limit_reached` or `throttled`, each with "
-            "`Retry-After`."
+            "`Retry-After`; `503` `service_unavailable` while the limit store is down, with `Retry-After`."
         ),
+        parameters=[RETRY_AFTER_HEADER],
         request=RegisterSerializer,
-        responses={201: RegisterResponseSerializer},
+        responses={201: RegisterResponseSerializer, 503: SERVICE_UNAVAILABLE_RESPONSE},
     )
     def post(self, request: Request) -> Response:
         serializer = RegisterSerializer(data=request.data)
@@ -137,10 +140,12 @@ class VerifyEmailView(PublicAuthView):
             "A correct code verifies the address and starts the session, so the app goes straight in. "
             "Errors: `400` `code_invalid` (the error item carries `attempts_left`) or `code_expired`, "
             "`429` `code_attempts_exceeded` (the code is dead; `Retry-After` is the wait before a new one "
-            "may be requested) or `throttled`."
+            "may be requested) or `throttled`; `503` `service_unavailable` while the limit store is "
+            "down, with `Retry-After`."
         ),
+        parameters=[RETRY_AFTER_HEADER],
         request=VerifyEmailSerializer,
-        responses={200: SignedInResponseSerializer},
+        responses={200: SignedInResponseSerializer, 503: SERVICE_UNAVAILABLE_RESPONSE},
     )
     def post(self, request: Request) -> Response:
         serializer = VerifyEmailSerializer(data=request.data)
@@ -168,10 +173,12 @@ class ResendCodeView(PublicAuthView):
         description=(
             "Emails a new code, which replaces every earlier one. The answer is the same for every "
             "address, so it reveals nothing. Errors: `429` `resend_too_soon` (the 60 second cooldown), "
-            "`resend_limit_reached` (5 codes per hour) or `throttled`, each with `Retry-After`."
+            "`resend_limit_reached` (5 codes per hour) or `throttled`, each with `Retry-After`; `503` "
+            "`service_unavailable` while the limit store is down, with `Retry-After`."
         ),
+        parameters=[RETRY_AFTER_HEADER],
         request=ResendCodeSerializer,
-        responses={200: CodeSentSerializer},
+        responses={200: CodeSentSerializer, 503: SERVICE_UNAVAILABLE_RESPONSE},
     )
     def post(self, request: Request) -> Response:
         serializer = ResendCodeSerializer(data=request.data)
@@ -197,13 +204,16 @@ class SignInView(PublicAuthView):
             "Starts a session. Errors: `401` `invalid_credentials` (an unknown email and a wrong password "
             "look the same), `403` `email_not_verified` (only after the right password; the app opens "
             "the verify screen), `429` `sign_in_locked` (even the right password, while locked; "
-            "`Retry-After` is the remaining lock time) or `throttled`."
+            "`Retry-After` is the remaining lock time) or `throttled`; `503` `service_unavailable` while "
+            "the limit store is down, with `Retry-After`."
         ),
+        parameters=[RETRY_AFTER_HEADER],
         request=SignInSerializer,
         responses={
             200: SignedInResponseSerializer,
             401: UNAUTHORIZED_RESPONSE,
             403: FORBIDDEN_RESPONSE,
+            503: SERVICE_UNAVAILABLE_RESPONSE,
         },
     )
     def post(self, request: Request) -> Response:
@@ -261,8 +271,15 @@ class SignOutView(PublicAuthView):
         summary="Sign out",
         description=(
             "Ends the session at once. Send the bearer access token, or, when it has expired, the "
-            "`refresh_token` in the body, so the device need not refresh first. Errors: `401` "
-            "`token_invalid` when neither is valid."
+            "`refresh_token` in the body, so the device need not refresh first. Signing out a session that "
+            "has already ended is not an error when the `refresh_token` is sent: it answers `204`, and so "
+            "does a second call with the same `refresh_token`. Errors: `401`, and the `code` depends on "
+            "what was sent. With the access token only: `token_expired` (refresh, or send the "
+            "`refresh_token`), `token_invalid`, or the code of the session's end (`session_signed_out`, "
+            "`session_revoked_by_user`, `session_password_changed`, `session_email_changed`, "
+            "`session_token_reuse` or `session_expired`; the session is over, so the device is already "
+            "signed out). With a `refresh_token` in the body: only `token_invalid`, when neither token is "
+            "valid. It never answers `503`."
         ),
         request=SignOutSerializer,
         responses={204: None},
