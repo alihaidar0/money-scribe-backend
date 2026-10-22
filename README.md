@@ -61,7 +61,8 @@ the single required check is **CI passed**.
 ## Template
 
 Created from [`alihaidar0/django-template`](https://github.com/alihaidar0/django-template)
-release [`v2026.10.15.1`](https://github.com/alihaidar0/django-template/releases/tag/v2026.10.15.1).
+release [`v2026.10.15.1`](https://github.com/alihaidar0/django-template/releases/tag/v2026.10.15.1)
+and in line with release [`v2026.10.22`](https://github.com/alihaidar0/django-template/releases/tag/v2026.10.22).
 
 ## License
 
