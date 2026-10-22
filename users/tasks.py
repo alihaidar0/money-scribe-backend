@@ -4,7 +4,7 @@ from celery import shared_task
 from django.conf import settings
 from django.utils import timezone
 
-from .models import User
+from .models import EmailCode, PasswordResetToken, User
 
 
 @shared_task
@@ -25,3 +25,16 @@ def purge_unverified_accounts() -> int:
     ).exclude(email_codes__created_at__gte=cutoff)
     _, deleted = stale.delete()
     return deleted.get("users.User", 0)
+
+
+@shared_task
+def purge_expired_secrets() -> int:
+    """Delete email codes and password reset tokens that have expired; returns how many.
+
+    An expired code or token can never be used again, and a missing one is answered exactly like an
+    expired one, so deleting changes nothing for the user. It only stops them piling up (data minimisation).
+    """
+    now = timezone.now()
+    codes, _ = EmailCode.objects.filter(expires_at__lte=now).delete()
+    reset_tokens, _ = PasswordResetToken.objects.filter(expires_at__lte=now).delete()
+    return codes + reset_tokens

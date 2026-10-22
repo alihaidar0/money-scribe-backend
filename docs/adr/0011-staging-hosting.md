@@ -41,8 +41,8 @@ Facts checked on 2026-10-16 (free tiers change often; check the provider's prici
 | API docs | Swagger UI at `/api/docs/`, only outside production and only for staff accounts |
 | Celery worker and Beat | **Not run on staging** (see below) |
 
-Redis is required even without Celery: the limits fail closed (ADR 0006), so without it register, resend, verify and
-sign-in answer `503`.
+Redis is required even without Celery: the limits fail closed (ADR 0006), so without it register, resend, verify,
+sign-in, the password reset, the password change and the account deletion answer `503`.
 
 **How a deploy works.** A merge into `develop` builds the image (tags `staging` and `sha-<short>`, the commit passed as a
 build argument). The job "Deploy to staging" of `docker.yml` then calls the reusable workflow `deploy-staging.yml` with

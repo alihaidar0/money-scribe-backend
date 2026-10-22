@@ -37,6 +37,7 @@ FRAMEWORK_CODES = (
     "method_not_allowed",
     "not_acceptable",
     "unsupported_media_type",
+    "read_only",
 )
 
 
@@ -58,7 +59,9 @@ class ErrorItemSerializer(serializers.Serializer):  # type: ignore[misc]
         allow_null=True,
         help_text=(
             "The field the error belongs to, or null for the request as a whole. "
-            "Sign-in sets it on `email_not_registered` (`email`) and `wrong_password` (`password`)."
+            "Sign-in sets it on `email_not_registered` (`email`) and `wrong_password` (`password`); "
+            "`invalid_password` is on `current_password` (password change) or `password` (account deletion); "
+            "`reset_token_invalid` is on `reset_token`."
         ),
     )
     attempts_left = serializers.IntegerField(
@@ -109,8 +112,9 @@ CONFLICT_RESPONSE = OpenApiResponse(
     description="The request conflicts with the current state; the `code` says what conflicts.",
 )
 
-# The limited calls (register, resend-code, verify-email, sign-in) fail closed when the limit store is
-# down (ADR 0006), so they declare it per operation. No other operation can answer a 503.
+# The limited calls (register, resend-code, verify-email, sign-in, the password reset calls, the password
+# change and the account deletion) fail closed when the limit store is down (ADR 0006, 0014), so they
+# declare it per operation. No other operation can answer a 503.
 #   @extend_schema(parameters=[RETRY_AFTER_HEADER], responses={..., 503: SERVICE_UNAVAILABLE_RESPONSE})
 SERVICE_UNAVAILABLE_RESPONSE = OpenApiResponse(
     response=ServerErrorResponseSerializer,

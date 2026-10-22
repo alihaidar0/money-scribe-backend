@@ -27,7 +27,7 @@ conflict says so with the shared response, `@extend_schema(responses={..., 409: 
 | 404 | not found | also the answer for another user's object, so its existence is not revealed |
 | 409 | a valid request that conflicts with the current state | not a field error; `attr` is `null` |
 | 429 | rate limit, sign-in lock or a cooldown | always sends `Retry-After` with the remaining whole seconds (RFC 9110) |
-| 503 | a safety control cannot run | sent with `Retry-After`, only by the calls that depend on a limit; those four operations declare it (`config.api_errors.SERVICE_UNAVAILABLE_RESPONSE`), with `type` `server_error` |
+| 503 | a safety control cannot run | sent with `Retry-After`, only by the calls that depend on a limit; those eleven operations declare it (`config.api_errors.SERVICE_UNAVAILABLE_RESPONSE`), with `type` `server_error` |
 
 Rules:
 
@@ -65,13 +65,17 @@ Initial registry:
 | `code_attempts_exceeded` | 429 | too many wrong codes, so the code is dead; `Retry-After` is the wait before a new one may be requested |
 | `resend_too_soon` | 429 | the 60 second cooldown has not passed; `Retry-After` |
 | `resend_limit_reached` | 429 | the limit of 5 codes per hour is used up; `Retry-After` is up to an hour |
-| `email_already_registered` | 409 | when changing the email (registration does not reveal it) |
-| `invalid_password` | 400 | the current password is wrong (`attr`: `current_password`) |
+| `email_already_registered` | 409 | when changing the email, to a signed-in caller who has proved the password (registration does not reveal it) |
+| `email_unchanged` | 400 | the new email is the one the account already has (`attr`: `email`) |
+| `invalid_password` | 400 | the current password is wrong: at a password change (`attr`: `current_password`) and at an account deletion (`attr`: `password`); a `400`, not a `401`, so the app's session handling is not triggered |
 | `password_too_short` | 400 | a new password under 15 characters (`attr`: `password`) |
 | `password_too_long` | 400 | a new password over 128 characters |
 | `password_too_similar` | 400 | a new password that resembles the user's name or email |
 | `password_too_common` | 400 | a new password on the common-password list |
 | `password_compromised` | 400 | a new password that appears in a known data breach |
+| `password_unchanged` | 400 | a new password equal to the current one, at a password change (`attr`: `password`); not applied to a reset ([ADR 0014](0014-password-reset-change-and-account-deletion.md)) |
+| `password_attempts_exceeded` | 429 | 5 wrong current passwords at a password change or an account deletion lock both for 15 minutes; `Retry-After` is the remaining time |
+| `reset_token_invalid` | 400 | the password reset token is unknown, used, expired or its account is deactivated (`attr`: `reset_token`); ask for a new code |
 | `service_unavailable` | 503 | a safety control (the limit store) is down, so the request is refused; `Retry-After` |
 | `invalid_amount` | 400 | not a valid amount for the currency (ADR 0008) |
 | `currency_mismatch` | 400 | a fixed item carries a currency other than its month's |

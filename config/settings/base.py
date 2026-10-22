@@ -266,6 +266,17 @@ TURNSTILE_SECRET_KEY = os.environ.get("TURNSTILE_SECRET_KEY", "")
 TURNSTILE_TIMEOUT_SECONDS = 3
 SIGN_IN_LOCK_SECONDS = 900
 
+# Password reset (ADR 0014): the code is verified for a reset token, which lives this long and works once.
+PASSWORD_RESET_TOKEN_LIFETIME_SECONDS = 600
+# The current password is asked again to change the password and to delete the account. This many wrong
+# answers from one account lock both operations for this many seconds, so a stolen access token cannot
+# be used to guess the password. Sign-in is unaffected.
+PASSWORD_CONFIRM_MAX_FAILURES = 5
+PASSWORD_CONFIRM_LOCK_SECONDS = 900
+# Email change (ADR 0015): the code goes to the new address, so one account may start this many changes an
+# hour, whatever the addresses are, or it could be used to send mail to strangers.
+EMAIL_CHANGE_REQUESTS_PER_HOUR = 5
+
 # An account that never verifies its email is deleted, with its codes, after this many days.
 UNVERIFIED_ACCOUNT_RETENTION_DAYS = 7
 
@@ -306,6 +317,13 @@ REST_FRAMEWORK: dict[str, object] = {
         "register": "20/hour",
         "resend_code": "20/hour",
         "verify_email": "60/hour",
+        "password_reset_request": "20/hour",
+        "password_reset_verify": "60/hour",
+        "password_reset_confirm": "30/hour",
+        "password_change": "30/hour",
+        "account_delete": "10/hour",
+        "email_change_request": "20/hour",
+        "email_change_confirm": "60/hour",
     },
 }
 DRF_STANDARDIZED_ERRORS = {
@@ -413,6 +431,10 @@ CELERY_BEAT_SCHEDULE = {
     "users-purge-unverified": {
         "task": "users.tasks.purge_unverified_accounts",
         "schedule": crontab(minute=37, hour=3),
+    },
+    "users-purge-expired-secrets": {
+        "task": "users.tasks.purge_expired_secrets",
+        "schedule": crontab(minute=47, hour=3),
     },
 }
 

@@ -34,12 +34,16 @@ class ErrorCode(StrEnum):
     RESEND_TOO_SOON = "resend_too_soon"
     RESEND_LIMIT_REACHED = "resend_limit_reached"
     EMAIL_ALREADY_REGISTERED = "email_already_registered"
+    EMAIL_UNCHANGED = "email_unchanged"
     INVALID_PASSWORD = "invalid_password"
     PASSWORD_TOO_SHORT = "password_too_short"
     PASSWORD_TOO_LONG = "password_too_long"
     PASSWORD_TOO_SIMILAR = "password_too_similar"
     PASSWORD_COMPROMISED = "password_compromised"
     PASSWORD_TOO_COMMON = "password_too_common"
+    PASSWORD_UNCHANGED = "password_unchanged"
+    PASSWORD_ATTEMPTS_EXCEEDED = "password_attempts_exceeded"
+    RESET_TOKEN_INVALID = "reset_token_invalid"
 
     # The server cannot do its job safely right now
     SERVICE_UNAVAILABLE = "service_unavailable"

@@ -10,6 +10,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from config.api_errors import (
+    CONFLICT_RESPONSE,
     FORBIDDEN_RESPONSE,
     RETRY_AFTER_HEADER,
     SERVICE_UNAVAILABLE_RESPONSE,
@@ -19,16 +20,26 @@ from config.authentication import PublicAuthentication
 from config.error_codes import ErrorCode
 
 from . import services
-from .models import EndReason, Language
+from .models import EndReason, Language, Session, User
 from .network import client_ip
 from .serializers import (
+    ChangePasswordSerializer,
     CodeSentSerializer,
+    DeleteAccountSerializer,
+    EmailChangeConfirmSerializer,
+    EmailChangeRequestSerializer,
+    EmailChangeResponseSerializer,
+    PasswordResetConfirmSerializer,
+    PasswordResetRequestSerializer,
+    PasswordResetVerifySerializer,
     ProfileSerializer,
+    ProfileUpdateSerializer,
     RefreshResponseSerializer,
     RefreshSerializer,
     RegisterResponseSerializer,
     RegisterSerializer,
     ResendCodeSerializer,
+    ResetTokenResponseSerializer,
     SignedInResponseSerializer,
     SignInSerializer,
     SignOutSerializer,
@@ -36,6 +47,13 @@ from .serializers import (
     VerifyEmailSerializer,
 )
 from .throttles import (
+    AccountDeleteThrottle,
+    EmailChangeConfirmThrottle,
+    EmailChangeRequestThrottle,
+    PasswordChangeThrottle,
+    PasswordResetConfirmThrottle,
+    PasswordResetRequestThrottle,
+    PasswordResetVerifyThrottle,
     RegisterThrottle,
     ResendCodeThrottle,
     SignInThrottle,
@@ -336,3 +354,289 @@ class ProfileView(APIView):  # type: ignore[misc]
     )
     def get(self, request: Request) -> Response:
         return Response(ProfileSerializer(request.user).data)
+
+    @extend_schema(
+        operation_id="auth_profile_update",
+        tags=TAG,
+        summary="Edit the name",
+        description=(
+            "Changes the display name and answers the updated profile. Only `name` can be sent: any other "
+            "field, such as `email`, `language` or `time_zone`, is refused with `400` and the code "
+            "`read_only` on that field (the email changes only through `auth_email_change_request`). "
+            "Errors: `400` `blank`, `required` or `max_length` on `name`."
+        ),
+        request=ProfileUpdateSerializer,
+        responses={200: ProfileSerializer},
+    )
+    def patch(self, request: Request) -> Response:
+        serializer = ProfileUpdateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user = services.change_name(
+            user=request.user, name=serializer.validated_data["name"]
+        )
+        return Response(ProfileSerializer(user).data)
+
+
+class PasswordResetRequestView(PublicAuthView):
+    throttle_classes: ClassVar[list[Any]] = [PasswordResetRequestThrottle]
+
+    @extend_schema(
+        operation_id="auth_password_reset_request",
+        tags=TAG,
+        auth=[],
+        summary="Ask for a password reset code",
+        description=(
+            "Step 1 of 3. Emails a 6-digit code to a registered, verified address. The answer is the "
+            "same for every address, whether it has an account or not, so it reveals nothing; the app "
+            "always goes on to the code screen. The code lives 10 minutes and shares the hourly budget "
+            "of the other codes. Errors: `429` `resend_too_soon` (the 60 second cooldown), "
+            "`resend_limit_reached` (5 codes per hour) or `throttled`, each with `Retry-After`; `503` "
+            "`service_unavailable` while the limit store is down, with `Retry-After`."
+        ),
+        parameters=[RETRY_AFTER_HEADER],
+        request=PasswordResetRequestSerializer,
+        responses={200: CodeSentSerializer, 503: SERVICE_UNAVAILABLE_RESPONSE},
+    )
+    def post(self, request: Request) -> Response:
+        serializer = PasswordResetRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        sent = services.request_password_reset(email=serializer.validated_data["email"])
+        return Response(
+            {
+                "code_expires_in": sent.code_expires_in,
+                "resend_available_in": sent.resend_available_in,
+            }
+        )
+
+
+class PasswordResetVerifyView(PublicAuthView):
+    throttle_classes: ClassVar[list[Any]] = [PasswordResetVerifyThrottle]
+
+    @extend_schema(
+        operation_id="auth_password_reset_verify",
+        tags=TAG,
+        auth=[],
+        summary="Check the password reset code",
+        description=(
+            "Step 2 of 3. A correct code is spent and answered with a single-use `reset_token` that "
+            "lives 10 minutes. It does not sign anyone in. Errors: `400` `code_invalid` (the error item "
+            "carries `attempts_left`) or `code_expired`, `429` `code_attempts_exceeded` (the code is "
+            "dead; `Retry-After` is the wait before a new one may be requested) or `throttled`; `503` "
+            "`service_unavailable` while the limit store is down, with `Retry-After`. The answers are "
+            "the same for an address with no account."
+        ),
+        parameters=[RETRY_AFTER_HEADER],
+        request=PasswordResetVerifySerializer,
+        responses={
+            200: ResetTokenResponseSerializer,
+            503: SERVICE_UNAVAILABLE_RESPONSE,
+        },
+    )
+    def post(self, request: Request) -> Response:
+        serializer = PasswordResetVerifySerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        issued = services.verify_password_reset(email=data["email"], code=data["code"])
+        return _token_response(
+            {"reset_token": issued.reset_token, "expires_in": issued.expires_in}
+        )
+
+
+class PasswordResetConfirmView(PublicAuthView):
+    throttle_classes: ClassVar[list[Any]] = [PasswordResetConfirmThrottle]
+
+    @extend_schema(
+        operation_id="auth_password_reset_confirm",
+        tags=TAG,
+        auth=[],
+        summary="Set the new password",
+        description=(
+            "Step 3 of 3. Sets the new password with the `reset_token` and ends **all** the user's "
+            "sessions, so the app returns to the sign-in screen (it signs nobody in). The owner gets an "
+            "email about the change. Errors: `400` `reset_token_invalid` (`attr` `reset_token`: unknown, "
+            "used or expired; ask for a new code), or a password rule on `attr` `password` "
+            "(`password_too_short`, `password_too_long`, `password_too_similar`, `password_too_common`, "
+            "`password_compromised`), after which the same token may be used again until it expires. "
+            "A new password equal to the current one is allowed here: the reset proves the mailbox, not "
+            "the old password. `429` `throttled` with `Retry-After`; `503` `service_unavailable` while the "
+            "limit store is down, with `Retry-After`."
+        ),
+        parameters=[RETRY_AFTER_HEADER],
+        request=PasswordResetConfirmSerializer,
+        responses={204: None, 503: SERVICE_UNAVAILABLE_RESPONSE},
+    )
+    def post(self, request: Request) -> Response:
+        serializer = PasswordResetConfirmSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        services.reset_password(
+            reset_token=data["reset_token"], password=data["password"]
+        )
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class ChangePasswordView(APIView):  # type: ignore[misc]
+    throttle_classes: ClassVar[list[Any]] = [PasswordChangeThrottle]
+
+    @extend_schema(
+        operation_id="auth_password_change",
+        tags=TAG,
+        summary="Change the password",
+        description=(
+            "Needs the current password. Ends every **other** session; this one continues with the new "
+            "token pair in the answer, and the previous refresh token is retired. The owner gets an "
+            "email about the change. Errors: `400` `invalid_password` (`attr` `current_password`: it is "
+            "`400`, not `401`, so the app's session handling is not triggered), `password_unchanged` "
+            "(`attr` `password`: the new password equals the current one), or a password rule on `attr` "
+            "`password` (`password_too_short`, `password_too_long`, `password_too_similar`, "
+            "`password_too_common`, `password_compromised`); `429` `password_attempts_exceeded` (5 wrong "
+            "current passwords lock this operation and the account deletion for 15 minutes; `Retry-After` "
+            "is the remaining time; sign-in is unaffected) or `throttled`; `503` `service_unavailable` "
+            "while the limit store is down, with `Retry-After`."
+        ),
+        parameters=[RETRY_AFTER_HEADER],
+        request=ChangePasswordSerializer,
+        responses={200: RefreshResponseSerializer, 503: SERVICE_UNAVAILABLE_RESPONSE},
+    )
+    def post(self, request: Request) -> Response:
+        serializer = ChangePasswordSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        user: User = request.user
+        session: Session = request.auth
+        pair = services.change_password(
+            user=user,
+            session=session,
+            current_password=data["current_password"],
+            password=data["password"],
+        )
+        return _token_response(_pair_body(pair))
+
+
+class DeleteAccountView(APIView):  # type: ignore[misc]
+    throttle_classes: ClassVar[list[Any]] = [AccountDeleteThrottle]
+
+    @extend_schema(
+        operation_id="auth_account_delete",
+        tags=TAG,
+        summary="Delete the account",
+        description=(
+            "Needs the password. Deletes the account and **all** its data at once and for good, in one "
+            "transaction, and every session ends with it (the tokens stop working at once). Nothing is "
+            "kept: no soft delete and no anonymised copy. The address is used only for a confirmation "
+            "email. It is `POST` with a body, not `DELETE`, because a `DELETE` body has no defined "
+            "meaning and proxies may drop it. Errors: `400` `invalid_password` (`attr` `password`); "
+            "`429` `password_attempts_exceeded` (shared with the password change) or `throttled`, "
+            "each with `Retry-After`; `503` `service_unavailable` while the limit store is down, with "
+            "`Retry-After`."
+        ),
+        parameters=[RETRY_AFTER_HEADER],
+        request=DeleteAccountSerializer,
+        responses={204: None, 503: SERVICE_UNAVAILABLE_RESPONSE},
+    )
+    def post(self, request: Request) -> Response:
+        serializer = DeleteAccountSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user: User = request.user
+        services.delete_account(
+            user=user, password=serializer.validated_data["password"]
+        )
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class EmailChangeView(APIView):  # type: ignore[misc]
+    def get_throttles(self) -> list[Any]:
+        # Cancelling needs no limit store, so it is not limited and can never answer a 503.
+        if self.request.method == "POST":
+            return [EmailChangeRequestThrottle()]
+        return []
+
+    @extend_schema(
+        operation_id="auth_email_change_request",
+        tags=TAG,
+        summary="Start an email change",
+        description=(
+            "Step 1 of 2. Emails a 6-digit code to the **new** address; the old one stays in force until the "
+            "code is accepted by `auth_email_change_confirm`. Needs the current password. A new request "
+            "replaces the earlier pending change. Errors: `400` `invalid_password` (`attr` "
+            "`current_password`), `email_unchanged` (`attr` `email`: the account already has it), or `invalid` "
+            "for a malformed address; `409` `email_already_registered` (a signed-in caller who has proved the "
+            "password may be told; no other call says so); `429` `password_attempts_exceeded` (the password "
+            "lock shared with the password change), `resend_too_soon` (60 second cooldown for the new address), "
+            "`resend_limit_reached` (5 codes per hour for the address, and 5 changes per hour for the "
+            "account) or `throttled`, each with `Retry-After`; `503` `service_unavailable` while the limit "
+            "store is down, with `Retry-After`."
+        ),
+        parameters=[RETRY_AFTER_HEADER],
+        request=EmailChangeRequestSerializer,
+        responses={
+            200: EmailChangeResponseSerializer,
+            409: CONFLICT_RESPONSE,
+            503: SERVICE_UNAVAILABLE_RESPONSE,
+        },
+    )
+    def post(self, request: Request) -> Response:
+        serializer = EmailChangeRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        sent = services.request_email_change(
+            user=request.user,
+            email=data["email"],
+            current_password=data["current_password"],
+        )
+        return Response(
+            {
+                "email": sent.email,
+                "code_expires_in": sent.code_expires_in,
+                "resend_available_in": sent.resend_available_in,
+            }
+        )
+
+    @extend_schema(
+        operation_id="auth_email_change_cancel",
+        tags=TAG,
+        summary="Cancel the pending email change",
+        description=(
+            "Drops the pending change, so its code stops working. It answers `204` also when nothing is "
+            "pending."
+        ),
+        responses={204: None},
+    )
+    def delete(self, request: Request) -> Response:
+        services.cancel_email_change(user=request.user)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class EmailChangeConfirmView(APIView):  # type: ignore[misc]
+    throttle_classes: ClassVar[list[Any]] = [EmailChangeConfirmThrottle]
+
+    @extend_schema(
+        operation_id="auth_email_change_confirm",
+        tags=TAG,
+        summary="Confirm the email change",
+        description=(
+            "Step 2 of 2. A correct code switches the sign-in address to the new one, ends every **other** "
+            "session (this one continues, with the same tokens), tells the old address by email and answers "
+            "the updated profile. Errors: `400` `code_invalid` (the error item carries `attempts_left`) or "
+            "`code_expired` (also when no change is pending); `409` `email_already_registered` (the address "
+            "was taken meanwhile; the code is kept); `429` `code_attempts_exceeded` (the code is dead; "
+            "`Retry-After` is the wait before a new one may be requested) or `throttled`; `503` "
+            "`service_unavailable` while the limit store is down, with `Retry-After`."
+        ),
+        parameters=[RETRY_AFTER_HEADER],
+        request=EmailChangeConfirmSerializer,
+        responses={
+            200: ProfileSerializer,
+            409: CONFLICT_RESPONSE,
+            503: SERVICE_UNAVAILABLE_RESPONSE,
+        },
+    )
+    def post(self, request: Request) -> Response:
+        serializer = EmailChangeConfirmSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user = services.confirm_email_change(
+            user=request.user,
+            session=request.auth,
+            code=serializer.validated_data["code"],
+        )
+        return Response(ProfileSerializer(user).data)

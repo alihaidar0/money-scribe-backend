@@ -124,14 +124,26 @@ token** that rotates.
   until the request carries the token of a solved Turnstile widget ([`sign-in-challenge.md`](sign-in-challenge.md)).
 - Sign-in answers `429` with `Retry-After` while the account or the client address is locked, even for the right password. A browser reads
   `Retry-After` because the API exposes it (`Access-Control-Expose-Headers`).
-- If the limit store is down, register, resend, verify and sign-in answer `503` with the code `service_unavailable`, the body `type` `server_error` and
-  `Retry-After`; the schema declares the `503` on those four operations only; everything that needs no limit (a refresh, sign-out, any call with an access token) keeps working.
+- If the limit store is down, register, resend, verify, sign-in, the three password reset calls, the password change, the
+  account deletion and the start and confirmation of an email change answer `503` with the code `service_unavailable`, the body `type` `server_error` and
+  `Retry-After`; the schema declares the `503` on those eleven operations only; everything that needs no limit (a refresh, sign-out, the profile, any other call with an access token) keeps working.
+- Password reset is three public calls (`/auth/password-reset/request/`, `verify/`, `confirm/`): the code, then a single-use
+  `reset_token`, then the new password, which ends all sessions and signs nobody in. Changing the password
+  (`/auth/password/change/`) and deleting the account (`/auth/account/delete/`) need the bearer token **and** the current
+  password; a wrong one is `400 invalid_password`, never `401`, and five wrong ones lock both for 15 minutes
+  (`429 password_attempts_exceeded`). A change answers with a new token pair for the current session; a deletion answers
+  `204` and every token stops working. Details and reasons: [ADR 0014](adr/0014-password-reset-change-and-account-deletion.md).
 - Sign-out accepts the bearer access token, or the refresh token in the body when the access token has expired. With the
   access token only, it answers `401` with `token_expired`, `token_invalid` or the code of the session's end
   (`session_signed_out`, `session_revoked_by_user`, `session_password_changed`, `session_email_changed`,
   `session_token_reuse`, `session_expired`); with the refresh token in the body, an ended session is a `204` and the
   only `401` is `token_invalid`.
-- `GET /api/v1/auth/profile/` returns the signed-in user's `id`, `name`, `email`, `language` and `time_zone`.
+- `GET /api/v1/auth/profile/` returns the signed-in user's `id`, `name`, `email`, `language` and `time_zone`. `PATCH` changes
+  the `name` only; any other field is refused with `400` and the code `read_only` on it.
+- Changing the email is `POST /auth/email-change/` (the new `email` and the `current_password`; the code goes to the new
+  address), then `POST /auth/email-change/confirm/` (the `code`; answers the updated profile, ends the other sessions), and
+  `DELETE /auth/email-change/` cancels. A taken address is `409 email_already_registered`; five changes an hour per account.
+  Details and reasons: [ADR 0015](adr/0015-profile-name-and-email-change.md).
 - Which events end which sessions is a table in [ADR 0006](adr/0006-authentication-tokens.md).
 
 ## Money
