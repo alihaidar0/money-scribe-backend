@@ -57,7 +57,7 @@ if [[ -f "$WORKSPACE/manage.py" ]]; then
     step "Services" \
         "Django   http://localhost:8000" \
         "Mailpit  http://localhost:8025" \
-        "Flower   celery -A config flower --port=5555  →  http://localhost:5555"
+        "Flower   celery -A config flower --port=5555  →  http://localhost:5556"
     if [[ ! -f "$WORKSPACE/openapi/schema.yaml" ]]; then
         step "API contract (with the first endpoint)" \
             "bash scripts/schema.sh generate   then commit openapi/schema.yaml"

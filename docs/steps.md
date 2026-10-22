@@ -151,8 +151,8 @@ no regeneration; they are a normal follow-up migration.
   ```
 
 - [ ] Open <http://localhost:8000> (the Django start page in debug mode). No venv activation is needed: the dev image
-  puts `/workspace/.venv/bin` first on `PATH`. The Celery worker and Beat start by themselves once the project and its
-  dependencies exist.
+  puts `/workspace/.venv/bin` first on `PATH`. The Celery worker starts by itself once the project and its
+  dependencies exist; Beat also waits until `pm migrate` has been run.
 
 ### 3.4 First run: check that everything works
 
@@ -168,7 +168,7 @@ Open a second terminal in the container (the first one runs the server).
 - [ ] `redis-cli -h redis ping` prints `PONG`
 - [ ] `celery -A config inspect ping` answers `pong` (the worker starts a few seconds after the project exists)
 - [ ] `python manage.py sendtestemail you@example.com` shows the message in Mailpit at <http://localhost:8025>
-- [ ] `celery -A config flower --port=5555` lists the worker at <http://localhost:5555> (Ctrl+C to stop)
+- [ ] `celery -A config flower --port=5555` lists the worker at <http://localhost:5556> (Ctrl+C to stop)
 - [ ] `python manage.py check --deploy` has no errors that matter for the current stage
 - [ ] `ssh -T git@github.com-freelance` greets `alihaidar0` (this repository's remote alias)
 - [ ] `git switch develop && pre-commit run no-commit-to-branch` **fails** (develop is protected); then `git switch -`
@@ -180,7 +180,7 @@ What you should see:
 | <http://localhost:8000> | the Django start page (debug mode) |
 | <http://localhost:8000/admin/> | the admin login; your superuser signs in |
 | <http://localhost:8025> | Mailpit with the test email |
-| <http://localhost:5555> | Flower listing the worker |
+| <http://localhost:5556> | Flower listing the worker |
 | VS Code → Run and Debug | *Django: Dev Server* and *Django: Attach Debugger (debugpy)* |
 | VS Code → Terminal → Run Task | *Pytest*, *Ruff*, *Mypy*, *Pre-commit* and *uv* tasks |
 

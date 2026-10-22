@@ -11,13 +11,14 @@
   "shutdownAction": "stopCompose",
 
   // ── Forwarded ports ──────────────────────────────────────────────────
-  "forwardPorts": [8000, 5432, 6379, 8025, 5555, 5678],
+  // Flower is not listed: docker-compose.yml publishes it on host port 5556 (5555 is the Android
+  // emulator's adb port), and forwarding the container's 5555 would take that host port again.
+  "forwardPorts": [8000, 5432, 6379, 8025, 5678],
   "portsAttributes": {
     "8000": { "label": "Django", "onAutoForward": "notify" },
     "5432": { "label": "PostgreSQL", "onAutoForward": "silent" },
     "6379": { "label": "Redis", "onAutoForward": "silent" },
     "8025": { "label": "Mailpit", "onAutoForward": "silent" },
-    "5555": { "label": "Flower", "onAutoForward": "silent" },
     "5678": { "label": "debugpy", "onAutoForward": "silent" }
   },
 

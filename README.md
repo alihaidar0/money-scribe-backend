@@ -31,8 +31,8 @@ code money-scribe-backend
 ```
 
 Click **Reopen in Container**. The first start installs the dependencies and the git
-hooks (`uv sync --locked`, `pre-commit install`); the Celery worker and Beat start by
-themselves. Then:
+hooks (`uv sync --locked`, `pre-commit install`); the Celery worker starts by
+itself, and Beat once `pm migrate` has been run. Then:
 
 ```bash
 python manage.py migrate
@@ -43,7 +43,7 @@ python manage.py runserver 0.0.0.0:8000
 | --- | --- |
 | Django | <http://localhost:8000> |
 | Mailpit | <http://localhost:8025> |
-| Flower | <http://localhost:5555> (`celery -A config flower --port=5555`) |
+| Flower | <http://localhost:5556> (`celery -A config flower --port=5555`) |
 
 ## Development
 
