@@ -47,6 +47,9 @@ def client(api_client: APIClient) -> APIClient:
         ("resend-code", {"email": EMAIL}),
         ("verify-email", {"email": EMAIL, "code": "123456", "device": device()}),
         ("sign-in", {"email": EMAIL, "password": PASSWORD, "device": device()}),
+        ("password-reset/request", {"email": EMAIL}),
+        ("password-reset/verify", {"email": EMAIL, "code": "123456"}),
+        ("password-reset/confirm", {"reset_token": "x", "password": "a-fine-pass-17"}),
     ],
 )
 def test_the_calls_that_need_a_limit_answer_503_with_retry_after(

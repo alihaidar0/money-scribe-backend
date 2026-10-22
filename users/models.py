@@ -73,6 +73,8 @@ class User(AbstractBaseUser, PermissionsMixin):
 
 class EmailCodePurpose(models.TextChoices):
     VERIFY_EMAIL = "verify_email", "Verify email"
+    PASSWORD_RESET = "password_reset", "Password reset"
+    EMAIL_CHANGE = "email_change", "Email change"
 
 
 class EmailCode(models.Model):
@@ -89,6 +91,8 @@ class EmailCode(models.Model):
     purpose = models.CharField(max_length=20, choices=EmailCodePurpose)
     code_hash = models.CharField(max_length=64)
     attempts = models.PositiveSmallIntegerField(default=0)
+    # What the code is for, when it is for something: the new address of an email change.
+    payload = models.CharField(max_length=254, blank=True)
     created_at = models.DateTimeField(default=timezone.now)
     expires_at = models.DateTimeField()
 
@@ -101,6 +105,27 @@ class EmailCode(models.Model):
 
     def __str__(self) -> str:
         return f"{self.purpose} code of {self.user_id}"
+
+
+class PasswordResetToken(models.Model):
+    """The proof that a password reset code was accepted (ADR 0014). Only a hash of it is stored.
+
+    One per user at most: a new one replaces the old. It works once and lives a few minutes, and it is
+    deleted when the password changes, whichever way.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid7, editable=False)
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="password_reset_token",
+    )
+    token_hash = models.CharField(max_length=64, unique=True)
+    created_at = models.DateTimeField(default=timezone.now)
+    expires_at = models.DateTimeField(db_index=True)
+
+    def __str__(self) -> str:
+        return f"password reset token of {self.user_id}"
 
 
 class Platform(models.TextChoices):

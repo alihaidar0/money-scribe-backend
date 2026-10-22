@@ -92,8 +92,8 @@ implementation. The 6-digit email codes (NIST asks for at least six) are stored 
 number of attempts, and have a resend cooldown and an hourly limit that also answer `429` with `Retry-After`.
 
 **Fail closed.** The limits live in Redis. If it is down, the calls that depend on a limit (register, resend, verify,
-sign-in) answer `503 service_unavailable` with `Retry-After` instead of running without their brake. Calls that need no limit
-keep working: a refresh, sign-out and every request with an access token.
+sign-in and, by ADR 0014, the password reset, the password change, the account deletion and the email change) answer `503 service_unavailable` with `Retry-After` instead of running without their brake. Calls that need no limit
+keep working: a refresh, sign-out and every other request with an access token.
 
 **What the API reveals.** As little as the client can live with (OWASP). Registration answers the same whether the address
 is new, pending or already registered: a verified address is not changed, and its owner gets an email that says someone

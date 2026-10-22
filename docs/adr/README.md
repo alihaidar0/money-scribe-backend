@@ -18,6 +18,8 @@ A decision that changes gets a new record that supersedes the old one; the old f
 | [0011](0011-staging-hosting.md) | Staging on free tiers: Neon, Render and the GitHub Container Registry; what is deferred | accepted |
 | [0012](0012-sign-in-names-the-field-at-fault.md) | Sign-in names the field at fault: unknown email or wrong password, with an address limit | accepted |
 | [0013](0013-sign-in-bot-challenge.md) | A Cloudflare Turnstile challenge for sign-in after repeated failures | accepted |
+| [0014](0014-password-reset-change-and-account-deletion.md) | Password reset with a single-use token, password change, account deletion and the lock on the current password | accepted |
+| [0015](0015-profile-name-and-email-change.md) | Editing the name, and changing the sign-in email with a code to the new address | accepted |
 
 The fields and limits of each resource are in [`../api-fields.md`](../api-fields.md).
 

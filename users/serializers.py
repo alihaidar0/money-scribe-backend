@@ -2,13 +2,11 @@ from typing import Any
 from zoneinfo import available_timezones
 
 from django.conf import settings
-from django.contrib.auth.password_validation import validate_password
-from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import serializers
 from rest_framework.exceptions import ErrorDetail
 
 from .models import Language, Platform, User
-from .validators import normalize_password
+from .validators import normalize_password, password_errors
 
 # Computed once: the list of IANA names does not change while the process runs.
 _TIME_ZONES = frozenset(available_timezones())
@@ -64,19 +62,6 @@ class PasswordField(serializers.CharField):  # type: ignore[misc]
         return normalize_password(super().to_internal_value(data))
 
 
-def password_errors(password: str, user: User) -> list[ErrorDetail]:
-    """Run every configured password rule; each failed rule is its own error with its own code."""
-    try:
-        validate_password(password, user)
-    except DjangoValidationError as error:
-        return [
-            ErrorDetail(message, code=item.code or "invalid")
-            for item in error.error_list
-            for message in item.messages
-        ]
-    return []
-
-
 class RegisterSerializer(ClientSettingsMixin):
     name = serializers.CharField(max_length=100)
     email = serializers.EmailField(max_length=254)
@@ -125,6 +110,82 @@ class SignInSerializer(ClientSettingsMixin):
     device = DeviceSerializer()
 
 
+class PasswordResetRequestSerializer(serializers.Serializer):  # type: ignore[misc]
+    email = serializers.EmailField(max_length=254)
+
+
+class PasswordResetVerifySerializer(serializers.Serializer):  # type: ignore[misc]
+    email = serializers.EmailField(max_length=254)
+    code = serializers.RegexField(
+        rf"^[0-9]{{{settings.EMAIL_CODE_LENGTH}}}$",
+        help_text=f"The {settings.EMAIL_CODE_LENGTH}-digit code from the email.",
+    )
+
+
+class PasswordResetConfirmSerializer(serializers.Serializer):  # type: ignore[misc]
+    reset_token = serializers.CharField(
+        max_length=128,
+        write_only=True,
+        help_text="The `reset_token` that `auth_password_reset_verify` returned. It works once.",
+    )
+    password = PasswordField(
+        help_text="The new password, under the same rules as at registration."
+    )
+
+
+class ChangePasswordSerializer(serializers.Serializer):  # type: ignore[misc]
+    current_password = PasswordField(
+        max_length=1024, help_text="The password in use now."
+    )
+    password = PasswordField(
+        help_text="The new password, under the same rules as at registration. It must differ from "
+        "the current one."
+    )
+
+
+class ProfileUpdateSerializer(serializers.Serializer):  # type: ignore[misc]
+    """Only the name can be edited here; any other field is refused instead of silently ignored."""
+
+    name = serializers.CharField(
+        max_length=100,
+        help_text="The display name, 1 to 100 characters, trimmed.",
+    )
+
+    def to_internal_value(self, data: Any) -> dict[str, Any]:
+        if isinstance(data, dict):
+            refused = {
+                field: [
+                    ErrorDetail("This field cannot be changed here.", code="read_only")
+                ]
+                for field in data
+                if field not in self.fields
+            }
+            if refused:
+                raise serializers.ValidationError(refused)
+        value: dict[str, Any] = super().to_internal_value(data)
+        return value
+
+
+class EmailChangeRequestSerializer(serializers.Serializer):  # type: ignore[misc]
+    email = serializers.EmailField(max_length=254, help_text="The new address.")
+    current_password = PasswordField(
+        max_length=1024, help_text="The password in use now."
+    )
+
+
+class EmailChangeConfirmSerializer(serializers.Serializer):  # type: ignore[misc]
+    code = serializers.RegexField(
+        rf"^[0-9]{{{settings.EMAIL_CODE_LENGTH}}}$",
+        help_text=f"The {settings.EMAIL_CODE_LENGTH}-digit code mailed to the new address.",
+    )
+
+
+class DeleteAccountSerializer(serializers.Serializer):  # type: ignore[misc]
+    password = PasswordField(
+        max_length=1024, help_text="The current password, to confirm the deletion."
+    )
+
+
 class RefreshSerializer(serializers.Serializer):  # type: ignore[misc]
     refresh_token = serializers.CharField(max_length=2048)
     device = DeviceSerializer()
@@ -150,8 +211,21 @@ class CodeSentSerializer(serializers.Serializer):  # type: ignore[misc]
     )
 
 
+class ResetTokenResponseSerializer(serializers.Serializer):  # type: ignore[misc]
+    reset_token = serializers.CharField(
+        help_text="Single use. Send it, with the new password, to `auth_password_reset_confirm`."
+    )
+    expires_in = serializers.IntegerField(
+        help_text="Seconds until the reset token expires (600)."
+    )
+
+
 class RegisterResponseSerializer(CodeSentSerializer):
     email = serializers.EmailField()
+
+
+class EmailChangeResponseSerializer(CodeSentSerializer):
+    email = serializers.EmailField(help_text="The new address the code was mailed to.")
 
 
 class UserSummarySerializer(serializers.ModelSerializer):  # type: ignore[misc]
