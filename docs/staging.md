@@ -96,6 +96,18 @@ On staging the list held three entries (the phone, a Cloudflare server, Render's
 [`staging-render.md`](staging-render.md), step 7, explains `GUNICORN_CMD_ARGS` flag by flag and records the check with a
 forged header.
 
+## Work in the dev container against the Neon database
+
+Set `DATABASE_URL` in your git-ignored dotenv file to the Neon direct connection string and reopen the container. The `db`
+service still starts but is not used. Run `pm migrate` only if you want to change the Neon schema from your machine;
+Render applies the migrations on every deploy anyway.
+
+Celery Beat does not start against an external database: it schedules the purge jobs on its own, and the local worker would
+run them on the Neon data. The `celery-beat` container stays up and its log (`docker compose logs celery-beat`) says why.
+To run Beat there on purpose, set `BEAT_ON_EXTERNAL_DATABASE=true` in the same file and run
+`docker compose restart celery-beat`. With the local `db` service Beat needs no setting: it waits for the migrations and
+starts after `pm migrate`.
+
 ## Check a deploy
 
 - `https://<service>.onrender.com/healthz` answers `ok`, and its `X-Release` header is the short commit that was

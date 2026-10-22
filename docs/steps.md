@@ -151,8 +151,8 @@ no regeneration; they are a normal follow-up migration.
   ```
 
 - [ ] Open <http://localhost:8000> (the Django start page in debug mode). No venv activation is needed: the dev image
-  puts `/workspace/.venv/bin` first on `PATH`. The Celery worker and Beat start by themselves once the project and its
-  dependencies exist.
+  puts `/workspace/.venv/bin` first on `PATH`. The Celery worker starts by itself once the project and its
+  dependencies exist; Beat also waits until `pm migrate` has been run.
 
 ### 3.4 First run: check that everything works
 

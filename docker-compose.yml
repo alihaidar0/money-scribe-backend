@@ -6,7 +6,7 @@
 #
 #    app          VS Code attaches here (/workspace = this folder)
 #    celery       worker — waits for manage.py, reloads on code change
-#    celery-beat  scheduler — waits for manage.py
+#    celery-beat  scheduler — waits for manage.py and the migrations
 #    db           PostgreSQL 18
 #    redis        cache + Celery broker/result backend
 #    mailpit      catches outgoing email (UI :8025, SMTP :1025)
@@ -79,6 +79,9 @@ x-dev-image: &dev-image
     REFRESH_REPLAY_WINDOW_SECONDS: ${REFRESH_REPLAY_WINDOW_SECONDS:-30}
     # Checks new passwords against known breaches through the Pwned Passwords range API (k-anonymity).
     PWNED_PASSWORD_CHECK: ${PWNED_PASSWORD_CHECK:-True}
+    # Beat refuses to start against an external DATABASE_URL (for example Neon) unless this is "true";
+    # it schedules jobs on its own. See scripts/start-beat.sh.
+    BEAT_ON_EXTERNAL_DATABASE: ${BEAT_ON_EXTERNAL_DATABASE:-false}
     # Proxies in front of the app (0 in development). Behind a reverse proxy set the real number, or every
     # client shares the proxy's address in the per-client limits.
     NUM_PROXIES: ${NUM_PROXIES:-0}
@@ -128,12 +131,10 @@ services:
 
   celery-beat:
     <<: *dev-image
-    command: >
-      sh -c '
-        echo "⏳ Celery Beat waits for manage.py and the project venv (uv sync)…"
-        until [ -f manage.py ] && [ -x .venv/bin/celery ]; do sleep 5; done
-        exec celery -A config beat -l INFO --scheduler django_celery_beat.schedulers:DatabaseScheduler
-      '
+    # Waits for the project, the venv and the migrations (the DatabaseScheduler needs its tables), then
+    # starts Beat. While it waits the log says why, and it stays idle when DATABASE_URL is external;
+    # see scripts/start-beat.sh.
+    command: bash scripts/start-beat.sh
 
   db:
     image: postgres:18.6-alpine@sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873

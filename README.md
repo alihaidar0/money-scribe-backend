@@ -31,8 +31,8 @@ code money-scribe-backend
 ```
 
 Click **Reopen in Container**. The first start installs the dependencies and the git
-hooks (`uv sync --locked`, `pre-commit install`); the Celery worker and Beat start by
-themselves. Then:
+hooks (`uv sync --locked`, `pre-commit install`); the Celery worker starts by
+itself, and Beat once `pm migrate` has been run. Then:
 
 ```bash
 python manage.py migrate
