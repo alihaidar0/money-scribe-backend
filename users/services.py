@@ -118,11 +118,27 @@ def normalize_email(email: str) -> str:
 # --- the email codes --------------------------------------------------------------------------
 
 
+# The label mixed into the keyed hash of a code, so a code of one purpose never matches another's even
+# when the digits are the same. It is a fixed label of its own, not the purpose's name: the hash then
+# depends on nothing but the label, the user and the code. A new purpose must be added here (a test
+# checks), and a label must never change once codes exist, or the codes in flight stop working.
+_CODE_DOMAINS = {
+    EmailCodePurpose.VERIFY_EMAIL: "verify_email",
+    EmailCodePurpose.PASSWORD_RESET: "reset",
+    EmailCodePurpose.EMAIL_CHANGE: "email_change",
+}
+
+
 def _hash_code(user_id: uuid.UUID, purpose: str, code: str) -> str:
-    """A keyed hash: a leaked table alone does not reveal a 6-digit code."""
+    """A keyed hash: a leaked table alone does not reveal a 6-digit code.
+
+    HMAC-SHA256 keyed with the server's secret is the right tool for a short, expiring, attempt-limited
+    code (it is not a password: those are hashed with Argon2id, ADR 0001).
+    """
+    domain = _CODE_DOMAINS[EmailCodePurpose(purpose)]
     return hmac.new(
         settings.SECRET_KEY.encode(),
-        f"{purpose}:{user_id}:{code}".encode(),
+        f"{domain}:{user_id}:{code}".encode(),
         hashlib.sha256,
     ).hexdigest()
 
