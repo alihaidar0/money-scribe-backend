@@ -48,10 +48,13 @@ def test_every_user_reads_only_their_own_profile(api_client: APIClient) -> None:
     assert one["email"] != two["email"]
 
 
-def test_the_profile_cannot_be_written_here(api_client: APIClient) -> None:
+@pytest.mark.parametrize("method", ["put", "post", "delete"])
+def test_the_profile_is_changed_only_by_patching_the_name(
+    api_client: APIClient, method: str
+) -> None:
     _, body = start_session(api_client)
 
-    response = api_client.patch(
+    response = getattr(api_client, method)(
         PROFILE, {"name": "Changed"}, headers=bearer(body["access_token"])
     )
 

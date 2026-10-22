@@ -46,3 +46,31 @@ class ResendCodeThrottle(ClientRateThrottle):
 
 class VerifyEmailThrottle(ClientRateThrottle):
     scope = "verify_email"
+
+
+class PasswordResetRequestThrottle(ClientRateThrottle):
+    scope = "password_reset_request"
+
+
+class PasswordResetVerifyThrottle(ClientRateThrottle):
+    scope = "password_reset_verify"
+
+
+class PasswordResetConfirmThrottle(ClientRateThrottle):
+    scope = "password_reset_confirm"
+
+
+class PasswordChangeThrottle(ClientRateThrottle):
+    scope = "password_change"
+
+
+class EmailChangeRequestThrottle(ClientRateThrottle):
+    scope = "email_change_request"
+
+
+class EmailChangeConfirmThrottle(ClientRateThrottle):
+    scope = "email_change_confirm"
+
+
+class AccountDeleteThrottle(ClientRateThrottle):
+    scope = "account_delete"

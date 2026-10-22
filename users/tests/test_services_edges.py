@@ -139,3 +139,43 @@ def test_a_correct_sign_in_password_is_the_factory_password() -> None:
     user = UserFactory.create()
 
     assert user.check_password(PASSWORD)
+
+
+def test_every_code_purpose_has_its_own_hash_label() -> None:
+    from users.models import EmailCodePurpose
+    from users.services import _CODE_DOMAINS
+
+    assert set(_CODE_DOMAINS) == set(EmailCodePurpose)
+    assert len(set(_CODE_DOMAINS.values())) == len(EmailCodePurpose)
+
+
+def test_a_code_hash_is_a_keyed_hash_of_label_user_and_code(settings: Any) -> None:
+    """Pinned, so a change of the label or the key use fails here and not on codes in flight."""
+    import hashlib
+    import hmac
+    import uuid
+
+    from users.services import _hash_code
+
+    user_id = uuid.UUID("00000000-0000-4000-8000-000000000001")
+
+    expected = hmac.new(
+        settings.SECRET_KEY.encode(),
+        f"verify_email:{user_id}:012345".encode(),
+        hashlib.sha256,
+    ).hexdigest()
+
+    assert _hash_code(user_id, "verify_email", "012345") == expected
+
+
+def test_the_same_digits_hash_differently_for_each_purpose() -> None:
+    import uuid
+
+    from users.models import EmailCodePurpose
+    from users.services import _hash_code
+
+    user_id = uuid.uuid4()
+
+    hashes = {_hash_code(user_id, purpose, "123456") for purpose in EmailCodePurpose}
+
+    assert len(hashes) == len(EmailCodePurpose)

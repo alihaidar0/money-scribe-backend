@@ -5,8 +5,8 @@ from celery.schedules import crontab
 from django.conf import settings
 from django.utils import timezone
 
-from users.models import EmailCode, EmailCodePurpose, User
-from users.tasks import purge_unverified_accounts
+from users.models import EmailCode, EmailCodePurpose, PasswordResetToken, User
+from users.tasks import purge_expired_secrets, purge_unverified_accounts
 from users.tests.factories import UserFactory, VerifiedUserFactory
 
 pytestmark = pytest.mark.django_db
@@ -104,3 +104,42 @@ def test_the_retention_is_a_setting_and_the_task_is_scheduled_daily() -> None:
     entry = settings.CELERY_BEAT_SCHEDULE["users-purge-unverified"]
     assert entry["task"] == "users.tasks.purge_unverified_accounts"
     assert entry["schedule"] == crontab(minute=37, hour=3)
+
+
+def reset_token_for(user: User, minutes_from_now: int) -> PasswordResetToken:
+    return PasswordResetToken.objects.create(
+        user=user,
+        token_hash=f"{user.pk}".replace("-", "").ljust(64, "0"),
+        expires_at=timezone.now() + timedelta(minutes=minutes_from_now),
+    )
+
+
+def test_expired_codes_and_tokens_are_deleted_and_live_ones_kept() -> None:
+    expired, live = VerifiedUserFactory.create(), VerifiedUserFactory.create()
+    code_for(expired, 1)  # created a day ago, expired ten minutes later
+    reset_token_for(expired, -1)
+    EmailCode.objects.create(
+        user=live,
+        purpose=EmailCodePurpose.PASSWORD_RESET,
+        code_hash="h",
+        expires_at=timezone.now() + timedelta(minutes=5),
+    )
+    reset_token_for(live, 5)
+
+    assert purge_expired_secrets() == 2
+
+    assert EmailCode.objects.get().user == live
+    assert PasswordResetToken.objects.get().user == live
+
+
+def test_purging_expired_secrets_twice_is_harmless() -> None:
+    reset_token_for(VerifiedUserFactory.create(), -1)
+
+    assert purge_expired_secrets() == 1
+    assert purge_expired_secrets() == 0
+
+
+def test_the_secrets_purge_is_scheduled_daily() -> None:
+    entry = settings.CELERY_BEAT_SCHEDULE["users-purge-expired-secrets"]
+    assert entry["task"] == "users.tasks.purge_expired_secrets"
+    assert entry["schedule"] == crontab(minute=47, hour=3)

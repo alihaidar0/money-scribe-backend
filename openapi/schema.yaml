@@ -4,6 +4,490 @@ info:
   version: 0.1.0
   description: The HTTP API of this project, generated from its code.
 paths:
+  /api/v1/auth/account/delete/:
+    post:
+      operationId: auth_account_delete
+      description: 'Needs the password. Deletes the account and **all** its data at
+        once and for good, in one transaction, and every session ends with it (the
+        tokens stop working at once). Nothing is kept: no soft delete and no anonymised
+        copy. The address is used only for a confirmation email. It is `POST` with
+        a body, not `DELETE`, because a `DELETE` body has no defined meaning and proxies
+        may drop it. Errors: `400` `invalid_password` (`attr` `password`); `429` `password_attempts_exceeded`
+        (shared with the password change) or `throttled`, each with `Retry-After`;
+        `503` `service_unavailable` while the limit store is down, with `Retry-After`.'
+      summary: Delete the account
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeleteAccountRequest'
+        required: true
+      security:
+      - bearerAuth: []
+      responses:
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error400Response'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '429':
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+              description: Whole seconds to wait before the request may be repeated;
+                at least 1.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '204':
+          description: No response body
+        '503':
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+              description: Whole seconds to wait before the request may be repeated;
+                at least 1.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServerErrorResponse'
+          description: A safety control (the rate-limit store) cannot run, so the
+            request is refused before it changes anything; try again after `Retry-After`.
+            The `code` is `service_unavailable`.
+  /api/v1/auth/email-change/:
+    post:
+      operationId: auth_email_change_request
+      description: 'Step 1 of 2. Emails a 6-digit code to the **new** address; the
+        old one stays in force until the code is accepted by `auth_email_change_confirm`.
+        Needs the current password. A new request replaces the earlier pending change.
+        Errors: `400` `invalid_password` (`attr` `current_password`), `email_unchanged`
+        (`attr` `email`: the account already has it), or `invalid` for a malformed
+        address; `409` `email_already_registered` (a signed-in caller who has proved
+        the password may be told; no other call says so); `429` `password_attempts_exceeded`
+        (the password lock shared with the password change), `resend_too_soon` (60
+        second cooldown for the new address), `resend_limit_reached` (5 codes per
+        hour for the address, and 5 changes per hour for the account) or `throttled`,
+        each with `Retry-After`; `503` `service_unavailable` while the limit store
+        is down, with `Retry-After`.'
+      summary: Start an email change
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmailChangeRequestRequest'
+        required: true
+      security:
+      - bearerAuth: []
+      responses:
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error400Response'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '429':
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+              description: Whole seconds to wait before the request may be repeated;
+                at least 1.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmailChangeResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request conflicts with the current state; the `code` says
+            what conflicts.
+        '503':
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+              description: Whole seconds to wait before the request may be repeated;
+                at least 1.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServerErrorResponse'
+          description: A safety control (the rate-limit store) cannot run, so the
+            request is refused before it changes anything; try again after `Retry-After`.
+            The `code` is `service_unavailable`.
+    delete:
+      operationId: auth_email_change_cancel
+      description: Drops the pending change, so its code stops working. It answers
+        `204` also when nothing is pending.
+      summary: Cancel the pending email change
+      tags:
+      - auth
+      security:
+      - bearerAuth: []
+      responses:
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error400Response'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '204':
+          description: No response body
+  /api/v1/auth/email-change/confirm/:
+    post:
+      operationId: auth_email_change_confirm
+      description: 'Step 2 of 2. A correct code switches the sign-in address to the
+        new one, ends every **other** session (this one continues, with the same tokens),
+        tells the old address by email and answers the updated profile. Errors: `400`
+        `code_invalid` (the error item carries `attempts_left`) or `code_expired`
+        (also when no change is pending); `409` `email_already_registered` (the address
+        was taken meanwhile; the code is kept); `429` `code_attempts_exceeded` (the
+        code is dead; `Retry-After` is the wait before a new one may be requested)
+        or `throttled`; `503` `service_unavailable` while the limit store is down,
+        with `Retry-After`.'
+      summary: Confirm the email change
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmailChangeConfirmRequest'
+        required: true
+      security:
+      - bearerAuth: []
+      responses:
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error400Response'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '429':
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+              description: Whole seconds to wait before the request may be repeated;
+                at least 1.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Profile'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request conflicts with the current state; the `code` says
+            what conflicts.
+        '503':
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+              description: Whole seconds to wait before the request may be repeated;
+                at least 1.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServerErrorResponse'
+          description: A safety control (the rate-limit store) cannot run, so the
+            request is refused before it changes anything; try again after `Retry-After`.
+            The `code` is `service_unavailable`.
+  /api/v1/auth/password-reset/confirm/:
+    post:
+      operationId: auth_password_reset_confirm
+      description: 'Step 3 of 3. Sets the new password with the `reset_token` and
+        ends **all** the user''s sessions, so the app returns to the sign-in screen
+        (it signs nobody in). The owner gets an email about the change. Errors: `400`
+        `reset_token_invalid` (`attr` `reset_token`: unknown, used or expired; ask
+        for a new code), or a password rule on `attr` `password` (`password_too_short`,
+        `password_too_long`, `password_too_similar`, `password_too_common`, `password_compromised`),
+        after which the same token may be used again until it expires. A new password
+        equal to the current one is allowed here: the reset proves the mailbox, not
+        the old password. `429` `throttled` with `Retry-After`; `503` `service_unavailable`
+        while the limit store is down, with `Retry-After`.'
+      summary: Set the new password
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PasswordResetConfirmRequest'
+        required: true
+      responses:
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error400Response'
+          description: ''
+        '429':
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+              description: Whole seconds to wait before the request may be repeated;
+                at least 1.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '204':
+          description: No response body
+        '503':
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+              description: Whole seconds to wait before the request may be repeated;
+                at least 1.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServerErrorResponse'
+          description: A safety control (the rate-limit store) cannot run, so the
+            request is refused before it changes anything; try again after `Retry-After`.
+            The `code` is `service_unavailable`.
+  /api/v1/auth/password-reset/request/:
+    post:
+      operationId: auth_password_reset_request
+      description: 'Step 1 of 3. Emails a 6-digit code to a registered, verified address.
+        The answer is the same for every address, whether it has an account or not,
+        so it reveals nothing; the app always goes on to the code screen. The code
+        lives 10 minutes and shares the hourly budget of the other codes. Errors:
+        `429` `resend_too_soon` (the 60 second cooldown), `resend_limit_reached` (5
+        codes per hour) or `throttled`, each with `Retry-After`; `503` `service_unavailable`
+        while the limit store is down, with `Retry-After`.'
+      summary: Ask for a password reset code
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PasswordResetRequestRequest'
+        required: true
+      responses:
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error400Response'
+          description: ''
+        '429':
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+              description: Whole seconds to wait before the request may be repeated;
+                at least 1.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CodeSent'
+          description: ''
+        '503':
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+              description: Whole seconds to wait before the request may be repeated;
+                at least 1.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServerErrorResponse'
+          description: A safety control (the rate-limit store) cannot run, so the
+            request is refused before it changes anything; try again after `Retry-After`.
+            The `code` is `service_unavailable`.
+  /api/v1/auth/password-reset/verify/:
+    post:
+      operationId: auth_password_reset_verify
+      description: 'Step 2 of 3. A correct code is spent and answered with a single-use
+        `reset_token` that lives 10 minutes. It does not sign anyone in. Errors: `400`
+        `code_invalid` (the error item carries `attempts_left`) or `code_expired`,
+        `429` `code_attempts_exceeded` (the code is dead; `Retry-After` is the wait
+        before a new one may be requested) or `throttled`; `503` `service_unavailable`
+        while the limit store is down, with `Retry-After`. The answers are the same
+        for an address with no account.'
+      summary: Check the password reset code
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PasswordResetVerifyRequest'
+        required: true
+      responses:
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error400Response'
+          description: ''
+        '429':
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+              description: Whole seconds to wait before the request may be repeated;
+                at least 1.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResetTokenResponse'
+          description: ''
+        '503':
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+              description: Whole seconds to wait before the request may be repeated;
+                at least 1.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServerErrorResponse'
+          description: A safety control (the rate-limit store) cannot run, so the
+            request is refused before it changes anything; try again after `Retry-After`.
+            The `code` is `service_unavailable`.
+  /api/v1/auth/password/change/:
+    post:
+      operationId: auth_password_change
+      description: 'Needs the current password. Ends every **other** session; this
+        one continues with the new token pair in the answer, and the previous refresh
+        token is retired. The owner gets an email about the change. Errors: `400`
+        `invalid_password` (`attr` `current_password`: it is `400`, not `401`, so
+        the app''s session handling is not triggered), `password_unchanged` (`attr`
+        `password`: the new password equals the current one), or a password rule on
+        `attr` `password` (`password_too_short`, `password_too_long`, `password_too_similar`,
+        `password_too_common`, `password_compromised`); `429` `password_attempts_exceeded`
+        (5 wrong current passwords lock this operation and the account deletion for
+        15 minutes; `Retry-After` is the remaining time; sign-in is unaffected) or
+        `throttled`; `503` `service_unavailable` while the limit store is down, with
+        `Retry-After`.'
+      summary: Change the password
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangePasswordRequest'
+        required: true
+      security:
+      - bearerAuth: []
+      responses:
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error400Response'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '429':
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+              description: Whole seconds to wait before the request may be repeated;
+                at least 1.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RefreshResponse'
+          description: ''
+        '503':
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+              description: Whole seconds to wait before the request may be repeated;
+                at least 1.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServerErrorResponse'
+          description: A safety control (the rate-limit store) cannot run, so the
+            request is refused before it changes anything; try again after `Retry-After`.
+            The `code` is `service_unavailable`.
   /api/v1/auth/profile/:
     get:
       operationId: auth_profile
@@ -13,6 +497,42 @@ paths:
       summary: Read the profile
       tags:
       - auth
+      security:
+      - bearerAuth: []
+      responses:
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error400Response'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Profile'
+          description: ''
+    patch:
+      operationId: auth_profile_update
+      description: 'Changes the display name and answers the updated profile. Only
+        `name` can be sent: any other field, such as `email`, `language` or `time_zone`,
+        is refused with `400` and the code `read_only` on that field (the email changes
+        only through `auth_email_change_request`). Errors: `400` `blank`, `required`
+        or `max_length` on `name`.'
+      summary: Edit the name
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedProfileUpdateRequest'
       security:
       - bearerAuth: []
       responses:
@@ -369,6 +889,24 @@ paths:
             The `code` is `service_unavailable`.
 components:
   schemas:
+    ChangePasswordRequest:
+      type: object
+      properties:
+        current_password:
+          type: string
+          writeOnly: true
+          minLength: 1
+          description: The password in use now.
+          maxLength: 1024
+        password:
+          type: string
+          writeOnly: true
+          minLength: 1
+          description: The new password, under the same rules as at registration.
+            It must differ from the current one.
+      required:
+      - current_password
+      - password
     ClientErrorEnum:
       enum:
       - client_error
@@ -386,6 +924,17 @@ components:
       required:
       - code_expires_in
       - resend_available_in
+    DeleteAccountRequest:
+      type: object
+      properties:
+        password:
+          type: string
+          writeOnly: true
+          minLength: 1
+          description: The current password, to confirm the deletion.
+          maxLength: 1024
+      required:
+      - password
     DeviceRequest:
       type: object
       description: The label of the device, for the user's own "active sessions" screen
@@ -417,6 +966,51 @@ components:
       - device_id
       - device_name
       - platform
+    EmailChangeConfirmRequest:
+      type: object
+      properties:
+        code:
+          type: string
+          minLength: 1
+          description: The 6-digit code mailed to the new address.
+          pattern: ^[0-9]{6}$
+      required:
+      - code
+    EmailChangeRequestRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+          minLength: 1
+          description: The new address.
+          maxLength: 254
+        current_password:
+          type: string
+          writeOnly: true
+          minLength: 1
+          description: The password in use now.
+          maxLength: 1024
+      required:
+      - current_password
+      - email
+    EmailChangeResponse:
+      type: object
+      properties:
+        code_expires_in:
+          type: integer
+          description: Seconds until the code expires.
+        resend_available_in:
+          type: integer
+          description: Seconds until a new code may be requested.
+        email:
+          type: string
+          format: email
+          description: The new address the code was mailed to.
+      required:
+      - code_expires_in
+      - email
+      - resend_available_in
     Error400Response:
       type: object
       description: '``validation_error``: invalid input. ``client_error``: an unreadable
@@ -451,15 +1045,16 @@ components:
             `session_email_changed`, `session_token_reuse`, `session_expired`, `email_not_verified`,
             `sign_in_locked`, `throttled`, `code_invalid`, `code_expired`, `code_attempts_exceeded`,
             `resend_too_soon`, `resend_limit_reached`, `email_already_registered`,
-            `invalid_password`, `password_too_short`, `password_too_long`, `password_too_similar`,
-            `password_compromised`, `password_too_common`, `service_unavailable`,
-            `invalid_amount`, `currency_mismatch`, `exceeds_remaining`, `account_has_transactions`,
-            `category_has_transactions`, `category_is_builtin`. Codes raised by the
-            framework for malformed or incomplete input: `required`, `blank`, `null`,
-            `invalid`, `max_length`, `min_length`, `parse_error`, `authentication_failed`,
-            `not_authenticated`, `permission_denied`, `not_found`, `method_not_allowed`,
-            `not_acceptable`, `unsupported_media_type`. A client treats a code it
-            does not know as a generic failure of the status.'
+            `email_unchanged`, `invalid_password`, `password_too_short`, `password_too_long`,
+            `password_too_similar`, `password_compromised`, `password_too_common`,
+            `password_unchanged`, `password_attempts_exceeded`, `reset_token_invalid`,
+            `service_unavailable`, `invalid_amount`, `currency_mismatch`, `exceeds_remaining`,
+            `account_has_transactions`, `category_has_transactions`, `category_is_builtin`.
+            Codes raised by the framework for malformed or incomplete input: `required`,
+            `blank`, `null`, `invalid`, `max_length`, `min_length`, `parse_error`,
+            `authentication_failed`, `not_authenticated`, `permission_denied`, `not_found`,
+            `method_not_allowed`, `not_acceptable`, `unsupported_media_type`, `read_only`.
+            A client treats a code it does not know as a generic failure of the status.'
         detail:
           type: string
           description: Human-readable text; not for display.
@@ -468,7 +1063,8 @@ components:
           nullable: true
           description: The field the error belongs to, or null for the request as
             a whole. Sign-in sets it on `email_not_registered` (`email`) and `wrong_password`
-            (`password`).
+            (`password`); `invalid_password` is on `current_password` (password change)
+            or `password` (account deletion); `reset_token_invalid` is on `reset_token`.
         attempts_left:
           type: integer
           minimum: 0
@@ -510,6 +1106,60 @@ components:
       description: |-
         * `en` - English
         * `ar` - Arabic
+    PasswordResetConfirmRequest:
+      type: object
+      properties:
+        reset_token:
+          type: string
+          writeOnly: true
+          minLength: 1
+          description: The `reset_token` that `auth_password_reset_verify` returned.
+            It works once.
+          maxLength: 128
+        password:
+          type: string
+          writeOnly: true
+          minLength: 1
+          description: The new password, under the same rules as at registration.
+      required:
+      - password
+      - reset_token
+    PasswordResetRequestRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+          minLength: 1
+          maxLength: 254
+      required:
+      - email
+    PasswordResetVerifyRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+          minLength: 1
+          maxLength: 254
+        code:
+          type: string
+          minLength: 1
+          description: The 6-digit code from the email.
+          pattern: ^[0-9]{6}$
+      required:
+      - code
+      - email
+    PatchedProfileUpdateRequest:
+      type: object
+      description: Only the name can be edited here; any other field is refused instead
+        of silently ignored.
+      properties:
+        name:
+          type: string
+          minLength: 1
+          description: The display name, 1 to 100 characters, trimmed.
+          maxLength: 100
     PlatformEnum:
       enum:
       - android
@@ -645,6 +1295,18 @@ components:
           maxLength: 254
       required:
       - email
+    ResetTokenResponse:
+      type: object
+      properties:
+        reset_token:
+          type: string
+          description: Single use. Send it, with the new password, to `auth_password_reset_confirm`.
+        expires_in:
+          type: integer
+          description: Seconds until the reset token expires (600).
+      required:
+      - expires_in
+      - reset_token
     ServerErrorEnum:
       enum:
       - server_error

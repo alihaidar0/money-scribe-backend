@@ -2,12 +2,18 @@ import hashlib
 import logging
 import unicodedata
 import urllib.request
+from typing import TYPE_CHECKING
 
 from django.conf import settings
 from django.contrib.auth.base_user import AbstractBaseUser
+from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
+from rest_framework.exceptions import ErrorDetail
 
 from config.error_codes import ErrorCode
+
+if TYPE_CHECKING:
+    from .models import User
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +28,19 @@ def normalize_password(password: str) -> str:
     one password. Every flow that takes a password goes through this function.
     """
     return unicodedata.normalize("NFKC", password)
+
+
+def password_errors(password: str, user: User) -> list[ErrorDetail]:
+    """Run every configured password rule; each failed rule is its own error with its own code."""
+    try:
+        validate_password(password, user)
+    except ValidationError as error:
+        return [
+            ErrorDetail(message, code=item.code or "invalid")
+            for item in error.error_list
+            for message in item.messages
+        ]
+    return []
 
 
 class MaximumLengthPasswordValidator:

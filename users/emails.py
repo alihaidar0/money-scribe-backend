@@ -41,6 +41,83 @@ _ACCOUNT_EXISTS = {
 }
 
 
+_RESET_CODE = {
+    Language.ENGLISH: (
+        "Your Money Scribe password reset code",
+        "Your Money Scribe password reset code is {code}.\n"
+        "It expires in {minutes} minutes.\n"
+        "If you did not ask to reset your password, you can ignore this email: your password has not changed.\n",
+    ),
+    Language.ARABIC: (
+        "رمز إعادة تعيين كلمة المرور في Money Scribe",
+        "رمز إعادة تعيين كلمة المرور في Money Scribe هو {code}.\n"
+        "تنتهي صلاحية الرمز خلال {minutes} دقائق.\n"
+        "إذا لم تطلب إعادة تعيين كلمة المرور فتجاهل هذه الرسالة: لم تتغير كلمة المرور.\n",
+    ),
+}
+
+_PASSWORD_CHANGED = {
+    Language.ENGLISH: (
+        "Your Money Scribe password was changed",
+        "The password of your Money Scribe account was just changed, and the other devices were signed out.\n"
+        "If this was you, there is nothing to do.\n"
+        "If it was not you, reset your password in the app now.\n",
+    ),
+    Language.ARABIC: (
+        "تم تغيير كلمة المرور في Money Scribe",
+        "تم تغيير كلمة مرور حسابك في Money Scribe للتو، وتم تسجيل الخروج من الأجهزة الأخرى.\n"
+        "إذا كنت أنت من فعل ذلك فلا حاجة لأي إجراء.\n"
+        "وإذا لم تكن أنت، فأعد تعيين كلمة المرور من التطبيق الآن.\n",
+    ),
+}
+
+_ACCOUNT_DELETED = {
+    Language.ENGLISH: (
+        "Your Money Scribe account was deleted",
+        "Your Money Scribe account and all the data in it were deleted, and every device was signed out.\n"
+        "This cannot be undone. If this was not you, your password was used to do it; "
+        "you can register again at any time.\n",
+    ),
+    Language.ARABIC: (
+        "تم حذف حسابك في Money Scribe",
+        "تم حذف حسابك في Money Scribe وجميع البيانات الموجودة فيه، وتم تسجيل الخروج من كل الأجهزة.\n"
+        "لا يمكن التراجع عن ذلك. إذا لم تكن أنت، فقد استُخدمت كلمة مرورك لتنفيذه؛ "
+        "ويمكنك التسجيل من جديد في أي وقت.\n",
+    ),
+}
+
+
+_EMAIL_CHANGE_CODE = {
+    Language.ENGLISH: (
+        "Confirm your new Money Scribe email",
+        "Your Money Scribe email change code is {code}.\n"
+        "It expires in {minutes} minutes.\n"
+        "If you did not ask to use this address, you can ignore this email: nothing has changed.\n",
+    ),
+    Language.ARABIC: (
+        "أكّد بريدك الإلكتروني الجديد في Money Scribe",
+        "رمز تغيير البريد الإلكتروني في Money Scribe هو {code}.\n"
+        "تنتهي صلاحية الرمز خلال {minutes} دقائق.\n"
+        "إذا لم تطلب استخدام هذا العنوان فتجاهل هذه الرسالة: لم يتغير شيء.\n",
+    ),
+}
+
+_EMAIL_CHANGED = {
+    Language.ENGLISH: (
+        "The email of your Money Scribe account was changed",
+        "The email address of your Money Scribe account was just changed, and the other devices were signed out.\n"
+        "From now on you sign in with the new address.\n"
+        "If this was not you, someone knows your password and may have taken over the account.\n",
+    ),
+    Language.ARABIC: (
+        "تم تغيير البريد الإلكتروني لحسابك في Money Scribe",
+        "تم تغيير عنوان البريد الإلكتروني لحسابك في Money Scribe للتو، وتم تسجيل الخروج من الأجهزة الأخرى.\n"
+        "ستسجّل الدخول من الآن بالعنوان الجديد.\n"
+        "إذا لم تكن أنت، فهناك من يعرف كلمة مرورك وربما استولى على الحساب.\n",
+    ),
+}
+
+
 def _send(email: str, subject: str, body: str, what: str) -> None:
     """Send one email. A delivery failure is logged without details; the user can ask again."""
     try:
@@ -70,3 +147,49 @@ def send_verification_code(
     )
     body = template.format(code=code, minutes=max(1, lifetime_seconds // 60))
     _send(email, subject, body, "a verification email")
+
+
+def send_password_reset_code(
+    *, email: str, language: str, code: str, lifetime_seconds: int
+) -> None:
+    """Email the password reset code. A delivery failure is logged without details; the user can ask again."""
+    subject, template = _RESET_CODE.get(
+        Language(language), _RESET_CODE[Language.ENGLISH]
+    )
+    body = template.format(code=code, minutes=max(1, lifetime_seconds // 60))
+    _send(email, subject, body, "a password reset email")
+
+
+def send_password_changed_notice(*, email: str, language: str) -> None:
+    """Tell the owner that the password changed (by a change or a reset), so a stranger's change is noticed."""
+    subject, body = _PASSWORD_CHANGED.get(
+        Language(language), _PASSWORD_CHANGED[Language.ENGLISH]
+    )
+    _send(email, subject, body, "a password change notice")
+
+
+def send_account_deleted_notice(*, email: str, language: str) -> None:
+    """Confirm a deletion to the address it had. Nothing is kept: the address is only used for this email."""
+    subject, body = _ACCOUNT_DELETED.get(
+        Language(language), _ACCOUNT_DELETED[Language.ENGLISH]
+    )
+    _send(email, subject, body, "an account deletion notice")
+
+
+def send_email_change_code(
+    *, email: str, language: str, code: str, lifetime_seconds: int
+) -> None:
+    """Email the change code to the **new** address. A failure is logged without details; the user can ask again."""
+    subject, template = _EMAIL_CHANGE_CODE.get(
+        Language(language), _EMAIL_CHANGE_CODE[Language.ENGLISH]
+    )
+    body = template.format(code=code, minutes=max(1, lifetime_seconds // 60))
+    _send(email, subject, body, "an email change code")
+
+
+def send_email_changed_notice(*, email: str, language: str) -> None:
+    """Tell the **old** address that the account moved to another one, without naming the new address."""
+    subject, body = _EMAIL_CHANGED.get(
+        Language(language), _EMAIL_CHANGED[Language.ENGLISH]
+    )
+    _send(email, subject, body, "an email change notice")

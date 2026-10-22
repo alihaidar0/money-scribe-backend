@@ -19,8 +19,10 @@ import functools
 import hashlib
 import logging
 import math
+import uuid
 from collections.abc import Callable
 from datetime import datetime
+from typing import NoReturn
 
 from django.conf import settings
 from django.core.cache import cache
@@ -295,3 +297,71 @@ def phantom_code_attempt(email: str, now: datetime | None = None) -> int | None:
     if sent is None or sent + lifetime <= now.timestamp():
         return None
     return _increment(f"code:phantom:{digest}", lifetime)
+
+
+@fail_closed
+def reserve_email_change(user_id: uuid.UUID, now: datetime | None = None) -> None:
+    """Count one email change started by this account, or raise ``429 resend_limit_reached``.
+
+    The code of a change is mailed to an address the user chooses, so without a cap per account a
+    signed-in user could use the call to send mail to any number of strangers. The cap counts every
+    attempt, including the ones refused afterwards, so it also bounds how many addresses can be probed.
+    """
+    count, wait = hit(f"emailchange:{_digest(str(user_id))}", HOUR, now)
+    if count > settings.EMAIL_CHANGE_REQUESTS_PER_HOUR:
+        raise throttled(
+            ErrorCode.RESEND_LIMIT_REACHED,
+            wait,
+            "Too many email changes were started. Try again later.",
+        )
+
+
+# --- the password confirmation lock -----------------------------------------------------------
+
+
+def _confirm_keys(user_id: uuid.UUID) -> tuple[str, str]:
+    digest = _digest(str(user_id))
+    return f"confirm:fails:{digest}", f"confirm:lock:{digest}"
+
+
+def _raise_confirm_locked(unlock: float, now: datetime) -> NoReturn:
+    raise throttled(
+        ErrorCode.PASSWORD_ATTEMPTS_EXCEEDED,
+        _seconds_until(unlock, now),
+        "Too many wrong passwords. Try again later.",
+    )
+
+
+@fail_closed
+def check_password_lock(user_id: uuid.UUID, now: datetime | None = None) -> None:
+    """Raise ``password_attempts_exceeded`` (429) while this account is locked out of confirming.
+
+    Changing the password and deleting the account both ask for the current password. Someone holding
+    only a stolen access token must not be able to guess it there, so wrong answers are counted per
+    account, whatever the client address. The lock does not touch sign-in.
+    """
+    now = now or timezone.now()
+    unlock = cache.get(_confirm_keys(user_id)[1])
+    if unlock is not None and unlock > now.timestamp():
+        _raise_confirm_locked(unlock, now)
+
+
+@fail_closed
+def record_password_failure(user_id: uuid.UUID, now: datetime | None = None) -> None:
+    """Count a wrong current password; the failure that reaches the limit locks the account and raises 429."""
+    now = now or timezone.now()
+    window = settings.PASSWORD_CONFIRM_LOCK_SECONDS
+    fails_key, lock_key = _confirm_keys(user_id)
+    if _increment(fails_key, window) < settings.PASSWORD_CONFIRM_MAX_FAILURES:
+        return
+    unlock = now.timestamp() + window
+    cache.set(lock_key, unlock, timeout=window)
+    cache.delete(fails_key)
+    logger.warning("An account was locked out of password confirmation.")
+    _raise_confirm_locked(unlock, now)
+
+
+@fail_closed
+def clear_password_failures(user_id: uuid.UUID) -> None:
+    """A right password starts the count again."""
+    cache.delete(_confirm_keys(user_id)[0])

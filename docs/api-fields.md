@@ -164,11 +164,13 @@ the session ends ([ADR 0009](adr/0009-sessions-and-devices.md)). The endpoints c
 | sign in | `email`, `password`, `device`, `language`, `time_zone` |
 | refresh | the refresh token and `device`, so `app_version`, `os_version` and `last_active_at` stay current |
 | sign out | the bearer access token, or the `refresh_token` in the body when the access token has expired |
-| profile (read) | `GET /api/v1/auth/profile/`: `id`, `name`, `email`, and the stored `language` and `time_zone` (read-only here); editing the name comes with the account step |
+| profile (read) | `GET /api/v1/auth/profile/`: `id`, `name`, `email`, and the stored `language` and `time_zone` (read-only here) |
+| profile (edit) | `PATCH /api/v1/auth/profile/` with `name` only; `200` with the profile. Another field is `400 read_only` on that field, never ignored |
+| change email | `POST /auth/email-change/` with `email` (the new one) and `current_password`: a code goes to the **new** address. `POST /auth/email-change/confirm/` with the `code`: the address switches and the updated profile is returned. `DELETE /auth/email-change/` cancels |
 | email code | 6 digits, to verify the email or to reset the password; resend allowed with a cooldown |
-| reset password | email, then the code, then the new password; it ends at the sign-in screen and needs no `device` |
-| change password | the current password and the new password |
-| delete account | the password must be sent to confirm |
+| reset password | three calls, no `device`, and it ends at the sign-in screen: `email` (the same answer for every address), then `email` and the `code` (answers a single-use `reset_token` that lives 10 minutes), then the `reset_token` and the new `password`. It ends **all** sessions. The new password may equal the old one here |
+| change password | `current_password` and the new `password` (named as at registration). A wrong current password is `400 invalid_password` on `current_password`; a new password equal to the current one is `400 password_unchanged` on `password`. The other sessions end, this one gets a new token pair |
+| delete account | `POST` with the `password`; `204`. A wrong password is `400 invalid_password` on `password`. Everything the account owns is deleted at once and for good, with nothing kept (see below) |
 
 **Passwords** follow NIST SP 800-63B-4: at least 15 characters because a password is the only factor, up to 128 (counted
 in Unicode code points, after normalization), no composition rules, spaces and any Unicode text allowed and never trimmed,
@@ -187,12 +189,29 @@ ones) and gets a new code. A verified address is left untouched and its owner ge
 code. The app shows its "enter the code" screen either way; if no code arrives, it suggests signing in or resetting the
 password. `resend_too_soon` and `resend_limit_reached` apply to all three cases alike.
 
-**Email change** (agreed shapes, finished in the request issues): the name is a plain update of the profile (`PATCH`).
-Changing the email is `POST` of the new email and the current password, which sends a 6-digit code to the **new** address
-while the old one stays active, then `POST` of the code, which switches the email, ends all other sessions, keeps the
-current one, sends a notice to the old address, and returns the updated profile. A new request replaces the earlier
-pending change, and the pending change can be cancelled (`DELETE`). Codes expire, attempts and resends are limited, and
-the answers use `429` with `Retry-After`; a taken address answers `409 email_already_registered` (only here: the caller is signed in and has proved the password).
+**Password reset, change and deletion** ([ADR 0014](adr/0014-password-reset-change-and-account-deletion.md)). Requesting a
+reset reveals nothing: the same `200 {code_expires_in, resend_available_in}` for every address, and a reset code is sent only
+to a verified, active account. The waits come from the server (`Retry-After` on every `429`, `resend_available_in`,
+`code_expires_in`, `expires_in` of the reset token), never from numbers in the app. A `reset_token_invalid` (unknown,
+used or expired) sends the user back to the first step. Five wrong current passwords at a change or a deletion lock both for
+15 minutes (`429 password_attempts_exceeded`, `Retry-After`); sign-in is unaffected. Each of the three operations also emails
+the owner ("password changed", "account deleted") in the user's language.
+
+**What deleting an account removes** (for the privacy policy and the Google Play Data safety form): the profile, the
+sessions and device records, the email codes and, as the features arrive, all the accounts, categories, transactions,
+salary months, debts and settings of the user, in one step with no recovery. Nothing is anonymised or kept. The address is
+used once more for the confirmation email. Server logs and the hosting provider's backups expire on the provider's schedule.
+
+**Name and email change** ([ADR 0015](adr/0015-profile-name-and-email-change.md)): the name is a plain update of the profile
+(`PATCH`, 1 to 100 characters, trimmed). Changing the email is `POST` of the new email and the current password, which sends a
+6-digit code to the **new** address while the old one stays active, then `POST` of the code, which switches the email, ends
+all other sessions, keeps the current one, sends a notice to the old address, and returns the updated profile. A new request
+replaces the earlier pending change, and the pending change can be cancelled (`DELETE`, `204` even when none is pending).
+Codes expire after 10 minutes with 5 wrong tries each; asking for a change is limited to 5 an hour per account and the new
+address has the 60 second cooldown, all with `429` and `Retry-After`. A taken address answers `409 email_already_registered`
+(only here: the caller is signed in and has proved the password); the same address as the account's own is
+`400 email_unchanged`. The wrong password is `400 invalid_password` on `current_password`, with the lock shared with the
+password change and the account deletion.
 
 ## Reports and read models
 
