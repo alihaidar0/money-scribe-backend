@@ -28,9 +28,9 @@ from rest_framework.exceptions import (
 )
 
 from config.error_codes import ErrorCode
-from config.exceptions import CodeInvalid, throttled
+from config.exceptions import CodeInvalid, FieldAuthenticationFailed, throttled
 
-from . import emails, limits, tokens
+from . import challenge, emails, limits, tokens
 from .models import (
     EmailCode,
     EmailCodePurpose,
@@ -339,6 +339,23 @@ def _dummy_hash() -> str:
     return make_password("not-a-real-password-0")
 
 
+def _require_challenge(
+    token: str, client: ClientInfo, client_ip: str, now: datetime
+) -> None:
+    """Ask a client address that keeps failing for a solved bot challenge, and check it (ADR 0013).
+
+    No token is only asked for again and costs nothing; a token that does not verify counts as a
+    failure of the address, so a bot cannot spin on it for free.
+    """
+    if not challenge.is_enabled() or not limits.challenge_required(client_ip):
+        return
+    if not token:
+        raise challenge.required()
+    if not challenge.verify(token, client.ip):
+        limits.record_address_failure(client_ip, now)
+        raise challenge.invalid()
+
+
 def sign_in(
     *,
     email: str,
@@ -347,26 +364,41 @@ def sign_in(
     client: ClientInfo,
     language: str | None = None,
     time_zone: str | None = None,
+    captcha_token: str = "",
 ) -> SignedIn:
     """Check the credentials and start a session.
 
-    While the account is locked even the right password answers ``429``. An unknown address, a wrong
-    password and an inactive account are all ``invalid_credentials``, counted the same way. The
-    ``email_not_verified`` answer is only given after the right password, so it cannot probe addresses.
+    The lock comes first, so while an account or a client address is locked even the right password
+    answers ``429``. Then the email: no account is ``email_not_registered`` (``attr`` ``email``), whatever
+    the password is, and only a registered email has its password checked (``wrong_password``, ``attr``
+    ``password``). That is deliberate account enumeration (ADR 0012); the client address limit is its
+    brake. An inactive account is ``invalid_credentials`` whatever the password, so it is not named.
+    ``email_not_verified`` is only given after the right password. Every branch does one password
+    hash, so the answers take the same time. A client address that has failed several sign-ins must
+    first send a solved bot challenge (ADR 0013); that is judged before the email, so it tells nothing.
     """
     email = normalize_email(email)
     now = timezone.now()
     client_ip = rate_limit_key(client.ip)
     limits.check_sign_in_lock(email, client_ip, now)
+    _require_challenge(captcha_token, client, client_ip, now)
     candidate = User.objects.filter(email=email).first()
-    user: User | None = None
     if candidate is None:
         check_password(password, _dummy_hash())  # the same work as a real check
-    elif candidate.check_password(password) and candidate.is_active:
-        user = candidate
-    if user is None:
+        limits.record_address_failure(client_ip, now)
+        raise FieldAuthenticationFailed(
+            ErrorCode.EMAIL_NOT_REGISTERED, "email", "No account has this email."
+        )
+    password_is_right = candidate.check_password(password)
+    if not candidate.is_active:
         limits.record_sign_in_failure(email, client_ip, now)
         raise _failure(ErrorCode.INVALID_CREDENTIALS, "The email or password is wrong.")
+    if not password_is_right:
+        limits.record_sign_in_failure(email, client_ip, now)
+        raise FieldAuthenticationFailed(
+            ErrorCode.WRONG_PASSWORD, "password", "The password is wrong."
+        )
+    user = candidate
     if user.email_verified_at is None:
         raise PermissionDenied(
             detail="The email is not verified yet.",

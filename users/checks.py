@@ -1,7 +1,7 @@
 from typing import Any
 
 from django.conf import settings
-from django.core.checks import CheckMessage, Error, Tags, register
+from django.core.checks import CheckMessage, Error, Tags, Warning, register
 
 from .tokens import MIN_KEY_BYTES
 
@@ -16,5 +16,19 @@ def check_signing_key(app_configs: Any, **kwargs: Any) -> list[CheckMessage]:
             f"JWT_SIGNING_KEY is missing or shorter than {MIN_KEY_BYTES} bytes.",
             hint="Set JWT_SIGNING_KEY to at least 256 random bits, for example `openssl rand -hex 32`.",
             id="users.E001",
+        )
+    ]
+
+
+@register(Tags.security)
+def check_challenge_key(app_configs: Any, **kwargs: Any) -> list[CheckMessage]:
+    """``users.W001``: staging and production should have the sign-in bot challenge switched on (ADR 0013)."""
+    if settings.TURNSTILE_SECRET_KEY or settings.APP_ENVIRONMENT == "development":
+        return []
+    return [
+        Warning(
+            "TURNSTILE_SECRET_KEY is not set, so sign-in has no bot challenge.",
+            hint="Create a Cloudflare Turnstile widget and set its secret key (docs/staging.md).",
+            id="users.W001",
         )
     ]

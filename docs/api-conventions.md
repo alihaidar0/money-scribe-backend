@@ -48,7 +48,7 @@ operation that can conflict declares it with `CONFLICT_RESPONSE` in `@extend_sch
 
 - **A client acts on the `code`.** It refreshes the access token only on a `401` with the code `token_expired`; every other
   `401` code is final for that request, so a failed sign-in cannot loop.
-- `401` sends `WWW-Authenticate: Bearer`. Its codes tell the app what happened: `invalid_credentials`, `token_expired`,
+- `401` sends `WWW-Authenticate: Bearer`. Its codes tell the app what happened: `email_not_registered` (`attr` `email`) and `wrong_password` (`attr` `password`) at sign-in, `invalid_credentials` for any other failed sign-in, `token_expired`,
   `token_invalid`, and one `session_*` code for each reason a session ended (see [Authentication](#authentication)).
 - `404` is also the answer for another user's object, so its existence is not revealed.
 - `403` is for a request that is not allowed, such as changing a built-in category (`category_is_builtin`).
@@ -117,7 +117,12 @@ token** that rotates.
   The app and the API need one registrable domain.
 - Sign-in, the email-code verification that signs a new account in, and every refresh send a `device` object
   ([ADR 0009](adr/0009-sessions-and-devices.md)); registration and password reset send none.
-- Sign-in answers `429` with `Retry-After` while the account is locked, even for the right password. A browser reads
+- Sign-in looks the email up first: `401 email_not_registered` (`attr` `email`, whatever the password is, even blank), then
+  `401 wrong_password` (`attr` `password`), then `403 email_not_verified` only after the right password
+  ([ADR 0012](adr/0012-sign-in-names-the-field-at-fault.md)). Do not retry a failed sign-in automatically: 15 failures from
+  one address lock it. After 5 failures from an address, sign-in answers `400 captcha_required` (`attr` `captcha_token`)
+  until the request carries the token of a solved Turnstile widget ([`sign-in-challenge.md`](sign-in-challenge.md)).
+- Sign-in answers `429` with `Retry-After` while the account or the client address is locked, even for the right password. A browser reads
   `Retry-After` because the API exposes it (`Access-Control-Expose-Headers`).
 - If the limit store is down, register, resend, verify and sign-in answer `503` with the code `service_unavailable`, the body `type` `server_error` and
   `Retry-After`; the schema declares the `503` on those four operations only; everything that needs no limit (a refresh, sign-out, any call with an access token) keeps working.

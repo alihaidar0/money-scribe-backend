@@ -371,7 +371,7 @@ listed at the end of this section. Each step is its own branch and pull request.
 - [ ] **9.7 The first test in the app**: the staging flavor points at the staging address. First check the admin panel and
   Swagger UI on staging ([`staging.md`](staging.md)), then run this list and record the result:
   - register, copy the code from the outbox in the admin panel, verify, and land in the app; sign out and sign in again
-  - a wrong password, then the sign-in lock with its countdown (`Retry-After`)
+  - an unknown email and a wrong password, each under its own field, then the sign-in lock with its countdown (`Retry-After`)
   - the access token expires after 10 minutes and the app refreshes without asking the user
   - a lost response on refresh (airplane mode) recovers within 30 seconds
   - password reset, change password, change email, delete account (once step 8.3 is deployed)

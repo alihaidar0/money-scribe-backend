@@ -192,6 +192,7 @@ openssl rand -hex 6                                            # ADMIN_URL
 | `NUM_PROXIES` | `1` at first, then **`3`** | Typed; `1` was a guess, `3` is the measured value of step 7 |
 | `WEB_CONCURRENCY` | `1` | Typed; the free instance has 512 MB |
 | `PWNED_PASSWORD_CHECK` | `True` | Typed |
+| `TURNSTILE_SECRET_KEY` | the widget's secret key | Password manager ([`sign-in-challenge.md`](sign-in-challenge.md)); without it sign-in has no bot challenge and `check --deploy` warns (`users.W001`) |
 
 Render masks the values of the keys it recognises as secrets (`SECRET_KEY`, `DATABASE_URL`, ...) and shows the others;
 the eye icon reveals a value. Check the masked ones by eye before deploying: `DATABASE_URL` starts with `postgresql://`,

@@ -82,6 +82,9 @@ x-dev-image: &dev-image
     # Proxies in front of the app (0 in development). Behind a reverse proxy set the real number, or every
     # client shares the proxy's address in the per-client limits.
     NUM_PROXIES: ${NUM_PROXIES:-0}
+    # The secret key of the Cloudflare Turnstile widget (the bot challenge of sign-in, docs/sign-in-challenge.md).
+    # Empty switches the challenge off; staging and production set a real one.
+    TURNSTILE_SECRET_KEY: ${TURNSTILE_SECRET_KEY:-}
     # First connection to github.com needs no manual "yes" prompt.
     GIT_SSH_COMMAND: ssh -o StrictHostKeyChecking=accept-new
   volumes:

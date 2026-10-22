@@ -98,8 +98,9 @@ keep working: a refresh, sign-out and every request with an access token.
 **What the API reveals.** As little as the client can live with (OWASP). Registration answers the same whether the address
 is new, pending or already registered: a verified address is not changed, and its owner gets an email that says someone
 tried, with no code; a pending one is registered again. Registering is throttled per address and per client, and a verified
-address spends the same time and the same budget as a new one. Signing in and requesting a password reset reveal nothing:
-`invalid_credentials` for any failure, and one fixed answer for a reset request whether the address exists or not. Changing
+address spends the same time and the same budget as a new one. Requesting a password reset reveals nothing: one fixed
+answer whether the address exists or not. Signing in does tell an unknown email from a wrong password
+([ADR 0012](0012-sign-in-names-the-field-at-fault.md)), with a limit per client address as its brake. Changing
 the email, which needs a signed-in session and the password, still answers `409 email_already_registered`.
 
 **Passwords.** Argon2id is the first entry of `PASSWORD_HASHERS` (the `argon2-cffi` package); PBKDF2 stays in the list so
@@ -130,8 +131,8 @@ expire, one per user).
   and per client address through an atomic throttle (`NUM_PROXIES` must be set behind a proxy). Counts are one atomic
   increment and a cooldown is one `SET NX`, never a read followed by a write, so parallel requests cannot slip past a limit
   together; the windows are fixed windows, which allow a short burst at a window boundary. Five failed sign-ins from one
-  address lock that account for that address for 15 minutes, 50 from all addresses lock it for everyone, and a locked
-  account answers `429 sign_in_locked` even for the right password. A code has 6 digits, lives 10 minutes, allows 5 wrong
+  address lock that account for that address for 15 minutes, 50 from all addresses lock it for everyone, 15 from one
+  address over all accounts lock the address (ADR 0012), and a locked account or address answers `429 sign_in_locked` even for the right password. A code has 6 digits, lives 10 minutes, allows 5 wrong
   tries, may be sent again after 60 seconds and at most 5 times an hour; a refused attempt does not count as a send.
 - **The client behind a limit** is an IPv4 address or an IPv6 /64 (one customer owns the whole /64, so choosing another
   address inside it must not start the count again). The address comes from `REMOTE_ADDR`, or from `X-Forwarded-For` when
