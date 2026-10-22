@@ -16,6 +16,8 @@ A decision that changes gets a new record that supersedes the old one; the old f
 | [0009](0009-sessions-and-devices.md) | Session and device records, retention and privacy | accepted |
 | [0010](0010-admin-panel-and-email-outbox.md) | The admin panel and a database email outbox for development and staging | accepted |
 | [0011](0011-staging-hosting.md) | Staging on free tiers: Neon, Render and the GitHub Container Registry; what is deferred | accepted |
+| [0012](0012-sign-in-names-the-field-at-fault.md) | Sign-in names the field at fault: unknown email or wrong password, with an address limit | accepted |
+| [0013](0013-sign-in-bot-challenge.md) | A Cloudflare Turnstile challenge for sign-in after repeated failures | accepted |
 
 The fields and limits of each resource are in [`../api-fields.md`](../api-fields.md).
 

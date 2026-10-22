@@ -1,11 +1,12 @@
 from typing import Any
 
 import pytest
+from django.contrib.auth.hashers import check_password
 from django.core.cache import cache
 from rest_framework.response import Response
 from rest_framework.test import APIClient
 
-from users import tokens
+from users import limits, tokens
 from users.models import Session, User
 from users.tests.factories import UserFactory, VerifiedUserFactory
 from users.tests.helpers import AUTH, PASSWORD, bearer, device, first_error, sign_in
@@ -96,7 +97,7 @@ def test_every_sign_in_is_its_own_session(api_client: APIClient) -> None:
     assert Session.objects.count() == 2
 
 
-def test_a_wrong_password_is_a_401_with_the_bearer_challenge(
+def test_a_wrong_password_names_the_password_field(
     api_client: APIClient,
 ) -> None:
     VerifiedUserFactory.create(email=EMAIL)
@@ -109,34 +110,113 @@ def test_a_wrong_password_is_a_401_with_the_bearer_challenge(
         "type": "client_error",
         "errors": [
             {
-                "code": "invalid_credentials",
-                "detail": "The email or password is wrong.",
-                "attr": None,
+                "code": "wrong_password",
+                "detail": "The password is wrong.",
+                "attr": "password",
             }
         ],
     }
     assert Session.objects.count() == 0
 
 
-def test_an_unknown_email_looks_exactly_like_a_wrong_password(
+def test_an_unknown_email_names_the_email_field(api_client: APIClient) -> None:
+    VerifiedUserFactory.create(email=EMAIL)
+
+    response = wrong(api_client, "nobody@example.com")
+
+    assert response.status_code == 401
+    assert response["WWW-Authenticate"] == "Bearer"
+    assert response.json() == {
+        "type": "client_error",
+        "errors": [
+            {
+                "code": "email_not_registered",
+                "detail": "No account has this email.",
+                "attr": "email",
+            }
+        ],
+    }
+
+
+@pytest.mark.parametrize("password", ["", PASSWORD, "not-the-password-9", "x" * 500])
+def test_an_unknown_email_is_the_answer_whatever_the_password_is(
+    api_client: APIClient, password: str
+) -> None:
+    VerifiedUserFactory.create(email=EMAIL)
+
+    response = sign_in(api_client, "nobody@example.com", password)
+
+    assert response.status_code == 401
+    assert first_error(response)["code"] == "email_not_registered"
+
+
+def test_a_blank_password_for_a_registered_email_is_a_wrong_password(
     api_client: APIClient,
 ) -> None:
     VerifiedUserFactory.create(email=EMAIL)
 
-    known = wrong(api_client)
-    unknown = wrong(api_client, "nobody@example.com")
+    response = sign_in(api_client, EMAIL, "")
 
-    assert unknown.status_code == known.status_code == 401
-    assert unknown.json() == known.json()
+    assert response.status_code == 401
+    assert first_error(response)["code"] == "wrong_password"
 
 
-def test_an_inactive_account_cannot_sign_in(api_client: APIClient) -> None:
+def test_a_missing_password_is_still_a_400(api_client: APIClient) -> None:
+    body: dict[str, Any] = {"email": EMAIL, "device": device()}
+
+    response = api_client.post(f"{AUTH}/sign-in/", body)
+
+    assert response.status_code == 400
+
+
+def test_the_password_is_only_checked_for_a_registered_email(
+    api_client: APIClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    VerifiedUserFactory.create(email=EMAIL)
+    checked: list[str] = []
+    real = User.check_password
+
+    def spy(self: User, raw: str) -> bool:
+        checked.append(self.email)
+        return real(self, raw)
+
+    monkeypatch.setattr(User, "check_password", spy)
+
+    wrong(api_client, "nobody@example.com")
+    wrong(api_client)
+
+    assert checked == [EMAIL]
+
+
+def test_an_unknown_email_costs_one_password_hash_like_a_known_one(
+    api_client: APIClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    VerifiedUserFactory.create(email=EMAIL)
+    hashes: list[str] = []
+    real = check_password
+
+    def spy(password: str, encoded: str) -> bool:
+        hashes.append(encoded)
+        return real(password, encoded)
+
+    monkeypatch.setattr("users.services.check_password", spy)
+
+    wrong(api_client, "nobody@example.com")
+
+    assert len(hashes) == 1
+
+
+@pytest.mark.parametrize("password", [PASSWORD, "not-the-password-9"])
+def test_an_inactive_account_cannot_sign_in_and_is_not_named(
+    api_client: APIClient, password: str
+) -> None:
     VerifiedUserFactory.create(email=EMAIL, is_active=False)
 
-    response = sign_in(api_client, EMAIL)
+    response = sign_in(api_client, EMAIL, password)
 
     assert response.status_code == 401
     assert first_error(response)["code"] == "invalid_credentials"
+    assert first_error(response)["attr"] is None
 
 
 def test_an_unverified_account_with_the_right_password_is_told_to_verify(
@@ -151,7 +231,7 @@ def test_an_unverified_account_with_the_right_password_is_told_to_verify(
     assert Session.objects.count() == 0
 
 
-def test_an_unverified_account_with_a_wrong_password_learns_nothing(
+def test_an_unverified_account_with_a_wrong_password_is_not_told_to_verify(
     api_client: APIClient,
 ) -> None:
     UserFactory.create(email=EMAIL)
@@ -159,7 +239,7 @@ def test_an_unverified_account_with_a_wrong_password_learns_nothing(
     response = wrong(api_client)
 
     assert response.status_code == 401
-    assert first_error(response)["code"] == "invalid_credentials"
+    assert first_error(response)["code"] == "wrong_password"
 
 
 def test_email_not_verified_does_not_count_towards_the_lock(
@@ -210,12 +290,90 @@ def test_a_lock_on_one_account_leaves_the_others_alone(api_client: APIClient) ->
     assert sign_in(api_client, "other@example.com").status_code == 200
 
 
-def test_an_unknown_email_is_counted_and_locked_the_same_way(
+def test_an_unknown_email_does_not_lock_by_itself(api_client: APIClient) -> None:
+    statuses = [wrong(api_client, "nobody@example.com").status_code for _ in range(14)]
+
+    assert statuses == [401] * 14
+
+
+def test_a_list_of_unknown_emails_locks_the_client_address(
     api_client: APIClient,
 ) -> None:
-    statuses = [wrong(api_client, "nobody@example.com").status_code for _ in range(6)]
+    VerifiedUserFactory.create(email=EMAIL)
 
-    assert statuses == [401, 401, 401, 401, 429, 429]
+    responses = [wrong(api_client, f"person{n}@example.com") for n in range(16)]
+
+    assert [r.status_code for r in responses[:14]] == [401] * 14
+    assert responses[14].status_code == 429
+    assert first_error(responses[14])["code"] == "sign_in_locked"
+    assert responses[14]["Retry-After"] == "900"
+    assert responses[15].status_code == 429
+
+
+def test_the_address_lock_refuses_even_a_right_password_and_a_known_email(
+    api_client: APIClient,
+) -> None:
+    VerifiedUserFactory.create(email=EMAIL)
+    for n in range(15):
+        wrong(api_client, f"person{n}@example.com")
+
+    response = sign_in(api_client, EMAIL)
+
+    assert response.status_code == 429
+    assert first_error(response)["code"] == "sign_in_locked"
+    assert Session.objects.count() == 0
+
+
+def test_wrong_passwords_over_many_accounts_count_towards_the_address_lock(
+    api_client: APIClient,
+) -> None:
+    for n in range(15):
+        VerifiedUserFactory.create(email=f"person{n}@example.com")
+
+    statuses = [
+        wrong(api_client, f"person{n}@example.com").status_code for n in range(15)
+    ]
+
+    assert statuses == [401] * 14 + [429]
+
+
+def test_a_success_does_not_clear_the_address_count(api_client: APIClient) -> None:
+    VerifiedUserFactory.create(email=EMAIL)
+    for n in range(14):
+        wrong(api_client, f"person{n}@example.com")
+    assert sign_in(api_client, EMAIL).status_code == 200
+
+    response = wrong(api_client, "nobody@example.com")
+
+    assert response.status_code == 429
+
+
+def test_the_address_lock_leaves_other_addresses_alone(api_client: APIClient) -> None:
+    VerifiedUserFactory.create(email=EMAIL)
+    for n in range(15):
+        attempt(api_client, "x", "198.51.100.9", f"person{n}@example.com")
+
+    assert attempt(api_client, PASSWORD, "203.0.113.1").status_code == 200
+
+
+def test_the_address_lock_ends_when_its_time_is_up(api_client: APIClient) -> None:
+    VerifiedUserFactory.create(email=EMAIL)
+    for n in range(15):
+        wrong(api_client, f"person{n}@example.com")
+    cache.clear()  # what the cache does by itself after the lock's 15 minutes
+
+    assert sign_in(api_client, EMAIL).status_code == 200
+
+
+def test_locking_an_address_is_logged_without_the_address_or_any_email(
+    api_client: APIClient, caplog: pytest.LogCaptureFixture
+) -> None:
+    for n in range(15):
+        attempt(api_client, "x", "198.51.100.9", f"person{n}@example.com")
+
+    assert "locked after repeated failed sign-ins" in caplog.text
+    assert "198.51.100.9" not in caplog.text
+    assert "example.com" not in caplog.text
 
 
 def test_a_success_resets_the_count(api_client: APIClient) -> None:
@@ -283,7 +441,6 @@ def test_the_session_keeps_only_the_network_of_the_address(
     [
         {"email": "nope"},
         {"email": ""},
-        {"password": ""},
         {"time_zone": "Mars/Olympus"},
         {"language": "fr"},
     ],
@@ -376,3 +533,59 @@ def test_every_ipv6_address_of_one_network_is_one_client(api_client: APIClient) 
 
     assert same_network == [401, 401, 401, 401, 429, 429]
     assert other_network.status_code == 200
+
+
+def test_unknown_emails_touch_only_the_counter_of_the_address(
+    api_client: APIClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    counted: list[str] = []
+    real = limits._increment
+
+    def spy(key: str, timeout: int) -> int:
+        if key.startswith("signin:"):  # not the per-client throttle
+            counted.append(key)
+        return real(key, timeout)
+
+    monkeypatch.setattr(limits, "_increment", spy)
+
+    for n in range(14):
+        wrong(api_client, f"person{n}@example.com")
+
+    assert len(counted) == 14
+    assert {key.split(":")[1] for key in counted} == {"addrfails"}
+    assert len(set(counted)) == 1  # one key, whatever the emails are
+
+
+def test_a_pair_lock_beats_a_wrong_password_answer(api_client: APIClient) -> None:
+    VerifiedUserFactory.create(email=EMAIL)
+    for _ in range(4):
+        assert first_error(wrong(api_client))["code"] == "wrong_password"
+
+    fifth = wrong(api_client)
+
+    assert fifth.status_code == 429
+    assert first_error(fifth)["code"] == "sign_in_locked"
+
+
+def test_a_locked_account_is_refused_before_the_email_is_judged(
+    api_client: APIClient,
+) -> None:
+    VerifiedUserFactory.create(email=EMAIL)
+    for _ in range(5):
+        wrong(api_client)
+
+    same_address = wrong(api_client)
+    other_address = attempt(api_client, "x", "203.0.113.1", EMAIL)
+
+    assert same_address.status_code == 429
+    assert other_address.status_code == 401  # the pair lock is per address
+
+
+def test_the_failures_of_an_inactive_account_count_towards_its_lock(
+    api_client: APIClient,
+) -> None:
+    VerifiedUserFactory.create(email=EMAIL, is_active=False)
+
+    statuses = [wrong(api_client).status_code for _ in range(5)]
+
+    assert statuses == [401, 401, 401, 401, 429]

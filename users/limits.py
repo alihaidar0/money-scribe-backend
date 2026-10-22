@@ -8,8 +8,10 @@ Three properties matter for a brake against guessing:
 * **Fail closed.** If the store is down, the request is refused with ``503`` and ``Retry-After``
   (:func:`fail_closed`). Letting it through would switch the brake off exactly when it is least
   watched. Calls that do not use a limit (a refresh, a request with an access token) are unaffected.
-* **No oracle.** Limits are keyed by the normalized email address whether or not an account exists, so
-  an unknown address behaves exactly like a known one.
+* **No oracle, except at sign-in.** The email-code limits are keyed by the normalized email address
+  whether or not an account exists, so an unknown address behaves exactly like a known one. Sign-in is
+  the one deliberate exception (ADR 0012): it names the field at fault, and the client address limit
+  stands in for the per-email count of an address that has no account.
 """
 
 import contextlib
@@ -86,17 +88,22 @@ def hit(key: str, window: int, now: datetime | None = None) -> tuple[int, int]:
 # --- the sign-in lock -------------------------------------------------------------------------
 
 
-def _lock_keys(email: str, client_ip: str) -> tuple[str, str]:
-    """The lock of this account for this client address, and the lock of the account for everyone."""
+def _address_lock_key(client_ip: str) -> str:
+    return f"signin:addrlock:{_digest(client_ip)}"
+
+
+def _lock_keys(email: str, client_ip: str) -> tuple[str, str, str]:
+    """The lock of this account for this client address, of the account for everyone, of the address."""
     account = _digest(email)
-    return f"signin:lock:{account}:{_digest(client_ip)}", f"signin:lock:{account}"
+    return (
+        f"signin:lock:{account}:{_digest(client_ip)}",
+        f"signin:lock:{account}",
+        _address_lock_key(client_ip),
+    )
 
 
-@fail_closed
-def check_sign_in_lock(email: str, client_ip: str, now: datetime | None = None) -> None:
-    """Raise ``sign_in_locked`` (429) while this account is locked for this client or for everyone."""
-    now = now or timezone.now()
-    unlocks = [cache.get(key) for key in _lock_keys(email, client_ip)]
+def _raise_if_locked(keys: tuple[str, ...], now: datetime) -> None:
+    unlocks = [cache.get(key) for key in keys]
     active = [
         unlock for unlock in unlocks if unlock is not None and unlock > now.timestamp()
     ]
@@ -109,18 +116,68 @@ def check_sign_in_lock(email: str, client_ip: str, now: datetime | None = None) 
 
 
 @fail_closed
+def check_sign_in_lock(email: str, client_ip: str, now: datetime | None = None) -> None:
+    """Raise ``sign_in_locked`` (429) while this account or this client address is locked."""
+    _raise_if_locked(_lock_keys(email, client_ip), now or timezone.now())
+
+
+def _count_address_failure(client_ip: str, now: datetime) -> bool:
+    """Count a failed sign-in against the client address; ``True`` when that locks the address.
+
+    Sign-in says whether an email has an account (ADR 0012), so the address is the brake against
+    trying a list of emails: it counts every failure over all accounts, and a success does not clear
+    it, or one real account would reset the count of a list-tester.
+    """
+    window = settings.SIGN_IN_LOCK_SECONDS
+    address = _digest(client_ip)
+    if _increment(f"signin:addrfails:{address}", window) < (
+        settings.SIGN_IN_ADDRESS_MAX_FAILURES
+    ):
+        return False
+    cache.set(_address_lock_key(client_ip), now.timestamp() + window, timeout=window)
+    cache.delete(f"signin:addrfails:{address}")
+    logger.warning("A client address was locked after repeated failed sign-ins.")
+    return True
+
+
+@fail_closed
+def record_address_failure(client_ip: str, now: datetime | None = None) -> None:
+    """Count a failed sign-in against the client address only: an email that has no account, or a
+    bot challenge that failed.
+
+    Nothing is kept per email: an address could otherwise fill the cache with keys of its choosing.
+    Raises 429 if this failure locks the address.
+    """
+    now = now or timezone.now()
+    if _count_address_failure(client_ip, now):
+        _raise_if_locked((_address_lock_key(client_ip),), now)
+
+
+@fail_closed
+def challenge_required(client_ip: str) -> bool:
+    """Whether this client address has failed enough sign-ins to be asked for a bot challenge.
+
+    Only reads the count, so asking never counts as a failure. The count is the one of the address
+    lock, so the challenge comes before the lock: 5 failures, then 10 more with a challenge to get past.
+    """
+    failures = cache.get(f"signin:addrfails:{_digest(client_ip)}", 0)
+    return bool(failures >= settings.SIGN_IN_CHALLENGE_AFTER_FAILURES)
+
+
+@fail_closed
 def record_sign_in_failure(
     email: str, client_ip: str, now: datetime | None = None
 ) -> None:
-    """Count a failed sign-in, and raise 429 if it locks the account for this client or for everyone.
+    """Count a failed sign-in for an account, and raise 429 if it locks anything.
 
     Five failures from one address lock the pair of account and address. Fifty from all addresses
-    together lock the account for everyone, which only a distributed guess can reach.
+    together lock the account for everyone, which only a distributed guess can reach. Fifteen from
+    one address over all accounts lock the address.
     """
     now = now or timezone.now()
     window = settings.SIGN_IN_LOCK_SECONDS
     account = _digest(email)
-    pair_lock, account_lock = _lock_keys(email, client_ip)
+    pair_lock, account_lock, _ = _lock_keys(email, client_ip)
     pair_key = f"signin:fails:{account}:{_digest(client_ip)}"
     locked = False
     if _increment(pair_key, window) >= settings.SIGN_IN_MAX_FAILURES:
@@ -133,6 +190,8 @@ def record_sign_in_failure(
     ):
         cache.set(account_lock, now.timestamp() + window, timeout=window)
         cache.delete(f"signin:fails:{account}")
+        locked = True
+    if _count_address_failure(client_ip, now):
         locked = True
     if locked:
         check_sign_in_lock(email, client_ip, now)

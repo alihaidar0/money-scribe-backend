@@ -110,7 +110,18 @@ class ResendCodeSerializer(serializers.Serializer):  # type: ignore[misc]
 
 class SignInSerializer(ClientSettingsMixin):
     email = serializers.EmailField(max_length=254)
-    password = PasswordField()
+    # No password policy on sign-in, and a blank one is let through so the email is judged first.
+    password = PasswordField(allow_blank=True)
+    captcha_token = serializers.CharField(
+        max_length=2048,
+        required=False,
+        allow_blank=True,
+        write_only=True,
+        help_text=(
+            "The token of a solved Cloudflare Turnstile widget created with the action `sign_in`. "
+            "Required only after `captcha_required`; it is single use and lives five minutes."
+        ),
+    )
     device = DeviceSerializer()
 
 

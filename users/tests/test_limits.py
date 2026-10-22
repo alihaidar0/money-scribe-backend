@@ -273,6 +273,8 @@ def broken_cache(monkeypatch: pytest.MonkeyPatch) -> None:
     [
         lambda: limits.check_sign_in_lock(EMAIL, HOME),
         lambda: limits.record_sign_in_failure(EMAIL, HOME),
+        lambda: limits.record_address_failure(HOME),
+        lambda: limits.challenge_required(HOME),
         lambda: limits.clear_sign_in_failures(EMAIL, HOME),
         lambda: limits.reserve_code_send(EMAIL),
         lambda: limits.resend_wait(EMAIL),

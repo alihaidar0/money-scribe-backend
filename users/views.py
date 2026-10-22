@@ -201,11 +201,21 @@ class SignInView(PublicAuthView):
         auth=[],
         summary="Sign in",
         description=(
-            "Starts a session. Errors: `401` `invalid_credentials` (an unknown email and a wrong password "
-            "look the same), `403` `email_not_verified` (only after the right password; the app opens "
-            "the verify screen), `429` `sign_in_locked` (even the right password, while locked; "
-            "`Retry-After` is the remaining lock time) or `throttled`; `503` `service_unavailable` while "
-            "the limit store is down, with `Retry-After`."
+            "Starts a session. A client address that has failed several sign-ins is first asked for a "
+            "bot challenge: `400` `captcha_required` (`attr` `captcha_token`) until it sends the token "
+            "of a solved Turnstile widget (action `sign_in`) as `captcha_token`, `400` `captcha_invalid` "
+            "for a token that is wrong, expired or used (it counts as a failed attempt); the token is "
+            "single use, so a repeated attempt needs a new one. The email is looked up next. "
+            "Errors: `401` `email_not_registered` "
+            "(`attr` `email`: no account has it, whatever the password is, even blank), `401` "
+            "`wrong_password` (`attr` `password`: the email has an account and the password is wrong), "
+            "`401` `invalid_credentials` (any other failed sign-in, such as a deactivated account), `403` `email_not_verified` (only "
+            "after the right password; the app opens the verify screen), `429` `sign_in_locked` (even "
+            "the right password, while the account or the client address is locked; `Retry-After` is "
+            "the remaining lock time) or `throttled`; `503` `service_unavailable` while the limit "
+            "store is down, with `Retry-After`. Telling an unknown email from a wrong password lets "
+            "anyone learn which emails have an account (ADR 0012); the limits are the brake, so a "
+            "client must not retry automatically."
         ),
         parameters=[RETRY_AFTER_HEADER],
         request=SignInSerializer,
@@ -227,6 +237,7 @@ class SignInView(PublicAuthView):
             client=_client(request),
             language=data.get("language"),
             time_zone=data.get("time_zone"),
+            captcha_token=data.get("captcha_token", ""),
         )
         return _token_response(_signed_in_body(signed_in))
 

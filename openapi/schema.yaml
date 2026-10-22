@@ -193,12 +193,22 @@ paths:
   /api/v1/auth/sign-in/:
     post:
       operationId: auth_sign_in
-      description: 'Starts a session. Errors: `401` `invalid_credentials` (an unknown
-        email and a wrong password look the same), `403` `email_not_verified` (only
-        after the right password; the app opens the verify screen), `429` `sign_in_locked`
-        (even the right password, while locked; `Retry-After` is the remaining lock
-        time) or `throttled`; `503` `service_unavailable` while the limit store is
-        down, with `Retry-After`.'
+      description: 'Starts a session. A client address that has failed several sign-ins
+        is first asked for a bot challenge: `400` `captcha_required` (`attr` `captcha_token`)
+        until it sends the token of a solved Turnstile widget (action `sign_in`) as
+        `captcha_token`, `400` `captcha_invalid` for a token that is wrong, expired
+        or used (it counts as a failed attempt); the token is single use, so a repeated
+        attempt needs a new one. The email is looked up next. Errors: `401` `email_not_registered`
+        (`attr` `email`: no account has it, whatever the password is, even blank),
+        `401` `wrong_password` (`attr` `password`: the email has an account and the
+        password is wrong), `401` `invalid_credentials` (any other failed sign-in,
+        such as a deactivated account), `403` `email_not_verified` (only after the
+        right password; the app opens the verify screen), `429` `sign_in_locked` (even
+        the right password, while the account or the client address is locked; `Retry-After`
+        is the remaining lock time) or `throttled`; `503` `service_unavailable` while
+        the limit store is down, with `Retry-After`. Telling an unknown email from
+        a wrong password lets anyone learn which emails have an account (ADR 0012);
+        the limits are the brake, so a client must not retry automatically.'
       summary: Sign in
       tags:
       - auth
@@ -435,7 +445,8 @@ components:
         code:
           type: string
           description: 'A stable, machine-readable code; act on it, not on `detail`.
-            Registered codes: `invalid_credentials`, `token_expired`, `token_invalid`,
+            Registered codes: `invalid_credentials`, `email_not_registered`, `wrong_password`,
+            `captcha_required`, `captcha_invalid`, `token_expired`, `token_invalid`,
             `session_signed_out`, `session_revoked_by_user`, `session_password_changed`,
             `session_email_changed`, `session_token_reuse`, `session_expired`, `email_not_verified`,
             `sign_in_locked`, `throttled`, `code_invalid`, `code_expired`, `code_attempts_exceeded`,
@@ -456,7 +467,8 @@ components:
           type: string
           nullable: true
           description: The field the error belongs to, or null for the request as
-            a whole.
+            a whole. Sign-in sets it on `email_not_registered` (`email`) and `wrong_password`
+            (`password`).
         attempts_left:
           type: integer
           minimum: 0
@@ -679,7 +691,13 @@ components:
         password:
           type: string
           writeOnly: true
-          minLength: 1
+        captcha_token:
+          type: string
+          writeOnly: true
+          description: The token of a solved Cloudflare Turnstile widget created with
+            the action `sign_in`. Required only after `captcha_required`; it is single
+            use and lives five minutes.
+          maxLength: 2048
         device:
           $ref: '#/components/schemas/DeviceRequest'
       required:

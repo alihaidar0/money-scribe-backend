@@ -35,15 +35,18 @@ Rules:
   `token_expired`; every other `401` code is final for that request. This keeps a failed sign-in from looping.
 - **Codes are a contract.** They are stable, snake_case and specific. Renaming or removing one is a breaking change
   (`docs/api-workflow.md`). The registry below grows with each endpoint and is mirrored in `docs/api-conventions.md`.
-- **Sign-in never says which part was wrong:** an unknown email and a wrong password both answer `invalid_credentials`.
-  Requesting a password reset always answers the same way, whether the address exists or not.
+- **Sign-in names the field at fault** ([ADR 0012](0012-sign-in-names-the-field-at-fault.md)): an unknown email answers
+  `email_not_registered` and a wrong password `wrong_password`; `invalid_credentials` stays for any other failure.
+  Requesting a password reset and registering still answer the same way whether the address exists or not.
 - Server errors keep the generic body without exception text and are not documented per operation.
 
 Initial registry:
 
 | Code | Status | Meaning |
 | --- | --- | --- |
-| `invalid_credentials` | 401 | wrong email or password at sign-in |
+| `invalid_credentials` | 401 | any other failed sign-in (a deactivated account), not an unknown email or a wrong password |
+| `email_not_registered` | 401 | no account has the email at sign-in (`attr`: `email`), whatever the password is |
+| `wrong_password` | 401 | the email has an account and the password is wrong (`attr`: `password`) |
 | `token_expired` | 401 | the access token has expired; refresh once and retry |
 | `token_invalid` | 401 | the token is malformed or its signature is wrong |
 | `session_signed_out` | 401 | the session was ended by sign-out |
@@ -53,7 +56,9 @@ Initial registry:
 | `session_token_reuse` | 401 | a used refresh token was replayed, so the session was ended |
 | `session_expired` | 401 | the session reached its 90 day limit |
 | `email_not_verified` | 403 | the credentials are right but the email is not verified |
-| `sign_in_locked` | 429 | too many failed sign-ins; `Retry-After` gives the remaining time, even for the right password |
+| `captcha_required` | 400 | sign-in from an address that keeps failing needs a solved bot challenge (`attr`: `captcha_token`), [ADR 0013](0013-sign-in-bot-challenge.md) |
+| `captcha_invalid` | 400 | the bot challenge token is wrong, expired or already used (`attr`: `captcha_token`) |
+| `sign_in_locked` | 429 | too many failed sign-ins for the account or from the client address; `Retry-After` gives the remaining time, even for the right password |
 | `throttled` | 429 | too many requests from one client address; `Retry-After` |
 | `code_invalid` | 400 | the 6-digit code is wrong; the error item also carries `attempts_left` (see below) |
 | `code_expired` | 400 | the 6-digit code has expired |

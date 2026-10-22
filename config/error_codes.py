@@ -11,6 +11,10 @@ class ErrorCode(StrEnum):
 
     # Sign-in and tokens
     INVALID_CREDENTIALS = "invalid_credentials"
+    EMAIL_NOT_REGISTERED = "email_not_registered"
+    WRONG_PASSWORD = "wrong_password"
+    CAPTCHA_REQUIRED = "captcha_required"
+    CAPTCHA_INVALID = "captcha_invalid"
     TOKEN_EXPIRED = "token_expired"
     TOKEN_INVALID = "token_invalid"
     SESSION_SIGNED_OUT = "session_signed_out"

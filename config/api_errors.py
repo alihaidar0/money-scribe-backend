@@ -56,7 +56,10 @@ class ErrorItemSerializer(serializers.Serializer):  # type: ignore[misc]
     detail = serializers.CharField(help_text="Human-readable text; not for display.")
     attr = serializers.CharField(
         allow_null=True,
-        help_text="The field the error belongs to, or null for the request as a whole.",
+        help_text=(
+            "The field the error belongs to, or null for the request as a whole. "
+            "Sign-in sets it on `email_not_registered` (`email`) and `wrong_password` (`password`)."
+        ),
     )
     attempts_left = serializers.IntegerField(
         required=False,
@@ -128,7 +131,7 @@ RETRY_AFTER_HEADER = OpenApiParameter(
 )
 
 # For the operations that need no token (so the package would not document a 401 or 403 for them) but
-# still answer one: sign-in (`invalid_credentials`, `email_not_verified`), refresh (`session_*`).
+# still answer one: sign-in (`email_not_registered`, `wrong_password`, `invalid_credentials`, `email_not_verified`), refresh (`session_*`).
 UNAUTHORIZED_RESPONSE = OpenApiResponse(
     response=ErrorResponseSerializer,
     description="Not authenticated, or the credentials, token or session are not valid; the `code` says which.",
