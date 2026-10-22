@@ -1,6 +1,7 @@
 from rest_framework import status
 from rest_framework.exceptions import (
     APIException,
+    AuthenticationFailed,
     ErrorDetail,
     Throttled,
     ValidationError,
@@ -32,6 +33,18 @@ def throttled(code: ErrorCode, wait: int, detail: str | None = None) -> Throttle
     The error handler sends ``wait`` as the ``Retry-After`` header, in whole seconds (ADR 0004).
     """
     return Throttled(wait=wait, detail=detail, code=code.value)
+
+
+class FieldAuthenticationFailed(AuthenticationFailed):  # type: ignore[misc]
+    """A failed sign-in that names the field at fault (HTTP 401, ``attr`` ``email`` or ``password``).
+
+    The error formatter copies ``attr`` into the error item (``config.error_format``), so the client
+    can show the message under the right field.
+    """
+
+    def __init__(self, code: ErrorCode, attr: str, detail: str) -> None:
+        self.attr = attr
+        super().__init__(detail=detail, code=code.value)
 
 
 class CodeInvalid(ValidationError):  # type: ignore[misc]

@@ -69,6 +69,8 @@ def test_a_browser_may_read_retry_after(
     settings: object, api_client: APIClient
 ) -> None:
     settings.CORS_ALLOWED_ORIGINS = ["http://localhost:8080"]  # type: ignore[attr-defined]
+    # a lock needs a real account
+    VerifiedUserFactory.create(email="nobody@example.com")
     for _ in range(5):
         api_client.post(
             f"{AUTH}/sign-in/",

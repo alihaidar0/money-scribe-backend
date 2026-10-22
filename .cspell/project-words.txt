@@ -53,6 +53,7 @@ SARIF
 Schemathesis
 Sigstore
 simplejwt
+siteverify
 spectacular
 stoplight
 tini

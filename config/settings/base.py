@@ -253,9 +253,17 @@ EMAIL_CODE_SENDS_PER_HOUR = 5
 # Sign-in lock. This many failures on one account from one client address lock that pair for this many
 # seconds, so someone who only knows an email address cannot lock the owner out from another address.
 # Failures from all addresses together are capped too, which stops a distributed guess (NIST allows
-# at most 100 consecutive failures).
+# at most 100 consecutive failures). Sign-in names the field at fault (ADR 0012), so a client address is
+# also capped over every account: this many failures, an unknown email or a wrong password, lock it.
 SIGN_IN_MAX_FAILURES = 5
 SIGN_IN_ACCOUNT_MAX_FAILURES = 50
+SIGN_IN_ADDRESS_MAX_FAILURES = 15
+# From this many failures, a client address must solve a bot challenge to sign in (ADR 0013).
+SIGN_IN_CHALLENGE_AFTER_FAILURES = 5
+# The secret key of the Cloudflare Turnstile widget. Empty switches the challenge off (development, tests);
+# staging and production set it (users.W001 warns when they do not). Never log it, never commit it.
+TURNSTILE_SECRET_KEY = os.environ.get("TURNSTILE_SECRET_KEY", "")
+TURNSTILE_TIMEOUT_SECONDS = 3
 SIGN_IN_LOCK_SECONDS = 900
 
 # An account that never verifies its email is deleted, with its codes, after this many days.
