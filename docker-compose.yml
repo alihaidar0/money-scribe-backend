@@ -111,7 +111,7 @@ services:
       - shell-history:/home/dev/.shell_history
     ports:
       - "127.0.0.1:8000:8000"   # Django dev server
-      - "127.0.0.1:5555:5555"   # Flower
+      - "127.0.0.1:5556:5555"   # Flower (host port 5556: 5555 belongs to the Android emulator's adb)
       - "127.0.0.1:5678:5678"   # debugpy
 
   celery:

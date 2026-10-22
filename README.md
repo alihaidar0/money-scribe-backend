@@ -43,7 +43,7 @@ python manage.py runserver 0.0.0.0:8000
 | --- | --- |
 | Django | <http://localhost:8000> |
 | Mailpit | <http://localhost:8025> |
-| Flower | <http://localhost:5555> (`celery -A config flower --port=5555`) |
+| Flower | <http://localhost:5556> (`celery -A config flower --port=5555`) |
 
 ## Development
 
