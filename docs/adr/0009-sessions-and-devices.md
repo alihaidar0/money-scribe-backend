@@ -70,6 +70,7 @@ These emails are throttled.
 | truncated IP address | show and investigate sign-ins | same |
 | user agent (web) | show the user their sessions | same |
 | sign-in, last-active and end times and the end reason | show the user their sessions | same |
+| the Firebase push token of the device (once the `notifications` feature exists) | send push notifications to the device | until the session ends or expires, at most 90 days; deleted at once when Firebase reports it invalid, and with the account |
 | the first five characters of the SHA-1 hash of a new password | the server asks the Pwned Passwords breach service whether the password is known (k-anonymity: the password, the full hash and the user are never sent) | not stored; sent at registration and at later password changes |
 
 Not collected: GPS or any device location, advertising ids, hardware ids, contacts. This data is for account security

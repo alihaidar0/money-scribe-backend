@@ -400,8 +400,9 @@ next. A decision a feature needs gets its record first. The order below is the o
 - [ ] **10.2 salary**: salary months computed on the server (ADR 0007), addressed by `YYYY-MM` with `PUT`; fixed items
   inline; balances per part and for the month; the history list with each result (the cursor class exists since 8.4);
   payment mode kept per month; month comparison. The worked examples of ADR 0007 become unit tests
-- [ ] **10.3 preferences**: default currency, default payment mode, pay days and `remind_on_pay_days` (`time_zone` and
-  `language` exist since 8.2)
+- [ ] **10.3 preferences**: default currency, default payment mode, pay days and `remind_on_pay_days`; `time_zone` and
+  `language` are stored since 8.2 and become changeable here through the same settings `PATCH` (the profile update
+  accepts only `name`), so a language change in the app reaches the notifications without a new sign-in
 - [ ] **10.4 ledger**: accounts (delete refused with `409` when transactions exist); categories (the built-in rows with
   their keys, read-only; custom ones); transactions (the category must allow the kind; ordered `-date`, `-created_at`,
   `-id` with the filters, through `django-filter`)
@@ -412,7 +413,13 @@ next. A decision a feature needs gets its record first. The order below is the o
 - [ ] **10.7 CSV export and import** of transactions, debts and salary months, with skipped-row reporting and a lossless
   round trip
 - [ ] **10.8 notifications**: push device tokens (one per session, removed when it ends), pay-day reminders through Celery
-  Beat, and the push provider wiring (the last open decision for this stage)
+  Beat, and the push provider wiring (the last open decision for this stage). The rules are in
+  [`api-fields.md`](api-fields.md#push-notifications). Build notes: one service function ends sessions and deletes their
+  tokens in the same transaction, and every place that ends a session uses it (a test guards this); sending selects only
+  tokens of sessions that are not ended and not past `expires_at`; registering is atomic, so two simultaneous calls
+  cannot leave two rows; the token is write-only, hidden in the admin and never logged; a daily sweep of tokens of
+  expired sessions joins the Celery Beat jobs when a worker runs in production; register refuses a `web` session with a
+  documented error code (new codes go into ADR 0004 first), and the `screen` values are part of the schema
 
 ## 11. Before the first production release
 

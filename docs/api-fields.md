@@ -153,6 +153,42 @@ contains an amount or a name. The server builds the text in the user's `language
 closed, and adds a data key so the app can open the right screen. The token belongs to the session and is removed when
 the session ends ([ADR 0009](adr/0009-sessions-and-devices.md)). The endpoints come with the `notifications` feature.
 
+The rules, agreed with the Flutter developer (the request and response shapes and the error codes are agreed in the
+endpoint request issue, then published in the schema):
+
+- **Ownership.** A token is stored under the user and the session that registered it, with one token per `device_id`:
+  a new token from the same device replaces the old one. A token is never shared between accounts; when another account
+  registers the same token, it moves to that account. The platform comes from the session's device record, so the
+  register request does not carry it. Registering from a `web` session is refused with a documented error, because web
+  push is not planned. Push is Android only for now; iOS comes later through the same endpoints.
+- **Operations.** Two authenticated operations, both idempotent and both using the standard error body and the existing
+  rate limits: register or replace the token, and remove it (it succeeds when there is nothing to remove). Repeating a
+  register with the same token changes nothing, so the app can retry it safely. The app registers only while the person
+  allows notifications and again whenever Firebase changes the token. It removes the token when it notices that
+  notifications are off while the person stays signed in. The switch lives in the system settings, so the app notices it
+  at start or on return to the app and the removal can be delayed; the retention below covers the gap.
+- **Removal on the server.** The token of a session is deleted when the session ends for any reason: sign-out, revoked
+  by the user, password changed or reset, email changed, refresh-token reuse or expiry. Every token of an account is
+  deleted in the same transaction as the rest of its data when the account is deleted.
+- **Invalid tokens.** A token that Firebase reports as unregistered or invalid is deleted at once.
+- **No leakage.** A token is never written to a log, never returned by any endpoint, and sent only to Firebase.
+- **Content.** A notification has no amounts, names or other financial data. It is worded in the `language` stored on
+  the account (see Settings), not in a language kept per device. The app changes that language with the settings
+  `PATCH`; a push token request carries no language.
+- **Data key.** The data of a push has one key, `screen`, whose value is one of a fixed list of screen identifiers. The
+  first list holds only what pay-day reminders need (`salary`). Every new value is added to the schema and these docs
+  before the server sends it. The data never holds amounts, names or record contents. There is no record id for now; if a
+  later notification must point at one record, an opaque id is added as its own agreed change. The app treats the data as
+  untrusted: it maps a value from its own list, ignores an unknown one and never opens an address or route taken from
+  the message.
+- **Retention.** A push token is kept until its session ends or expires, and at most 90 days. This is the sentence the
+  privacy policy and the store data forms quote.
+- **App side.** The app registers after sign-in (and on a new Firebase token, as above). On sign-out it calls remove
+  first with a short timeout and continues on any failure, then deletes the local Firebase token. On account deletion
+  it deletes the local token after the server confirms. The app treats every `401` other than `token_expired` as a session the server ended, deletes
+  the local token and does not call remove. This classification stays stable
+  ([API conventions](api-conventions.md)).
+
 ## Profile and account
 
 | Field | Rule |
