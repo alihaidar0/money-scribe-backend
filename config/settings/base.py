@@ -405,7 +405,9 @@ SPECTACULAR_SETTINGS = {
     },
     # Replaces drf-spectacular's own enum hook (the package's hook calls the same logic).
     "POSTPROCESSING_HOOKS": [
-        "drf_standardized_errors.openapi_hooks.postprocess_schema_enums"
+        "drf_standardized_errors.openapi_hooks.postprocess_schema_enums",
+        # Names the money types of ADR 0008 (Amount, SignedAmount) as shared components.
+        "common.openapi.name_money_types",
     ],
 }
 
