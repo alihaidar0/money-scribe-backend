@@ -58,6 +58,23 @@ def test_the_request_has_only_the_settings_and_the_nullable_ones_say_so(
     assert request["properties"]["first_pay_day"]["maximum"] == 28
 
 
+def test_a_nullable_enum_is_one_reference_not_a_union_with_null(
+    schema: dict[str, Any],
+) -> None:
+    # Dart client generators cannot build a union that has to implement an enum.
+    request = schema["components"]["schemas"]["PatchedSettingsUpdateRequest"]
+
+    for field, enum in (
+        ("default_currency", "CurrencyEnum"),
+        ("payment_mode", "PaymentModeEnum"),
+    ):
+        prop = request["properties"][field]
+        assert prop["nullable"] is True
+        assert prop["allOf"] == [{"$ref": f"#/components/schemas/{enum}"}]
+        assert "oneOf" not in prop
+    assert "NullEnum" not in schema["components"]["schemas"]
+
+
 def test_the_answer_always_has_every_field(schema: dict[str, Any]) -> None:
     answer = schema["components"]["schemas"]["Settings"]
 
