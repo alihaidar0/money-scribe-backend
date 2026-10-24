@@ -388,36 +388,58 @@ Not on staging yet (ADR 0011 has the reasons):
   12), because `onrender.com` is a public suffix. Staging is for the mobile app only.
 - Migrations as a separate release step: the container runs them when it starts, which is safe for one instance.
 
-## 10. Stage 3: the features, one at a time (salary first)
+## 10. Stage 3: the features, one at a time (fingerprint sign-in, then salary)
 
 Each feature is a loop: agree the shapes in a request issue, implement with tests, regenerate the schema, open the pull
 request with the `api-change` label, merge, let staging deploy by itself, **test it in the Flutter app**, then move to the
-next. A decision a feature needs gets its record first. The order below is the owner's: salary first, then the others.
+next. A decision a feature needs gets its record first. The order below is the owner's (2026-10-24): the fingerprint
+sign-in first, because the store disclosures for it need time and it depends on no money feature, then salary, then the
+others. The Flutter developer's dependency view put the settings and the ledger before salary; salary needs neither, so it
+stays ahead of them. Each step ships in a tagged release with `openapi.yaml` attached, and the app pins that tag
+([`consuming-the-api.md`](consuming-the-api.md)).
 
-- [ ] **10.1 `feat/money-core`** (before salary): `common/money.py`, the money value type (integer minor units, currency
+- [ ] **10.1 `feat/auth-device-key`**: sign-in with a device key pair and a signed challenge (the model passkeys use,
+  without a domain), [ADR 0018](adr/0018-sign-in-with-a-device-key.md): the key table, the public challenge and sign-in calls, the
+  authenticated registration with a proof of possession and the Android key attestation, the list and removal of keys,
+  the limits that fail closed, the removal of every key when the password or the email changes or the account is deleted,
+  and the privacy and store-disclosure sentences. Moves to passkeys when the shared domain exists
+- [ ] **10.2 `feat/money-core`** (before salary): `common/money.py`, the money value type (integer minor units, currency
   table, half-up rounding, cross-currency error) with unit tests, decimal-string parsing and writing in the form of ADR
   0008, and the shared `Amount` and `SignedAmount` serializer field
-- [ ] **10.2 salary**: salary months computed on the server (ADR 0007), addressed by `YYYY-MM` with `PUT`; fixed items
+- [ ] **10.3 `feat/write-safety`** (before the first resource with a create): the `Idempotency-Key` store and mixin
+  (the key and the stored answer saved in the same transaction as the record, 24 hours, user scoped), the `version` field
+  with `ETag` and `If-Match` handling in one statement, the `412` and `422` declarations in `config/api_errors.py`, the
+  five new codes in `config.error_codes.ErrorCode`, and the CORS headers; all of it tested with a throwaway resource
+  (a repeated create, the same key with another body, two simultaneous requests, a stale edit), [ADR 0016](adr/0016-safe-writes.md)
+- [ ] **10.4 salary**: salary months computed on the server (ADR 0007), addressed by `YYYY-MM` with `PUT`; fixed items
   inline; balances per part and for the month; the history list with each result (the cursor class exists since 8.4);
-  payment mode kept per month; month comparison. The worked examples of ADR 0007 become unit tests
-- [ ] **10.3 preferences**: default currency, default payment mode, pay days and `remind_on_pay_days`; `time_zone` and
+  payment mode kept per month (month comparison is a read model and comes with 10.8); one month per user per `YYYY-MM`,
+  the currency a field of the month; at most 100 fixed items and the explicit copy of the items of another month; `If-None-Match: *` on the creating `PUT`;
+  the read of defaults for a month not saved yet (precedence in `api-fields.md`: a Settings value the person has set,
+  then the latest saved month, then the app's own defaults; the currency follows the Settings default, and the carried
+  amounts only when it equals the latest month's; until 10.5 the latest month is the only source). The worked examples of ADR 0007 become unit tests,
+  and the file of invented cases is shared with the Flutter developer so the live preview matches to the minor unit
+- [ ] **10.5 preferences**: default currency, default payment mode, pay days and `remind_on_pay_days`; `time_zone` and
   `language` are stored since 8.2 and become changeable here through the same settings `PATCH` (the profile update
   accepts only `name`), so a language change in the app reaches the notifications without a new sign-in
-- [ ] **10.4 ledger**: accounts (delete refused with `409` when transactions exist); categories (the built-in rows with
-  their keys, read-only; custom ones); transactions (the category must allow the kind; ordered `-date`, `-created_at`,
-  `-id` with the filters, through `django-filter`)
-- [ ] **10.5 debts**: debts with repayments, derived `repaid`, `remaining`, `is_settled`, `progress` and `status`, with the
+- [ ] **10.6 ledger**: accounts (delete refused with `409` when transactions exist; reorder); categories (the built-in
+  rows with their keys, read-only; custom ones, reorder; deleting a custom one moves its transactions to `other`, ADR
+  0017); transactions (the category must allow the kind; ordered `-date`, `-created_at`, `-id` with the filters,
+  including `search` on the note, through `django-filter`)
+- [ ] **10.7 debts**: debts with repayments, derived `repaid`, `remaining`, `is_settled`, `progress` and `status`, with the
   `today` parameter
-- [ ] **10.6 reports**: month overview, day totals, category spend, month comparison, debts report and period report, with
+- [ ] **10.8 reports**: month overview, day totals, category spend, month comparison, debts report and period report, with
   the `part` filter
-- [ ] **10.7 CSV export and import** of transactions, debts and salary months, with skipped-row reporting and a lossless
-  round trip
-- [ ] **10.8 notifications**: push device tokens (one per session, removed when it ends), pay-day reminders through Celery
-  Beat, and the push provider wiring (the last open decision for this stage). The rules are in
+- [ ] **10.9 CSV export and import** of transactions, debts and salary months: the server builds the export; the import is
+  a bulk call of rows the app has parsed (the server never parses an uploaded file), with skipped-row reporting and a
+  lossless round trip
+- [ ] **10.10 notifications**: push device FIDs (Firebase installation IDs, one per session, removed when it ends),
+  pay-day reminders through Celery Beat, and the push provider wiring (the last open decision for this stage; `firebase-admin`
+  7.5.0 or later, `Message(fid=...)`). The rules are in
   [`api-fields.md`](api-fields.md#push-notifications). Build notes: one service function ends sessions and deletes their
-  tokens in the same transaction, and every place that ends a session uses it (a test guards this); sending selects only
-  tokens of sessions that are not ended and not past `expires_at`; registering is atomic, so two simultaneous calls
-  cannot leave two rows; the token is write-only, hidden in the admin and never logged; a daily sweep of tokens of
+  FIDs in the same transaction, and every place that ends a session uses it (a test guards this); sending selects only
+  FIDs of sessions that are not ended and not past `expires_at`; registering is atomic, so two simultaneous calls
+  cannot leave two rows; the FID is write-only, hidden in the admin and never logged; a daily sweep of FIDs of
   expired sessions joins the Celery Beat jobs when a worker runs in production; register refuses a `web` session with a
   documented error code (new codes go into ADR 0004 first), and the `screen` values are part of the schema
 

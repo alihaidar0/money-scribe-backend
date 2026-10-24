@@ -50,7 +50,9 @@ Worked example, invented values in minor units: `base` 300000, `food_per_day` 50
 
 ## The month, its fixed items and its parts
 
-- A salary month is addressed by its year and month, `YYYY-MM`, one per user and currency. `PUT` on that key creates the
+- In the formulas, `tax_rate_bp` stands for the field `tax_rate_basis_points`; the wire name is spelled out.
+- A salary month is addressed by its year and month, `YYYY-MM`, one per user and month; the currency is a field of the month
+  (decided 2026-10-24). `PUT` on that key creates the
   month or replaces its inputs, so saving is an upsert; the month also has a UUID, which appears in the body. The month
   stores the payment mode and the two pay days (1 to 28) it was saved with.
 - A **fixed item** (name, amount greater than zero, `income` or `expense`, `part` of `first` or `second`) belongs to a

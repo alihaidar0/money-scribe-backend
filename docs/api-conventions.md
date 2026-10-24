@@ -55,6 +55,9 @@ operation that can conflict declares it with `CONFLICT_RESPONSE` in `@extend_sch
 - `409` is a valid request that conflicts with the current state (for example deleting an account that has
   transactions). It is not a field error: `attr` is `null` and `code` is stable and specific. A rule on one field, such
   as a repayment above the remaining debt, is a `400` on that field.
+- `412` is an edit or delete whose `If-Match` version is stale (`precondition_failed`), and `422` is an `Idempotency-Key`
+  reused for a different request (`idempotency_key_reused`); both are declared per operation like `409`
+  ([ADR 0016](adr/0016-safe-writes.md)).
 - `429` always sends `Retry-After` with the remaining time in whole seconds, for throttling, the sign-in lock and the
   code resend cooldown. The header is declared on every `429` response of the schema (an integer, in seconds).
 - Error `code` values are a contract. Renaming or removing one is a breaking change. The initial list is in
@@ -80,11 +83,19 @@ Every list endpoint is paginated by one class, `ApiCursorPagination` (`DEFAULT_P
 - Each list has one deterministic ordering that ends in the unique `id`, so a row is never repeated or skipped by paging.
   Transactions are ordered `-date`, `-created_at`, `-id`, so within a day the entry added last comes first.
 - Filters are explicit query parameters documented in the schema; transactions take `date_from`, `date_to`, `account`,
-  `category` and `kind`.
+  `category`, `kind` and `search` (the note).
 - A total that spans pages, such as the total per day, comes from a report endpoint
   (`GET /api/v1/reports/day-totals/`), never from adding up pages.
 - Read models (overview, reports), settings and single objects are not lists and are not paginated. A salary month
   returns its fixed items inline.
+
+## Safe writes
+
+([ADR 0016](adr/0016-safe-writes.md).) Every `POST` that creates a record needs `Idempotency-Key: "<random UUID>"`, one per
+user action and reused only to repeat that action: the same key and request returns the first answer again
+(`Idempotent-Replayed: true`), so a lost answer never records an amount twice. Keys live 24 hours. Every editable record has
+a read-only integer `version`, also sent as the `ETag`; an edit or delete should send `If-Match: "<version>"`, and a stale one
+is `412 precondition_failed` with nothing changed. Without `If-Match`, the last write wins.
 
 ## Timestamps
 
@@ -145,6 +156,10 @@ token** that rotates.
   `DELETE /auth/email-change/` cancels. A taken address is `409 email_already_registered`; five changes an hour per account.
   Details and reasons: [ADR 0015](adr/0015-profile-name-and-email-change.md).
 - Which events end which sessions is a table in [ADR 0006](adr/0006-authentication-tokens.md).
+- **Fingerprint sign-in** ([ADR 0018](adr/0018-sign-in-with-a-device-key.md)) signs a phone in without the password: a
+  public challenge, then a signature made by a hardware key that needs a fingerprint for every use. Any failure is the one
+  `401 device_sign_in_failed`; the app then shows the password form. The server deletes every key when the password or the
+  email changes or the account is deleted; signing out does not delete it. The calls are under `/auth/device-keys/`.
 
 ## Money
 

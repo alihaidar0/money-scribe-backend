@@ -11,7 +11,7 @@ message, or takes a different action, for each of them.
 
 ## Decision
 
-The contract documents **400, 401, 403, 404, 409 and 429** for each operation that can return them. The package setting
+The contract documents **400, 401, 403, 404, 409, 412, 422 and 429** for each operation that can return them. The package setting
 `DRF_STANDARDIZED_ERRORS["ALLOWED_ERROR_STATUS_CODES"]` lists 400, 401, 403, 404 and 429, and each status added there gets
 its enum name in `ENUM_NAME_OVERRIDES`. **`409` is declared per operation instead.** The package documents any extra
 status listed in that setting on *every* operation, which would put a conflict on plain reads, so an operation that can
@@ -26,6 +26,8 @@ conflict says so with the shared response, `@extend_schema(responses={..., 409: 
 | 403 | authenticated but not allowed | never used to hide another user's object |
 | 404 | not found | also the answer for another user's object, so its existence is not revealed |
 | 409 | a valid request that conflicts with the current state | not a field error; `attr` is `null` |
+| 412 | an `If-Match` version no longer matches the stored record ([ADR 0016](0016-safe-writes.md)) | declared per operation, like `409`; nothing changed |
+| 422 | an `Idempotency-Key` reused for a different request ([ADR 0016](0016-safe-writes.md)) | declared per operation, like `409` |
 | 429 | rate limit, sign-in lock or a cooldown | always sends `Retry-After` with the remaining whole seconds (RFC 9110) |
 | 503 | a safety control cannot run | sent with `Retry-After`, only by the calls that depend on a limit; those eleven operations declare it (`config.api_errors.SERVICE_UNAVAILABLE_RESPONSE`), with `type` `server_error` |
 
@@ -78,11 +80,24 @@ Initial registry:
 | `reset_token_invalid` | 400 | the password reset token is unknown, used, expired or its account is deactivated (`attr`: `reset_token`); ask for a new code |
 | `service_unavailable` | 503 | a safety control (the limit store) is down, so the request is refused; `Retry-After` |
 | `invalid_amount` | 400 | not a valid amount for the currency (ADR 0008) |
-| `currency_mismatch` | 400 | a fixed item carries a currency other than its month's |
+| `currency_mismatch` | 400 | a fixed item carries a currency other than its month's, or a repayment one other than its debt's (`attr`: `currency`) |
 | `exceeds_remaining` | 400 | a repayment is larger than the remaining debt (`attr`: `amount`) |
 | `account_has_transactions` | 409 | deleting an account that still has transactions |
-| `category_has_transactions` | 409 | deleting a category that still has transactions |
+| `category_has_transactions` | 409 | reserved, no longer sent: deleting a category moves its transactions to Other ([ADR 0017](0017-deleting-a-category-moves-its-transactions.md)) |
 | `category_is_builtin` | 403 | changing or deleting a built-in category |
+| `idempotency_key_required` | 400 | a create without the `Idempotency-Key` header (`attr`: `idempotency_key`), [ADR 0016](0016-safe-writes.md) |
+| `idempotency_key_invalid` | 400 | the key is not a quoted string of 16 to 64 letters, digits, hyphens or underscores (`attr`: `idempotency_key`) |
+| `idempotency_key_reused` | 422 | the key was already used for a different request |
+| `idempotency_in_progress` | 409 | the first request with this key is still running; `Retry-After` |
+| `fixed_item_limit_reached` | 409 | a salary month already has 100 fixed items |
+| `month_has_fixed_items` | 409 | changing the currency of a salary month that still has fixed items ([ADR 0007](0007-salary-calculation-on-the-server.md)) |
+| `precondition_failed` | 412 | the `If-Match` version is not the stored one, or `If-None-Match: *` found the record; reload it |
+| `device_sign_in_failed` | 401 | the one answer to any failure of sign-in with a device key, [ADR 0018](0018-sign-in-with-a-device-key.md) |
+| `challenge_invalid` | 400 | a device-key challenge is unknown, used or expired, or the proof of possession is wrong (`attr`: `challenge_id`) |
+| `public_key_invalid` | 400 | the device public key is not a valid P-256 key (`attr`: `public_key`) |
+| `attestation_invalid` | 400 | the Android key attestation failed a check; no reason is given (`attr`: `attestation_chain`) |
+| `platform_not_supported` | 400 | the feature is not available on this platform, such as a device key from a `web` session |
+| `device_key_limit_reached` | 409 | the account already has 5 device keys |
 
 **Extra members.** An error item is `{code, detail, attr}`. Three optional integer members exist, each sent with one code
 only and documented in the shared error schema: `attempts_left` on `code_invalid` (the wrong tries the 6-digit code still

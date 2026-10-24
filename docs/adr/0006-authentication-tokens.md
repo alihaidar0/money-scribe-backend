@@ -65,7 +65,7 @@ or inactive. A session that is ended therefore loses access **at once**, not whe
 | Replay of a used refresh token | that session |
 | Account deletion | all, with the account |
 
-Each ended session keeps its `end_reason` (ADR 0009), and its push token is removed (ADR 0005).
+Each ended session keeps its `end_reason` (ADR 0009), and its push FID is removed (ADR 0005).
 
 **Clients.** The mode of a client is decided by **how a token arrives**, never by a header the page could omit.
 
