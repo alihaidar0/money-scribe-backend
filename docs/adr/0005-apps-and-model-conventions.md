@@ -16,6 +16,7 @@ Apps follow the entity groups of the client's domain. An app is created when its
 | --- | --- | --- |
 | `users` | the user, email codes, sessions with their device records (ADR 0001, 0006, 0009) | none |
 | `outbox` | the database email backend, the stored emails, their admin and purge task (ADR 0010) | none |
+| `idempotency` | the stored answers of repeated creates, with their purge task (ADR 0016) | `users` |
 | `ledger` | accounts, categories, transactions | `users`, `common` |
 | `salary` | salary months and the calculation (ADR 0007) | `users`, `common` |
 | `debts` | debts and repayments | `users`, `common` |
@@ -23,7 +24,8 @@ Apps follow the entity groups of the client's domain. An app is created when its
 | `notifications` | push device FIDs, each tied to a session, and reminders (Celery Beat) | `users`, `preferences` |
 | `reports` | read models only (overview, day totals, category spend, comparisons, debts and period reports) | `ledger`, `salary`, `debts`, `users` |
 
-- `common/` is a plain Python package at the repository root, not an installed app: no models and no migrations. It holds
+- `common/` is a plain Python package at the repository root, not an installed app: no tables and no migrations (its
+  only models are abstract, such as `VersionedModel`). It holds
   code that several apps share, such as the `Money` value type.
 - `config/` keeps settings and project-wide API plumbing (error schema, pagination, health, Celery).
 - Dependencies point one way: `users` and `common` depend on nothing in the project, and nothing imports `reports`. An app
@@ -41,7 +43,8 @@ Model conventions for every new model:
   signed-in user's own categories.
 - **Timestamps:** `created_at` and `updated_at`, UTC.
 - **Version:** an editable model also has `version`, a `PositiveIntegerField` that starts at 1 and rises with every change,
-  in the same statement as the change ([ADR 0016](0016-safe-writes.md)).
+  in the same statement as the change ([ADR 0016](0016-safe-writes.md)). It comes from inheriting the abstract
+  `common.models.VersionedModel`, which also gives `created_at` and `updated_at`.
 - **Money:** `BigIntegerField` minor units plus a `CharField(max_length=3)` currency code, with a `CheckConstraint` where
   the amount must be positive. The wire format is ADR 0008.
 - **Tests:** `<app>/tests/`, with factories in `tests/factories.py`.

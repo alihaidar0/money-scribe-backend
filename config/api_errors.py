@@ -155,3 +155,61 @@ class ApiAutoSchema(AutoSchema):
 
     def _get_error_response_examples(self) -> list[OpenApiExample]:
         return []
+
+
+# --- safe writes (ADR 0016) -----------------------------------------------------------------------
+# An operation that creates a record takes the key, can answer 409 for a copy still running and 422 for a
+# reused key; an operation that edits or deletes one may take If-Match and answers 412 for a stale version.
+#   @extend_schema(parameters=[IDEMPOTENCY_KEY_HEADER, IDEMPOTENT_REPLAYED_HEADER, ETAG_HEADER],
+#                  responses={201: S, 409: CONFLICT_RESPONSE, 422: UNPROCESSABLE_RESPONSE})
+#   @extend_schema(parameters=[IF_MATCH_HEADER, ETAG_HEADER], responses={200: S, 412: PRECONDITION_FAILED_RESPONSE})
+IDEMPOTENCY_KEY_HEADER = OpenApiParameter(
+    name="Idempotency-Key",
+    type=OpenApiTypes.STR,
+    location=OpenApiParameter.HEADER,
+    required=True,
+    description=(
+        "A random id, once per user action, as a quoted string of 16 to 64 letters, digits, hyphens or underscores "
+        '(a UUID fits): `"8e03978e-40d5-43e8-bc93-6894a57f9324"`. Repeat the same request with the same key after a '
+        "lost answer and nothing is created twice; the answer is replayed with `Idempotent-Replayed: true`. The key "
+        "is honoured for 24 hours. Without it: `400` `idempotency_key_required` (`attr` `idempotency_key`)."
+    ),
+)
+IDEMPOTENT_REPLAYED_HEADER = OpenApiParameter(
+    name="Idempotent-Replayed",
+    type=OpenApiTypes.STR,
+    location=OpenApiParameter.HEADER,
+    response=[200, 201],
+    description="`true` when this is the stored answer of an earlier request with the same key.",
+)
+IF_MATCH_HEADER = OpenApiParameter(
+    name="If-Match",
+    type=OpenApiTypes.STR,
+    location=OpenApiParameter.HEADER,
+    required=False,
+    description=(
+        'The `version` of the record the edit was made from, as a quoted string: `"3"` (`*` matches any record). '
+        "If the stored version is another one nothing changes and the answer is `412` `precondition_failed`. "
+        "Without the header the last write wins."
+    ),
+)
+ETAG_HEADER = OpenApiParameter(
+    name="ETag",
+    type=OpenApiTypes.STR,
+    location=OpenApiParameter.HEADER,
+    response=[200, 201],
+    description='The `version` of the record in the answer, as a quoted string: `"3"`.',
+)
+PRECONDITION_FAILED_RESPONSE = OpenApiResponse(
+    response=ErrorResponseSerializer,
+    description=(
+        "The `If-Match` version is not the stored one, or `If-None-Match: *` found the record. Nothing was "
+        "changed: reload the record. The `code` is `precondition_failed`."
+    ),
+)
+UNPROCESSABLE_RESPONSE = OpenApiResponse(
+    response=ErrorResponseSerializer,
+    description=(
+        "The `Idempotency-Key` was already used for a different request. The `code` is `idempotency_key_reused`."
+    ),
+)
