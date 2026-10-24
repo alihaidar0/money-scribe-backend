@@ -167,9 +167,12 @@ Open a second terminal in the container (the first one runs the server).
 - [x] `pre-commit run --all-files` passes every hook (checked 2026-10-24)
 - [x] `psql "$DATABASE_URL" -c "select version();"` shows PostgreSQL 18 (checked 2026-10-24)
 - [x] `redis-cli -h redis ping` prints `PONG` (checked 2026-10-24)
-- [ ] `celery -A config inspect ping` answers `pong` (the worker starts a few seconds after the project exists)
+- [ ] `celery -A config inspect ping` answers `pong` (the worker starts a few seconds after the project exists). Not tested
+  locally by choice (2026-10-24): work happens against staging, which has no worker or Beat
+  ([ADR 0011](adr/0011-staging-hosting.md)); it stays open until a worker exists
 - [x] `python manage.py sendtestemail you@example.com` shows the message in Mailpit at <http://localhost:8025> (checked 2026-10-24)
-- [ ] `celery -A config flower --port=5555` lists the worker at <http://localhost:5556> (Ctrl+C to stop)
+- [ ] `celery -A config flower --port=5555` lists the worker at <http://localhost:5556> (Ctrl+C to stop). Open for the same
+  reason as the ping above
 - [x] `python manage.py check --deploy` has no errors that matter for the current stage (checked 2026-10-24)
 - [x] `ssh -T git@github.com-freelance` greets `alihaidar0` (this repository's remote alias) (checked 2026-10-24)
 - [x] `git switch develop && pre-commit run no-commit-to-branch` **fails** (develop is protected); then `git switch -` (checked 2026-10-24)
