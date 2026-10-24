@@ -14,6 +14,9 @@
 *.pfx
 *.crt
 *.cer
+# The one certificate file that belongs in the repository: Google's public attestation roots (ADR 0018).
+# Public by design; every other *.pem stays ignored.
+!users/attestation_roots.pem
 service-account*.json
 application_default_credentials.json
 key.json
