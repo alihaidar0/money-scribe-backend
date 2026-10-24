@@ -418,7 +418,7 @@ stays ahead of them. Each step ships in a tagged release with `openapi.yaml` att
   the currency a field of the month; at most 100 fixed items and the explicit copy of the items of another month; `If-None-Match: *` on the creating `PUT`;
   the read of defaults for a month not saved yet (precedence in `api-fields.md`: a Settings value the person has set,
   then the latest saved month, then the app's own defaults; the currency follows the Settings default, and the carried
-  amounts only when it equals the latest month's; until 10.5 the latest month is the only source). The worked examples of ADR 0007 become unit tests,
+  amounts only when it equals the latest month's; the Settings of 10.5 now feed it). The worked examples of ADR 0007 become unit tests,
   and the file of invented cases is shared with the Flutter developer so the live preview matches to the minor unit
 - [ ] **10.5 preferences**: default currency, default payment mode, pay days and `remind_on_pay_days`; `time_zone` and
   `language` are stored since 8.2 and become changeable here through the same settings `PATCH` (the profile update

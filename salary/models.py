@@ -6,6 +6,7 @@ from django.conf import settings
 from django.db import models
 from django.db.models import F, Q
 
+from common.enums import PaymentMode
 from common.models import VersionedModel
 from common.money import MAX_MINOR_UNITS, Currency, Money
 
@@ -15,11 +16,6 @@ MAX_WORKING_HOURS = 744  # 31 days of 24 hours
 MAX_EXTRA_HOURS_HUNDREDTHS = MAX_WORKING_HOURS * 100
 FIRST_MONTH = datetime.date(2000, 1, 1)
 LAST_MONTH = datetime.date(2099, 12, 1)
-
-
-class PaymentMode(models.TextChoices):
-    ONE_PAYMENT = "one_payment", "One payment"
-    TWO_PAYMENTS = "two_payments", "Two payments"
 
 
 class ItemKind(models.TextChoices):
