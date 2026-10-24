@@ -42,8 +42,9 @@ Use the same region for all three services (for example Frankfurt), or every que
    - variable `STAGING_URL`: `https://<service>.onrender.com`
 6. **Deploy once.** Actions, **Deploy staging**, **Run workflow**, with the commit of the image you want (the first 7
    characters are enough). The run ends when `/healthz` reports the release it deployed.
-7. **Switch the automatic deploy on (optional).** Staging may stay manual, deployed with step 6 when you decide; the
-   repository variable is then simply not set. To go automatic, add the repository variable `DEPLOY_STAGING` = `true`. From then on every merge
+7. **Switch the automatic deploy on (optional).** Staging stays manual for now: it is deployed with step 6 when the
+   endpoints agreed with the frontend are finished, and the app is tested then
+   ([ADR 0019](adr/0019-first-release-after-the-last-endpoint.md)); the repository variable is therefore not set. To go automatic, add the repository variable `DEPLOY_STAGING` = `true`. From then on every merge
    into `develop` is deployed by the Docker workflow, in its job "Deploy to staging". Until the variable is set that job
    is skipped, so a merge never fails for lack of a service.
 8. **The admin account** exists already if you did step 8 of [`staging-neon.md`](staging-neon.md); the tables are there
@@ -75,6 +76,11 @@ Use the same region for all three services (for example Frankfurt), or every que
 | `TURNSTILE_SECRET_KEY` | the secret key of the Turnstile widget ([`sign-in-challenge.md`](sign-in-challenge.md)); a secret, never in the repository |
 | `DEVICE_KEY_ANDROID_PACKAGE` | the package name of the staging app (fingerprint sign-in, [ADR 0018](adr/0018-sign-in-with-a-device-key.md)); `check --deploy` warns (`users.W002`) while it is empty |
 | `DEVICE_KEY_ANDROID_CERT_SHA256` | the SHA-256 digests, hex and comma separated, of the certificates that sign the staging app; leave `DEVICE_KEY_REQUIRE_ATTESTATION` unset (it must stay on here, `users.E002`) |
+
+Optional variables, all with a working default: `LOG_LEVEL` and `DJANGO_LOG_LEVEL` (`INFO`; raise to `DEBUG` only while
+looking for a fault, and remember that the logs never hold request bodies), `SECURE_SSL_REDIRECT` (`True`) and
+`SECURE_HSTS_SECONDS` (`0`; leave it at `0` on `onrender.com`, because HSTS belongs to the final domain). `APP_RELEASE`
+is set by the image build; never set it by hand.
 
 Render sets `PORT` itself and the image listens on it. `RUN_MIGRATIONS` stays at its default (migrate when the container
 starts). No `CELERY_*` variable is needed while the worker is not run. Never copy a real value into the repository.

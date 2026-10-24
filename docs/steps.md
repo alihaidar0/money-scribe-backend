@@ -143,14 +143,15 @@ no regeneration; they are a normal follow-up migration.
 
 ### 3.3 The sixth command: database and server
 
-- [ ] 6. Database and server (after 3.2 if `User` needs fields)
+- [x] 6. Database and server (after 3.2 if `User` needs fields) (checked 2026-10-24)
 
   ```bash
   python manage.py migrate
   python manage.py runserver 0.0.0.0:8000
   ```
 
-- [ ] Open <http://localhost:8000> (the Django start page in debug mode). No venv activation is needed: the dev image
+- [x] Open <http://localhost:8000>: the root path has no page and answers `404` (the start page is gone since the API exists;
+  use `/healthz`) (checked 2026-10-24). No venv activation is needed: the dev image
   puts `/workspace/.venv/bin` first on `PATH`. The Celery worker starts by itself once the project and its
   dependencies exist; Beat also waits until `pm migrate` has been run.
 
@@ -158,26 +159,26 @@ no regeneration; they are a normal follow-up migration.
 
 Open a second terminal in the container (the first one runs the server).
 
-- [ ] `curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8000/healthz` prints `200`
+- [x] `curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8000/healthz` prints `200` (checked 2026-10-24)
 - [ ] `pmsu` creates a superuser; sign in at <http://localhost:8000/admin/>
-- [ ] `pytest` passes (the user model tests; on a project with no tests, exit 5 "no tests ran" is normal)
-- [ ] `mypy .` prints `Success: no issues found`
-- [ ] `ruff check . && ruff format --check .` pass
-- [ ] `pre-commit run --all-files` passes every hook
-- [ ] `psql "$DATABASE_URL" -c "select version();"` shows PostgreSQL 18
-- [ ] `redis-cli -h redis ping` prints `PONG`
+- [x] `pytest` passes (the user model tests; on a project with no tests, exit 5 "no tests ran" is normal) (checked 2026-10-24)
+- [x] `mypy .` prints `Success: no issues found` (checked 2026-10-24)
+- [x] `ruff check . && ruff format --check .` pass (checked 2026-10-24)
+- [x] `pre-commit run --all-files` passes every hook (checked 2026-10-24)
+- [x] `psql "$DATABASE_URL" -c "select version();"` shows PostgreSQL 18 (checked 2026-10-24)
+- [x] `redis-cli -h redis ping` prints `PONG` (checked 2026-10-24)
 - [ ] `celery -A config inspect ping` answers `pong` (the worker starts a few seconds after the project exists)
-- [ ] `python manage.py sendtestemail you@example.com` shows the message in Mailpit at <http://localhost:8025>
+- [x] `python manage.py sendtestemail you@example.com` shows the message in Mailpit at <http://localhost:8025> (checked 2026-10-24)
 - [ ] `celery -A config flower --port=5555` lists the worker at <http://localhost:5556> (Ctrl+C to stop)
-- [ ] `python manage.py check --deploy` has no errors that matter for the current stage
-- [ ] `ssh -T git@github.com-freelance` greets `alihaidar0` (this repository's remote alias)
-- [ ] `git switch develop && pre-commit run no-commit-to-branch` **fails** (develop is protected); then `git switch -`
+- [x] `python manage.py check --deploy` has no errors that matter for the current stage (checked 2026-10-24)
+- [x] `ssh -T git@github.com-freelance` greets `alihaidar0` (this repository's remote alias) (checked 2026-10-24)
+- [x] `git switch develop && pre-commit run no-commit-to-branch` **fails** (develop is protected); then `git switch -` (checked 2026-10-24)
 
 What you should see:
 
 | Where | What you should see |
 | --- | --- |
-| <http://localhost:8000> | the Django start page (debug mode) |
+| <http://localhost:8000/healthz> | `200` (the root path answers `404`) |
 | <http://localhost:8000/admin/> | the admin login; your superuser signs in |
 | <http://localhost:8025> | Mailpit with the test email |
 | <http://localhost:5556> | Flower listing the worker |
@@ -205,8 +206,8 @@ What you should see:
 
 `develop` and `main` are protected, so the first commit goes on a topic branch. Stage explicit paths, never `git add -A`.
 
-- [ ] Review what changed: `git status --short`
-- [ ] Branch, identity check, stage, commit, push (three logical commits):
+- [x] Review what changed: `git status --short` (done in PR #4)
+- [x] Branch, identity check, stage, commit, push (three logical commits): (done in PR #4)
 
   ```bash
   git switch develop && git pull --ff-only origin develop
@@ -233,10 +234,10 @@ What you should see:
 
   If the commit stops because a hook fixed files, run `git add` for those paths again and commit again.
 
-- [ ] Pull request `feat/initial-django-project` → `develop` opened (title in Conventional Commits form)
-- [ ] **CI passed** is green (this is the first time the check exists)
-- [ ] Merged with **Create a merge commit**
-- [ ] Local clean-up after the merge: switch to `develop`, `git pull --ff-only origin develop`, delete the topic branch
+- [x] Pull request `feat/initial-django-project` → `develop` opened (title in Conventional Commits form) (PR #4)
+- [x] **CI passed** is green (this is the first time the check exists) (PR #4)
+- [x] Merged with **Create a merge commit** (PR #4, merge commit cd467b1)
+- [x] Local clean-up after the merge: switch to `develop`, `git pull --ff-only origin develop`, delete the topic branch (done by every "sync")
 
 ## 6. Rulesets and final GitHub setup (GitHub)
 
@@ -246,10 +247,10 @@ General, Actions and Advanced Security settings were applied in section 1. Full 
 - [x] Import the three rulesets from `.github/rulesets/` (`protect-main`, `protect-develop`, `protect-tags`),
   enforcement **Active**, empty bypass list. Only after **CI passed** has run once: a required check that has never
   reported would block the first pull request.
-- [ ] `.github/CODEOWNERS` lists the right owners; review `LICENSE`, `.github/SECURITY.md`, `.github/CONTRIBUTING.md`
+- [x] `.github/CODEOWNERS` lists the right owners; review `LICENSE`, `.github/SECURITY.md`, `.github/CONTRIBUTING.md` (the four files exist; checked 2026-10-24)
 - [ ] CodeQL languages: **Actions**, and **Python** now that the project has code (Settings → Advanced Security →
   CodeQL analysis → Edit configuration)
-- [ ] Optional: publish the production image. CI builds and smoke-tests it on every pull request and pushes nothing.
+- [x] Optional: publish the production image. CI builds and smoke-tests it on every pull request and pushes nothing. (`PUBLISH_IMAGE=ghcr`, step 9.3)
   To publish, set the repository variable `PUBLISH_IMAGE` to `ghcr` (no secrets) or `dockerhub` (variable
   `DOCKERHUB_USERNAME` and secret `DOCKERHUB_TOKEN`). Leave it unset to publish nothing.
 - [ ] Optional: secret `CODECOV_TOKEN` enables the coverage upload. CI needs no other secrets and no environments;
@@ -288,7 +289,7 @@ Each decision has a record in [`adr/`](adr/README.md). Settle the open ones befo
 - [ ] The web cookie needs a shared domain: the developer agrees in principle and waits for the owner's choice of domain
   (sections 9 and 12)
 - [ ] Push notification provider wiring (FCM device tokens): later, with the `notifications` feature
-- [ ] Staging hosting: Neon, Render and the GitHub Container Registry on free tiers, with the worker and Beat deferred,
+- [x] Staging hosting: Neon, Render and the GitHub Container Registry on free tiers, with the worker and Beat deferred, (decided, ADR 0011)
   [ADR 0011](adr/0011-staging-hosting.md). Email delivery on staging: the outbox. Production hosting, real email delivery
   and the shared domain of the web app and the API: later (section 12)
 
@@ -365,10 +366,10 @@ listed at the end of this section. Each step is its own branch and pull request.
   by hand (deploys stay manual for now; the repository variable `DEPLOY_STAGING=true` would switch the automatic deploy
   on), the superuser, the `NUM_PROXIES` measured (`3`), and, optionally, an uptime monitor (deferred: without it staging sleeps after 15 minutes
   idle and the first request takes about a minute)
-- [ ] **9.6 The first contract release**: check that `version` in `pyproject.toml` is the version to release, open the
-  release pull request (`develop` → `main`), check the draft `v<version>` (notes and the `openapi.yaml` asset), and
-  publish it so the Flutter developer pins that tag ([`consuming-the-api.md`](consuming-the-api.md)); or pin a commit and
-  wait, if you prefer
+- [ ] **9.6 The first contract release**: moved to the end of stage 3 by
+  [ADR 0019](adr/0019-first-release-after-the-last-endpoint.md): no version is released until every endpoint exists
+  (section 11). Until then the Flutter developer pins a commit of `openapi/schema.yaml`
+  ([`consuming-the-api.md`](consuming-the-api.md)), and the draft `v0.1.0` left by release pull request #48 stays a draft until then
 - [ ] **9.7 The first test in the app**: the staging flavor points at the staging address. First check the admin panel and
   Swagger UI on staging ([`staging.md`](staging.md)), then run this list and record the result:
   - register, copy the code from the outbox in the admin panel, verify, and land in the app; sign out and sign in again
@@ -377,7 +378,9 @@ listed at the end of this section. Each step is its own branch and pull request.
   - a lost response on refresh (airplane mode) recovers within 30 seconds
   - password reset, change password, change email, delete account (once step 8.3 is deployed)
   - a session ended from another device shows the reason from its `session_*` code (once step 8.4 is deployed)
-- [ ] Gate: start stage 3 only when the app works against staging. Fix what the test found first.
+- [ ] Gate: start stage 3 only when the app works against staging. Fix what the test found first. (Stage 3 started on
+  2026-10-24 before this gate was closed, on the owner's decision; the app tests run on the next staging deploy, which
+  [ADR 0019](adr/0019-first-release-after-the-last-endpoint.md) places after the endpoints agreed with the frontend.)
 
 Not on staging yet (ADR 0011 has the reasons):
 
@@ -392,12 +395,14 @@ Not on staging yet (ADR 0011 has the reasons):
 ## 10. Stage 3: the features, one at a time (fingerprint sign-in, then salary)
 
 Each feature is a loop: agree the shapes in a request issue, implement with tests, regenerate the schema, open the pull
-request with the `api-change` label, merge, let staging deploy by itself, **test it in the Flutter app**, then move to the
-next. A decision a feature needs gets its record first. The order below is the owner's (2026-10-24): the fingerprint
+request with the `api-change` label, merge, then move to the next. Staging is not deployed after every merge: the owner
+deploys it by hand when the endpoints agreed with the frontend are finished, and the app tests then
+([ADR 0019](adr/0019-first-release-after-the-last-endpoint.md)). A decision a feature needs gets its record first. The order below is the owner's (2026-10-24): the fingerprint
 sign-in first, because the store disclosures for it need time and it depends on no money feature, then salary, then the
 others. The Flutter developer's dependency view put the settings and the ledger before salary; salary needs neither, so it
-stays ahead of them. Each step ships in a tagged release with `openapi.yaml` attached, and the app pins that tag
-([`consuming-the-api.md`](consuming-the-api.md)).
+stays ahead of them. No step ships in a release: the first release comes after the last endpoint (section 11), and until
+then the app pins a commit of `openapi/schema.yaml` ([`consuming-the-api.md`](consuming-the-api.md)). A step is ticked
+when the owner confirms it, and a step that needs the app on staging waits for the test result.
 
 - [ ] **10.1 `feat/auth-device-key`**: sign-in with a device key pair and a signed challenge (the model passkeys use,
   without a domain), [ADR 0018](adr/0018-sign-in-with-a-device-key.md): the key table, the public challenge and sign-in calls, the
@@ -465,7 +470,10 @@ stays ahead of them. Each step ships in a tagged release with `openapi.yaml` att
   enforce, and keep a way to switch it off. It needs work in both repositories and its own ADR. A plain API key in the
   app is **not** used: it can be read out of the app, so it would identify no one and protect nothing the tokens do not
   already protect
-- [ ] `version` in `pyproject.toml` is the version to release (the draft release is named after it)
+- [ ] Every endpoint of the API exists (10.1 to 10.10) and the app was tested against one staging deploy that has them all:
+  the first release waits for this ([ADR 0019](adr/0019-first-release-after-the-last-endpoint.md))
+- [ ] `version` in `pyproject.toml` is the version to release (`0.1.0` unless you change it; the draft release is named
+  after it)
 - [ ] One pull request `develop` → `main`, titled `release: <summary>`, merged with a merge commit
 - [ ] The privacy policy and the Google Play Data safety form list exactly what
   [ADR 0009](adr/0009-sessions-and-devices.md) stores about sessions and devices, with its retention
@@ -521,7 +529,8 @@ release candidate is stable.
 
 - [ ] Sync before starting: fetch, fast-forward `main` and `develop`, switch to `develop`, remove merged local branches
 - [ ] Weekly: review Dependabot pull requests (they target `develop`), merge the ones you want
-- [ ] Weekly: open one `develop` → `main` release pull request when `develop` is verified
+- [ ] After the first release only (ADR 0019): open a `develop` → `main` release pull request when `develop` holds an
+  update worth shipping and is verified
 - [ ] After a merge into `main`: check the draft release `v<version>` and publish it only when you want the release
 - [ ] When `django-celery-beat` supports Django 6.1 (its releases require `Django<6.1` today): remove the `django`
   ignore entry in `.github/dependabot.yml` and let Dependabot propose the Django 6.1 update
