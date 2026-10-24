@@ -1,0 +1,96 @@
+{
+  "about": "Invented cases for the salary calculation (ADR 0007). Both the server and the app run this file; the figures of A to E come from the app's own calculator, the example of the ADR from the record. All amounts are decimal strings of the currency's digits; rounding is half away from zero, once per formula.",
+  "cases": [
+    {
+      "name": "ADR 0007 worked example, two payments",
+      "currency": "RUB",
+      "inputs": {
+        "base_salary": "3000.00", "food_per_day": "5.00", "working_days_in_month": 22,
+        "working_hours_in_month": 176, "extra_hours_hundredths": 750, "tax_rate_basis_points": 1500,
+        "payment_mode": "two_payments", "working_days_first_half": 11
+      },
+      "expected": {
+        "food_allowance": "110.00", "extra_hours_pay": "255.68", "income_before_tax": "3365.68",
+        "tax": "504.85", "total_after_tax": "2860.83", "first_payment": "1275.00", "second_payment": "1585.83"
+      }
+    },
+    {
+      "name": "A, two payments",
+      "currency": "RUB",
+      "inputs": {
+        "base_salary": "100000.00", "food_per_day": "500.00", "working_days_in_month": 20,
+        "working_hours_in_month": 160, "extra_hours_hundredths": 800, "tax_rate_basis_points": 1300,
+        "payment_mode": "two_payments", "working_days_first_half": 10
+      },
+      "expected": {
+        "food_allowance": "10000.00", "extra_hours_pay": "10000.00", "income_before_tax": "120000.00",
+        "tax": "15600.00", "total_after_tax": "104400.00", "first_payment": "43500.00", "second_payment": "60900.00"
+      }
+    },
+    {
+      "name": "A, one payment",
+      "currency": "RUB",
+      "inputs": {
+        "base_salary": "100000.00", "food_per_day": "500.00", "working_days_in_month": 20,
+        "working_hours_in_month": 160, "extra_hours_hundredths": 800, "tax_rate_basis_points": 1300,
+        "payment_mode": "one_payment", "working_days_first_half": null
+      },
+      "expected": {
+        "food_allowance": "10000.00", "extra_hours_pay": "10000.00", "income_before_tax": "120000.00",
+        "tax": "15600.00", "total_after_tax": "104400.00", "first_payment": "104400.00", "second_payment": null
+      }
+    },
+    {
+      "name": "B, rounding",
+      "currency": "RUB",
+      "inputs": {
+        "base_salary": "98765.00", "food_per_day": "345.00", "working_days_in_month": 21,
+        "working_hours_in_month": 168, "extra_hours_hundredths": 700, "tax_rate_basis_points": 1300,
+        "payment_mode": "two_payments", "working_days_first_half": 9
+      },
+      "expected": {
+        "food_allowance": "7245.00", "extra_hours_pay": "8230.42", "income_before_tax": "114240.42",
+        "tax": "14851.25", "total_after_tax": "99389.17", "first_payment": "36825.24", "second_payment": "62563.93"
+      }
+    },
+    {
+      "name": "C, half kopecks",
+      "currency": "RUB",
+      "inputs": {
+        "base_salary": "75000.05", "food_per_day": "250.50", "working_days_in_month": 23,
+        "working_hours_in_month": 184, "extra_hours_hundredths": 1250, "tax_rate_basis_points": 1500,
+        "payment_mode": "two_payments", "working_days_first_half": 11
+      },
+      "expected": {
+        "food_allowance": "5761.50", "extra_hours_pay": "10190.22", "income_before_tax": "90951.77",
+        "tax": "13642.77", "total_after_tax": "77309.00", "first_payment": "30489.15", "second_payment": "46819.85"
+      }
+    },
+    {
+      "name": "D, all days in the first half",
+      "currency": "RUB",
+      "inputs": {
+        "base_salary": "100001.00", "food_per_day": "0.00", "working_days_in_month": 22,
+        "working_hours_in_month": 176, "extra_hours_hundredths": 0, "tax_rate_basis_points": 1300,
+        "payment_mode": "two_payments", "working_days_first_half": 22
+      },
+      "expected": {
+        "food_allowance": "0.00", "extra_hours_pay": "0.00", "income_before_tax": "100001.00",
+        "tax": "13000.13", "total_after_tax": "87000.87", "first_payment": "87000.87", "second_payment": "0.00"
+      }
+    },
+    {
+      "name": "E, the cap: the uncapped first payment (0.44) is above what is left (0.43)",
+      "currency": "RUB",
+      "inputs": {
+        "base_salary": "0.50", "food_per_day": "0.00", "working_days_in_month": 22,
+        "working_hours_in_month": 176, "extra_hours_hundredths": 0, "tax_rate_basis_points": 1300,
+        "payment_mode": "two_payments", "working_days_first_half": 22
+      },
+      "expected": {
+        "food_allowance": "0.00", "extra_hours_pay": "0.00", "income_before_tax": "0.50",
+        "tax": "0.07", "total_after_tax": "0.43", "first_payment": "0.43", "second_payment": "0.00"
+      }
+    }
+  ]
+}

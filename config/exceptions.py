@@ -87,3 +87,44 @@ class ServiceUnavailable(APIException):  # type: ignore[misc]
 def service_unavailable(wait: int = 30) -> ServiceUnavailable:
     """Build the ``503`` that a failed safety control answers with."""
     return ServiceUnavailable(wait=wait)
+
+
+class PreconditionFailed(APIException):  # type: ignore[misc]
+    """An ``If-Match`` or ``If-None-Match`` condition does not hold (HTTP 412, ADR 0016).
+
+    Nothing was changed. The client reloads the record and lets the person decide.
+    """
+
+    status_code = status.HTTP_412_PRECONDITION_FAILED
+    default_detail = (
+        "The record was changed or already exists. Reload it and try again."
+    )
+    default_code = ErrorCode.PRECONDITION_FAILED.value
+
+
+def precondition_failed() -> PreconditionFailed:
+    return PreconditionFailed()
+
+
+class IdempotencyKeyReused(APIException):  # type: ignore[misc]
+    """An ``Idempotency-Key`` that was used for a different request (HTTP 422, ADR 0016)."""
+
+    status_code = status.HTTP_422_UNPROCESSABLE_ENTITY
+    default_detail = "This Idempotency-Key was already used for a different request."
+    default_code = ErrorCode.IDEMPOTENCY_KEY_REUSED.value
+
+
+class IdempotencyInProgress(Conflict):
+    """The first request with this ``Idempotency-Key`` is still running (HTTP 409, ADR 0016).
+
+    The error handler sends ``wait`` as ``Retry-After``; repeating the same request then replays the answer.
+    """
+
+    default_detail = (
+        "The first request with this Idempotency-Key is still being handled."
+    )
+    default_code = ErrorCode.IDEMPOTENCY_IN_PROGRESS.value
+
+    def __init__(self, wait: int = 1) -> None:
+        super().__init__()
+        self.wait = wait

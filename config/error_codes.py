@@ -53,6 +53,17 @@ class ErrorCode(StrEnum):
     PASSWORD_ATTEMPTS_EXCEEDED = "password_attempts_exceeded"
     RESET_TOKEN_INVALID = "reset_token_invalid"
 
+    # Safe writes (ADR 0016)
+    IDEMPOTENCY_KEY_REQUIRED = "idempotency_key_required"
+    IDEMPOTENCY_KEY_INVALID = "idempotency_key_invalid"
+    IDEMPOTENCY_KEY_REUSED = "idempotency_key_reused"
+    IDEMPOTENCY_IN_PROGRESS = "idempotency_in_progress"
+    PRECONDITION_FAILED = "precondition_failed"
+
+    # Salary (ADR 0007)
+    FIXED_ITEM_LIMIT_REACHED = "fixed_item_limit_reached"
+    MONTH_HAS_FIXED_ITEMS = "month_has_fixed_items"
+
     # The server cannot do its job safely right now
     SERVICE_UNAVAILABLE = "service_unavailable"
 

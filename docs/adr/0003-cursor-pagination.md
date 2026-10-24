@@ -75,5 +75,5 @@ and are not a list of their own.
   by a report endpoint.
 - The OpenAPI schema documents `limit`, `cursor` and the envelope once, as a generic paginated response, plus the
   filters of each list.
-- Implemented in `feat/api-foundation` (the class and its tests) and used by each list endpoint; day totals arrive with
-  the `reports` app.
+- Implemented in `config/pagination.py` with the first list, the salary history (step 10.4), and used by each list
+  endpoint after it; day totals arrive with the `reports` app.

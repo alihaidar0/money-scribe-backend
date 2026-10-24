@@ -15,6 +15,7 @@ from pathlib import Path
 
 import dj_database_url
 from celery.schedules import crontab
+from corsheaders.defaults import default_headers
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
@@ -174,7 +175,14 @@ CORS_ALLOWED_ORIGINS = [
 ]
 # A browser hides every response header except a few unless it is exposed; the web app reads the
 # countdown of a 429 from this one.
-CORS_EXPOSE_HEADERS = ["Retry-After"]
+CORS_EXPOSE_HEADERS = ["Retry-After", "ETag", "Idempotent-Replayed"]
+# The headers of the safe writes (ADR 0016), on top of the defaults, so the web build can send them.
+CORS_ALLOW_HEADERS = [
+    *default_headers,
+    "idempotency-key",
+    "if-match",
+    "if-none-match",
+]
 
 DATABASES = {
     "default": dict(
@@ -194,6 +202,9 @@ INSTALLED_APPS += [
     "drf_standardized_errors",
     "django_celery_beat",
     "users",
+    "idempotency",
+    "preferences",
+    "salary",
     "outbox",
 ]
 
@@ -305,6 +316,11 @@ DEVICE_KEY_TRUSTED_ROOTS_PATH = BASE_DIR / "users" / "attestation_roots.pem"
 DEVICE_KEY_REVOCATION_CACHE_SECONDS = 3600
 DEVICE_KEY_REVOCATION_TIMEOUT_SECONDS = 3
 
+# Safe writes (ADR 0016): an Idempotency-Key is honoured for this long, and a second request that meets a
+# first one still running waits this many seconds for it before it answers 409 idempotency_in_progress.
+IDEMPOTENCY_KEY_LIFETIME_SECONDS = 86400
+IDEMPOTENCY_LOCK_WAIT_SECONDS = 3
+
 # An account that never verifies its email is deleted, with its codes, after this many days.
 UNVERIFIED_ACCOUNT_RETENTION_DAYS = 7
 
@@ -331,6 +347,8 @@ REST_FRAMEWORK: dict[str, object] = {
     # opts out, so a forgotten permission fails closed.
     "DEFAULT_AUTHENTICATION_CLASSES": ["config.authentication.BearerAuthentication"],
     "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.IsAuthenticated"],
+    # One keyset cursor class for every list (ADR 0003); a list names its ordering as `cursor_ordering`.
+    "DEFAULT_PAGINATION_CLASS": "config.pagination.ApiCursorPagination",
     # JSON in and out: no browsable API in any environment. A view that takes files adds its parser.
     "DEFAULT_RENDERER_CLASSES": ["rest_framework.renderers.JSONRenderer"],
     "DEFAULT_PARSER_CLASSES": ["rest_framework.parsers.JSONParser"],
@@ -402,10 +420,15 @@ SPECTACULAR_SETTINGS = {
     "ENUM_NAME_OVERRIDES": {
         "ClientErrorEnum": f"{_ERROR_ENUMS}.ClientErrorEnum.choices",
         "ServerErrorEnum": f"{_ERROR_ENUMS}.ServerErrorEnum.choices",
+        # The same set of choices appears under several field names (currency, default_currency, payment_mode).
+        "CurrencyEnum": "common.serializers.CURRENCY_CHOICES",
+        "PaymentModeEnum": "common.enums.PaymentMode.choices",
     },
     # Replaces drf-spectacular's own enum hook (the package's hook calls the same logic).
     "POSTPROCESSING_HOOKS": [
-        "drf_standardized_errors.openapi_hooks.postprocess_schema_enums"
+        "drf_standardized_errors.openapi_hooks.postprocess_schema_enums",
+        # Names the money types of ADR 0008 (Amount, SignedAmount) as shared components.
+        "common.openapi.name_money_types",
     ],
 }
 
@@ -466,6 +489,10 @@ CELERY_BEAT_SCHEDULE = {
     "users-purge-expired-secrets": {
         "task": "users.tasks.purge_expired_secrets",
         "schedule": crontab(minute=47, hour=3),
+    },
+    "idempotency-purge": {
+        "task": "idempotency.tasks.purge_expired_keys",
+        "schedule": crontab(minute=7, hour=4),
     },
     "users-purge-device-keys": {
         "task": "users.tasks.purge_expired_device_keys",

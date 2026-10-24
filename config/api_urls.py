@@ -7,4 +7,6 @@ from django.urls import URLPattern, URLResolver, include, path
 
 urlpatterns: list[URLPattern | URLResolver] = [
     path("auth/", include("users.urls")),
+    path("salary/", include("salary.urls")),
+    path("settings/", include("preferences.urls")),
 ]
