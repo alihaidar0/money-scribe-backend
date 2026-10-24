@@ -132,7 +132,7 @@ def test_an_unsigned_token_is_invalid() -> None:
     payload = jwt.decode(forge({}), options={"verify_signature": False})
     unsigned = jwt.encode(
         payload,
-        None,
+        "",
         algorithm="none",
         headers={"kid": settings.JWT_KEY_ID, "typ": "at+jwt"},
     )

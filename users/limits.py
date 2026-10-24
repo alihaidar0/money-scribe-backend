@@ -365,3 +365,65 @@ def record_password_failure(user_id: uuid.UUID, now: datetime | None = None) -> 
 def clear_password_failures(user_id: uuid.UUID) -> None:
     """A right password starts the count again."""
     cache.delete(_confirm_keys(user_id)[0])
+
+
+# --- the device key sign-in lock (ADR 0018) ---------------------------------------------------
+
+
+def _device_keys(device_id: uuid.UUID, client_ip: str) -> tuple[str, str, str, str]:
+    """The failure counters and the locks of one device and of one client address."""
+    device, address = _digest(str(device_id)), _digest(client_ip)
+    return (
+        f"devicekey:fails:{device}",
+        f"devicekey:lock:{device}",
+        f"devicekey:addrfails:{address}",
+        f"devicekey:addrlock:{address}",
+    )
+
+
+@fail_closed
+def check_device_sign_in_lock(
+    device_id: uuid.UUID, client_ip: str, now: datetime | None = None
+) -> None:
+    """Raise ``sign_in_locked`` (429) while this device or this client address is locked out of key sign-in.
+
+    These counters are their own: failing here never locks the password sign-in, and a locked password
+    sign-in does not stop a phone that holds a good key.
+    """
+    now = now or timezone.now()
+    _, device_lock, _, address_lock = _device_keys(device_id, client_ip)
+    _raise_if_locked((device_lock, address_lock), now)
+
+
+@fail_closed
+def record_device_sign_in_failure(
+    device_id: uuid.UUID, client_ip: str, now: datetime | None = None
+) -> None:
+    """Count a failed key sign-in, and raise 429 if that failure locks the device or the address.
+
+    The device is the brake against guessing one phone's key (which cannot be guessed: it is a signature),
+    and the address is the brake against a client that sends many devices to find one that exists.
+    """
+    now = now or timezone.now()
+    window = settings.SIGN_IN_LOCK_SECONDS
+    device_fails, device_lock, address_fails, address_lock = _device_keys(
+        device_id, client_ip
+    )
+    locked = False
+    if _increment(device_fails, window) >= settings.DEVICE_KEY_SIGN_IN_MAX_FAILURES:
+        cache.set(device_lock, now.timestamp() + window, timeout=window)
+        cache.delete(device_fails)
+        locked = True
+    if _increment(address_fails, window) >= settings.DEVICE_KEY_ADDRESS_MAX_FAILURES:
+        cache.set(address_lock, now.timestamp() + window, timeout=window)
+        cache.delete(address_fails)
+        locked = True
+    if locked:
+        logger.warning("A device key sign-in was locked after repeated failures.")
+        _raise_if_locked((device_lock, address_lock), now)
+
+
+@fail_closed
+def clear_device_sign_in_failures(device_id: uuid.UUID) -> None:
+    """A success starts the count of this device afresh; the address count runs out by itself."""
+    cache.delete(f"devicekey:fails:{_digest(str(device_id))}")

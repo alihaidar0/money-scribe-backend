@@ -74,3 +74,15 @@ class EmailChangeConfirmThrottle(ClientRateThrottle):
 
 class AccountDeleteThrottle(ClientRateThrottle):
     scope = "account_delete"
+
+
+class DeviceKeyChallengeThrottle(ClientRateThrottle):
+    scope = "device_key_challenge"
+
+
+class DeviceKeyRegisterThrottle(ClientRateThrottle):
+    scope = "device_key_register"
+
+
+class DeviceKeySignInThrottle(ClientRateThrottle):
+    scope = "device_key_sign_in"

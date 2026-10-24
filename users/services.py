@@ -38,6 +38,7 @@ from config.exceptions import (
 
 from . import challenge, emails, limits, tokens
 from .models import (
+    DeviceKey,
     EmailCode,
     EmailCodePurpose,
     EndReason,
@@ -107,7 +108,7 @@ class SignedIn:
     tokens: TokenPair
 
 
-def _failure(code: ErrorCode, detail: str) -> AuthenticationFailed:
+def auth_failure(code: ErrorCode, detail: str) -> AuthenticationFailed:
     return AuthenticationFailed(detail=detail, code=code.value)
 
 
@@ -349,8 +350,8 @@ def verify_email(
 
     def accept(user: User, record: EmailCode) -> SignedIn:
         user.email_verified_at = now
-        _remember_client(user, language, time_zone)
-        return _start_session(user, device, client, now)
+        remember_client(user, language, time_zone)
+        return start_session(user, device, client, now)
 
     return _redeem_code(
         user=user,
@@ -365,7 +366,7 @@ def verify_email(
 # --- sessions and tokens ----------------------------------------------------------------------
 
 
-def _remember_client(user: User, language: str | None, time_zone: str | None) -> None:
+def remember_client(user: User, language: str | None, time_zone: str | None) -> None:
     """The device the user signs in on decides the language and zone (docs/api-fields.md)."""
     if language:
         user.language = Language(language)
@@ -373,7 +374,7 @@ def _remember_client(user: User, language: str | None, time_zone: str | None) ->
         user.time_zone = time_zone
 
 
-def _start_session(
+def start_session(
     user: User, device: DeviceInfo, client: ClientInfo, now: datetime
 ) -> SignedIn:
     session = Session(
@@ -465,7 +466,9 @@ def sign_in(
     password_is_right = candidate.check_password(password)
     if not candidate.is_active:
         limits.record_sign_in_failure(email, client_ip, now)
-        raise _failure(ErrorCode.INVALID_CREDENTIALS, "The email or password is wrong.")
+        raise auth_failure(
+            ErrorCode.INVALID_CREDENTIALS, "The email or password is wrong."
+        )
     if not password_is_right:
         limits.record_sign_in_failure(email, client_ip, now)
         raise FieldAuthenticationFailed(
@@ -478,9 +481,9 @@ def sign_in(
             code=ErrorCode.EMAIL_NOT_VERIFIED.value,
         )
     limits.clear_sign_in_failures(email, client_ip)
-    _remember_client(user, language, time_zone)
+    remember_client(user, language, time_zone)
     with transaction.atomic():
-        return _start_session(user, device, client, now)
+        return start_session(user, device, client, now)
 
 
 def end_session(
@@ -515,9 +518,11 @@ def refresh(*, refresh_token: str, device: DeviceInfo, client: ClientInfo) -> To
         claims = tokens.decode_refresh_token(refresh_token, now)
     except tokens.TokenExpired:
         _end_expired_session(refresh_token, now)
-        raise _failure(ErrorCode.SESSION_EXPIRED, "The session has expired.") from None
+        raise auth_failure(
+            ErrorCode.SESSION_EXPIRED, "The session has expired."
+        ) from None
     except tokens.TokenInvalid:
-        raise _failure(ErrorCode.TOKEN_INVALID, "The token is not valid.") from None
+        raise auth_failure(ErrorCode.TOKEN_INVALID, "The token is not valid.") from None
 
     failure: ErrorCode | None = None
     successor = ""
@@ -545,7 +550,7 @@ def refresh(*, refresh_token: str, device: DeviceInfo, client: ClientInfo) -> To
                 session.save()
 
     if failure is not None or session is None:
-        raise _failure(
+        raise auth_failure(
             failure or ErrorCode.TOKEN_INVALID, "The session cannot be refreshed."
         )
     return TokenPair(
@@ -604,21 +609,21 @@ def authenticate_access_token(
     try:
         claims = tokens.decode_access_token(token, now)
     except tokens.TokenExpired:
-        raise _failure(
+        raise auth_failure(
             ErrorCode.TOKEN_EXPIRED, "The access token has expired."
         ) from None
     except tokens.TokenInvalid:
-        raise _failure(ErrorCode.TOKEN_INVALID, "The token is not valid.") from None
+        raise auth_failure(ErrorCode.TOKEN_INVALID, "The token is not valid.") from None
     session = (
         Session.objects.select_related("user")
         .filter(pk=claims.session_id, user_id=claims.user_id)
         .first()
     )
     if session is None:
-        raise _failure(ErrorCode.TOKEN_INVALID, "The token is not valid.")
+        raise auth_failure(ErrorCode.TOKEN_INVALID, "The token is not valid.")
     failure = _usable_or_code(session, now)
     if failure is not None:
-        raise _failure(failure, "The session is no longer valid.")
+        raise auth_failure(failure, "The session is no longer valid.")
     _touch(session, now, client_ip)
     return session.user, session
 
@@ -639,7 +644,7 @@ def sign_out_with_refresh_token(refresh_token: str) -> None:
     try:
         claims = tokens.decode_refresh_token(refresh_token, now, allow_expired=True)
     except tokens.TokenError:
-        raise _failure(ErrorCode.TOKEN_INVALID, "The token is not valid.") from None
+        raise auth_failure(ErrorCode.TOKEN_INVALID, "The token is not valid.") from None
     Session.objects.filter(
         pk=claims.session_id, user_id=claims.user_id, ended_at__isnull=True
     ).update(ended_at=now, end_reason=EndReason.SIGNED_OUT)
@@ -709,7 +714,7 @@ def verify_password_reset(*, email: str, code: str) -> ResetToken:
     )
 
 
-def _field_error(field: str, code: ErrorCode, detail: str) -> ValidationError:
+def field_error(field: str, code: ErrorCode, detail: str) -> ValidationError:
     return ValidationError({field: [ErrorDetail(detail, code=code.value)]})
 
 
@@ -743,7 +748,7 @@ def reset_password(*, reset_token: str, password: str) -> None:
             or not record.user.is_active
             or record.user.email_verified_at is None
         ):
-            raise _field_error(
+            raise field_error(
                 "reset_token",
                 ErrorCode.RESET_TOKEN_INVALID,
                 "The reset token is not valid. Ask for a new code.",
@@ -756,7 +761,18 @@ def reset_password(*, reset_token: str, password: str) -> None:
         user.save(update_fields=["password"])
         _end_sessions(user, now)
         _forget_password_secrets(user)
+        forget_device_keys(user)
     emails.send_password_changed_notice(email=user.email, language=user.language)
+
+
+def forget_device_keys(user: User) -> None:
+    """Delete every device key of the user (ADR 0018).
+
+    A password change or reset and an email change are the person's answer to "my account may be
+    compromised", so a phone that could sign in without the password loses that power with them.
+    Ending a session never does this: signing out must leave the key, which is the point of it.
+    """
+    DeviceKey.objects.filter(user=user).delete()
 
 
 def _end_sessions(user: User, now: datetime, keep: Session | None = None) -> None:
@@ -767,7 +783,7 @@ def _end_sessions(user: User, now: datetime, keep: Session | None = None) -> Non
     live.update(ended_at=now, end_reason=EndReason.PASSWORD_CHANGED)
 
 
-def _confirm_password(user: User, password: str, field: str) -> None:
+def confirm_password(user: User, password: str, field: str) -> None:
     """Ask for the current password again (change password, delete account), with a lock on wrong answers.
 
     The count is per account and does not depend on the client address, so a stolen access token cannot
@@ -777,7 +793,7 @@ def _confirm_password(user: User, password: str, field: str) -> None:
     limits.check_password_lock(user.id)
     if not user.check_password(password):
         limits.record_password_failure(user.id)
-        raise _field_error(
+        raise field_error(
             field, ErrorCode.INVALID_PASSWORD, "The password is not correct."
         )
     limits.clear_password_failures(user.id)
@@ -793,9 +809,9 @@ def change_password(
     rules. Every other session ends; this one continues with a new token pair, so the old refresh token
     is retired. The owner gets an email, so a change by a stranger is noticed.
     """
-    _confirm_password(user, current_password, "current_password")
+    confirm_password(user, current_password, "current_password")
     if hmac.compare_digest(password.encode(), current_password.encode()):
-        raise _field_error(
+        raise field_error(
             "password",
             ErrorCode.PASSWORD_UNCHANGED,
             "The new password must be different from the current one.",
@@ -813,14 +829,15 @@ def change_password(
             .first()
         )
         if current is None:
-            raise _failure(ErrorCode.TOKEN_INVALID, "The token is not valid.")
+            raise auth_failure(ErrorCode.TOKEN_INVALID, "The token is not valid.")
         failure = _usable_or_code(current, now)
         if failure is not None:
-            raise _failure(failure, "The session is no longer valid.")
+            raise auth_failure(failure, "The session is no longer valid.")
         locked.set_password(password)
         locked.save(update_fields=["password"])
         _end_sessions(locked, now, keep=current)
         _forget_password_secrets(locked)
+        forget_device_keys(locked)
         refresh_token = _advance_refresh_token(current, now)
         current.save()
     emails.send_password_changed_notice(email=user.email, language=user.language)
@@ -839,7 +856,7 @@ def delete_account(*, user: User, password: str) -> None:
     kept: there is no soft delete and no anonymised copy. The address is used once more, for the
     confirmation email, and then forgotten.
     """
-    _confirm_password(user, password, "password")
+    confirm_password(user, password, "password")
     email, language = user.email, user.language
     with transaction.atomic():
         User.objects.filter(pk=user.pk).delete()
@@ -867,10 +884,10 @@ def request_email_change(*, user: User, email: str, current_password: str) -> Co
     replaces the earlier pending change.
     """
     new_email = normalize_email(email)
-    _confirm_password(user, current_password, "current_password")
+    confirm_password(user, current_password, "current_password")
     limits.reserve_email_change(user.id)
     if new_email == user.email:
-        raise _field_error(
+        raise field_error(
             "email",
             ErrorCode.EMAIL_UNCHANGED,
             "This is already the email of the account.",
@@ -917,6 +934,7 @@ def confirm_email_change(*, user: User, session: Session, code: str) -> User:
             ended_at=now, end_reason=EndReason.EMAIL_CHANGED
         )
         _forget_password_secrets(user)
+        forget_device_keys(user)
         return user
 
     # A dead code is replaced by asking again, which the new address's send budget paces.

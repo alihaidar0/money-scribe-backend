@@ -1,3 +1,5 @@
+import base64
+import binascii
 from typing import Any
 from zoneinfo import available_timezones
 
@@ -5,7 +7,7 @@ from django.conf import settings
 from rest_framework import serializers
 from rest_framework.exceptions import ErrorDetail
 
-from .models import Language, Platform, User
+from .models import DeviceKey, Language, Platform, User
 from .validators import normalize_password, password_errors
 
 # Computed once: the list of IANA names does not change while the process runs.
@@ -258,3 +260,115 @@ class ProfileSerializer(serializers.ModelSerializer):  # type: ignore[misc]
         model = User
         fields = ("id", "name", "email", "language", "time_zone")
         read_only_fields = fields
+
+
+# --- sign-in with a device key (ADR 0018) -------------------------------------------------------
+
+
+class Base64Field(serializers.CharField):  # type: ignore[misc]
+    """Standard base64 with padding, decoded strictly to bytes (no whitespace, no URL alphabet)."""
+
+    def to_internal_value(self, data: Any) -> bytes:
+        text = super().to_internal_value(data)
+        try:
+            raw = base64.b64decode(text, validate=True)
+        except binascii.Error, ValueError:
+            raise serializers.ValidationError(
+                "Not valid base64.", code="invalid"
+            ) from None
+        if not raw:
+            raise serializers.ValidationError("Empty.", code="blank")
+        return raw
+
+
+class DeviceKeyChallengeSerializer(serializers.Serializer):  # type: ignore[misc]
+    device_id = serializers.UUIDField(
+        help_text="The `device_id` of the app install (the same random id as in the `device` object)."
+    )
+
+
+class DeviceKeyRegisterSerializer(serializers.Serializer):  # type: ignore[misc]
+    current_password = PasswordField(
+        max_length=1024, help_text="The password in use now."
+    )
+    public_key = Base64Field(
+        max_length=256,
+        help_text="The public key of the device: P-256, SPKI DER in standard base64 with padding.",
+    )
+    algorithm = serializers.ChoiceField(
+        choices=["ES256"], help_text="Only `ES256` (ECDSA on P-256 with SHA-256)."
+    )
+    challenge_id = serializers.UUIDField(
+        help_text="The `challenge_id` of `auth_device_key_challenge`."
+    )
+    signature = Base64Field(
+        max_length=256,
+        help_text="The DER signature, in standard base64 with padding, of the registration text.",
+    )
+    attestation_chain = serializers.ListField(
+        child=serializers.CharField(max_length=8192),
+        required=False,
+        allow_null=True,
+        max_length=10,
+        help_text=(
+            "Android only: the certificate chain of the key attestation, leaf first, each certificate "
+            "DER in standard base64. Required for an Android session; `null` or left out on iOS."
+        ),
+    )
+
+
+class DeviceKeySignInSerializer(ClientSettingsMixin):
+    challenge_id = serializers.UUIDField(
+        help_text="The `challenge_id` of `auth_device_key_challenge`."
+    )
+    signature = Base64Field(
+        max_length=256,
+        help_text="The DER signature, in standard base64 with padding, of the sign-in text.",
+    )
+    device = DeviceSerializer()
+
+
+class DeviceKeyChallengeResponseSerializer(serializers.Serializer):  # type: ignore[misc]
+    challenge_id = serializers.UUIDField()
+    challenge = serializers.CharField(
+        help_text="32 random bytes in base64url without padding. Sign it exactly as sent."
+    )
+    expires_in = serializers.IntegerField(
+        help_text="Seconds the challenge lives (120). It works once."
+    )
+
+
+class DeviceKeySerializer(serializers.ModelSerializer):  # type: ignore[misc]
+    is_current = serializers.SerializerMethodField(
+        help_text="Whether this is the key of the device that made the request."
+    )
+
+    class Meta:
+        model = DeviceKey
+        fields = (
+            "id",
+            "device_id",
+            "device_name",
+            "platform",
+            "attested",
+            "is_current",
+            "created_at",
+            "last_used_at",
+            "expires_at",
+        )
+        read_only_fields = fields
+
+    def get_is_current(self, obj: DeviceKey) -> bool:
+        return str(obj.device_id) == str(self.context.get("device_id", ""))
+
+
+class DeviceKeyListSerializer(serializers.Serializer):  # type: ignore[misc]
+    """The envelope of every list (ADR 0003). This list holds at most five keys, so it is one page."""
+
+    next = serializers.CharField(
+        allow_null=True, help_text="Always `null`: the list fits one page."
+    )
+    previous = serializers.CharField(
+        allow_null=True, help_text="Always `null`: the list fits one page."
+    )
+    results = DeviceKeySerializer(many=True)

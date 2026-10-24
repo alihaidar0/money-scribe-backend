@@ -39,4 +39,29 @@ urlpatterns = [
     path(
         "account/delete/", views.DeleteAccountView.as_view(), name="auth-account-delete"
     ),
+    path(
+        "device-keys/",
+        views.DeviceKeyListView.as_view(),
+        name="auth-device-key-list",
+    ),
+    path(
+        "device-keys/challenge/",
+        views.DeviceKeyChallengeView.as_view(),
+        name="auth-device-key-challenge",
+    ),
+    path(
+        "device-keys/sign-in/",
+        views.DeviceKeySignInView.as_view(),
+        name="auth-device-key-sign-in",
+    ),
+    path(
+        "device-keys/current/",
+        views.DeviceKeyCurrentView.as_view(),
+        name="auth-device-key-current",
+    ),
+    path(
+        "device-keys/<uuid:device_id>/",
+        views.DeviceKeyDetailView.as_view(),
+        name="auth-device-key-detail",
+    ),
 ]

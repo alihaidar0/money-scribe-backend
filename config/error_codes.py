@@ -27,6 +27,14 @@ class ErrorCode(StrEnum):
     SIGN_IN_LOCKED = "sign_in_locked"
     THROTTLED = "throttled"
 
+    # Sign-in with a device key (ADR 0018)
+    DEVICE_SIGN_IN_FAILED = "device_sign_in_failed"
+    CHALLENGE_INVALID = "challenge_invalid"
+    PUBLIC_KEY_INVALID = "public_key_invalid"
+    ATTESTATION_INVALID = "attestation_invalid"
+    PLATFORM_NOT_SUPPORTED = "platform_not_supported"
+    DEVICE_KEY_LIMIT_REACHED = "device_key_limit_reached"
+
     # Email codes and account changes
     CODE_INVALID = "code_invalid"
     CODE_EXPIRED = "code_expired"

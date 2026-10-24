@@ -136,8 +136,9 @@ token** that rotates.
 - Sign-in answers `429` with `Retry-After` while the account or the client address is locked, even for the right password. A browser reads
   `Retry-After` because the API exposes it (`Access-Control-Expose-Headers`).
 - If the limit store is down, register, resend, verify, sign-in, the three password reset calls, the password change, the
-  account deletion and the start and confirmation of an email change answer `503` with the code `service_unavailable`, the body `type` `server_error` and
-  `Retry-After`; the schema declares the `503` on those eleven operations only; everything that needs no limit (a refresh, sign-out, the profile, any other call with an access token) keeps working.
+  account deletion, the start and confirmation of an email change, and the challenge, the registration and the
+  sign-in of a device key answer `503` with the code `service_unavailable`, the body `type` `server_error` and
+  `Retry-After`; the schema declares the `503` on those fourteen operations only; everything that needs no limit (a refresh, sign-out, the profile, any other call with an access token) keeps working.
 - Password reset is three public calls (`/auth/password-reset/request/`, `verify/`, `confirm/`): the code, then a single-use
   `reset_token`, then the new password, which ends all sessions and signs nobody in. Changing the password
   (`/auth/password/change/`) and deleting the account (`/auth/account/delete/`) need the bearer token **and** the current

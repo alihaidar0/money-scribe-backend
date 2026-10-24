@@ -193,6 +193,8 @@ openssl rand -hex 6                                            # ADMIN_URL
 | `WEB_CONCURRENCY` | `1` | Typed; the free instance has 512 MB |
 | `PWNED_PASSWORD_CHECK` | `True` | Typed |
 | `TURNSTILE_SECRET_KEY` | the widget's secret key | Password manager ([`sign-in-challenge.md`](sign-in-challenge.md)); without it sign-in has no bot challenge and `check --deploy` warns (`users.W001`) |
+| `DEVICE_KEY_ANDROID_PACKAGE` | the staging app's package name | Typed; the app's side sends it ([ADR 0018](adr/0018-sign-in-with-a-device-key.md)); without it no Android fingerprint key can be registered (`users.W002`) |
+| `DEVICE_KEY_ANDROID_CERT_SHA256` | the SHA-256 digests of the certificates that sign the staging app, comma separated | Typed; digests are public, but kept in the environment like the rest |
 
 Render masks the values of the keys it recognises as secrets (`SECRET_KEY`, `DATABASE_URL`, ...) and shows the others;
 the eye icon reveals a value. Check the masked ones by eye before deploying: `DATABASE_URL` starts with `postgresql://`,

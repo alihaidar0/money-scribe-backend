@@ -67,6 +67,318 @@ paths:
           description: A safety control (the rate-limit store) cannot run, so the
             request is refused before it changes anything; try again after `Retry-After`.
             The `code` is `service_unavailable`.
+  /api/v1/auth/device-keys/:
+    get:
+      operationId: auth_device_key_list
+      description: The person's own keys, newest first, with `is_current` on the one
+        of the calling device. A signed-out phone has no session but may still hold
+        a key, so the keys have their own list. An account with none is `200` with
+        an empty `results`. The list holds at most 5 keys, so it is one page in the
+        envelope of every list (`next` and `previous` are `null`); it moves onto the
+        cursor class without a change of shape.
+      summary: List the fingerprint sign-in keys
+      tags:
+      - auth
+      security:
+      - bearerAuth: []
+      responses:
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error400Response'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceKeyList'
+          description: ''
+  /api/v1/auth/device-keys/{device_id}/:
+    delete:
+      operationId: auth_device_key_remove
+      description: Deletes the person's key of that device, for example a lost phone's,
+        from another device. It answers `204` also when there is none, and for a `device_id`
+        that is not theirs it changes nothing and answers the same, so the call reveals
+        nothing about other accounts.
+      summary: Remove the fingerprint sign-in key of a device
+      parameters:
+      - in: path
+        name: device_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - auth
+      security:
+      - bearerAuth: []
+      responses:
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error400Response'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '204':
+          description: No response body
+  /api/v1/auth/device-keys/challenge/:
+    post:
+      operationId: auth_device_key_challenge
+      description: 'Step 1 of a fingerprint sign-in, and of registering a key. Answers
+        32 random bytes (`challenge`, base64url without padding) and their `challenge_id`;
+        the challenge lives 2 minutes and works once. The answer has the same shape
+        for every `device_id`, known or not, so it reveals nothing. Sign the text
+        of ADR 0018 that contains the challenge exactly as sent. Errors: `429` `throttled`
+        with `Retry-After`; `503` `service_unavailable` while the limit store is down,
+        with `Retry-After`.'
+      summary: Ask for a challenge to sign
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeviceKeyChallengeRequest'
+        required: true
+      responses:
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error400Response'
+          description: ''
+        '429':
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+              description: Whole seconds to wait before the request may be repeated;
+                at least 1.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceKeyChallengeResponse'
+          description: ''
+        '503':
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+              description: Whole seconds to wait before the request may be repeated;
+                at least 1.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServerErrorResponse'
+          description: A safety control (the rate-limit store) cannot run, so the
+            request is refused before it changes anything; try again after `Retry-After`.
+            The `code` is `service_unavailable`.
+  /api/v1/auth/device-keys/current/:
+    put:
+      operationId: auth_device_key_register
+      description: 'Step 2 of 2 (after `auth_device_key_challenge`). Registers the
+        public key of the calling session''s device, or replaces the one it had, also
+        when another account held it. Needs the current password. The signature proves
+        the phone holds the private key: it signs `money-scribe/device-key-registration/v1`,
+        the `challenge_id`, the challenge, the `device_id` and the account id, joined
+        by newlines. An Android key also needs its attestation chain, whose challenge
+        is the 32 raw bytes of the challenge. The owner is emailed. `201` for a new
+        key, `200` for a replaced one. Errors: `400` `invalid_password` (`attr` `current_password`),
+        `challenge_invalid` (`attr` `challenge_id`: unknown, used or expired, asked
+        for another device, or a wrong proof), `public_key_invalid` (`attr` `public_key`),
+        `attestation_invalid` (`attr` `attestation_chain`; no reason is given) or
+        `platform_not_supported` (a `web` session); `409` `device_key_limit_reached`
+        (the account has 5 keys); `429` `password_attempts_exceeded` (the lock shared
+        with the password change) or `throttled`, each with `Retry-After`; `503` `service_unavailable`
+        while the limit store is down, or when Google''s revocation list cannot be
+        reached, with `Retry-After`.'
+      summary: Register the fingerprint sign-in key of this device
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeviceKeyRegisterRequest'
+        required: true
+      security:
+      - bearerAuth: []
+      responses:
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error400Response'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '429':
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+              description: Whole seconds to wait before the request may be repeated;
+                at least 1.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceKey'
+          description: ''
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceKey'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request conflicts with the current state; the `code` says
+            what conflicts.
+        '503':
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+              description: Whole seconds to wait before the request may be repeated;
+                at least 1.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServerErrorResponse'
+          description: A safety control (the rate-limit store) cannot run, so the
+            request is refused before it changes anything; try again after `Retry-After`.
+            The `code` is `service_unavailable`.
+    delete:
+      operationId: auth_device_key_remove_current
+      description: Deletes the key of the calling session's device. It answers `204`
+        also when there is none.
+      summary: Turn off fingerprint sign-in on this device
+      tags:
+      - auth
+      security:
+      - bearerAuth: []
+      responses:
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error400Response'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '204':
+          description: No response body
+  /api/v1/auth/device-keys/sign-in/:
+    post:
+      operationId: auth_device_key_sign_in
+      description: 'Starts a session from a signature made with the hardware key of
+        this device, with no password and no email: the key identifies the account.
+        The signed text is `money-scribe/device-sign-in/v1`, the `challenge_id`, the
+        challenge exactly as sent and the `device_id`, joined by newlines. The answer
+        is the one of `auth_sign_in`. Errors: every failure is one `401` `device_sign_in_failed`
+        (unknown device, a challenge that is unknown, used, expired or asked for another
+        device, a bad signature, an expired key, an inactive account), so the app
+        shows the password form; `429` `sign_in_locked` after 5 failures from the
+        device or 20 from the client address in 15 minutes (its own lock, apart from
+        the password one) or `throttled`, each with `Retry-After`; `503` `service_unavailable`
+        while the limit store is down, with `Retry-After`.'
+      summary: Sign in with the device key
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeviceKeySignInRequest'
+        required: true
+      responses:
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error400Response'
+          description: ''
+        '429':
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+              description: Whole seconds to wait before the request may be repeated;
+                at least 1.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SignedInResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Not authenticated, or the credentials, token or session are
+            not valid; the `code` says which.
+        '503':
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+              description: Whole seconds to wait before the request may be repeated;
+                at least 1.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServerErrorResponse'
+          description: A safety control (the rate-limit store) cannot run, so the
+            request is refused before it changes anything; try again after `Retry-After`.
+            The `code` is `service_unavailable`.
   /api/v1/auth/email-change/:
     post:
       operationId: auth_email_change_request
@@ -889,6 +1201,11 @@ paths:
             The `code` is `service_unavailable`.
 components:
   schemas:
+    AlgorithmEnum:
+      enum:
+      - ES256
+      type: string
+      description: '* `ES256` - ES256'
     ChangePasswordRequest:
       type: object
       properties:
@@ -935,6 +1252,186 @@ components:
           maxLength: 1024
       required:
       - password
+    DeviceKey:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        device_id:
+          type: string
+          format: uuid
+          readOnly: true
+        device_name:
+          type: string
+          readOnly: true
+        platform:
+          allOf:
+          - $ref: '#/components/schemas/PlatformEnum'
+          readOnly: true
+        attested:
+          type: boolean
+          readOnly: true
+        is_current:
+          type: boolean
+          readOnly: true
+          description: Whether this is the key of the device that made the request.
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        last_used_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        expires_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - attested
+      - created_at
+      - device_id
+      - device_name
+      - expires_at
+      - id
+      - is_current
+      - last_used_at
+      - platform
+    DeviceKeyChallengeRequest:
+      type: object
+      properties:
+        device_id:
+          type: string
+          format: uuid
+          description: The `device_id` of the app install (the same random id as in
+            the `device` object).
+      required:
+      - device_id
+    DeviceKeyChallengeResponse:
+      type: object
+      properties:
+        challenge_id:
+          type: string
+          format: uuid
+        challenge:
+          type: string
+          description: 32 random bytes in base64url without padding. Sign it exactly
+            as sent.
+        expires_in:
+          type: integer
+          description: Seconds the challenge lives (120). It works once.
+      required:
+      - challenge
+      - challenge_id
+      - expires_in
+    DeviceKeyList:
+      type: object
+      description: The envelope of every list (ADR 0003). This list holds at most
+        five keys, so it is one page.
+      properties:
+        next:
+          type: string
+          nullable: true
+          description: 'Always `null`: the list fits one page.'
+        previous:
+          type: string
+          nullable: true
+          description: 'Always `null`: the list fits one page.'
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/DeviceKey'
+      required:
+      - next
+      - previous
+      - results
+    DeviceKeyRegisterRequest:
+      type: object
+      properties:
+        current_password:
+          type: string
+          writeOnly: true
+          minLength: 1
+          description: The password in use now.
+          maxLength: 1024
+        public_key:
+          type: string
+          minLength: 1
+          description: 'The public key of the device: P-256, SPKI DER in standard
+            base64 with padding.'
+          maxLength: 256
+        algorithm:
+          allOf:
+          - $ref: '#/components/schemas/AlgorithmEnum'
+          description: |-
+            Only `ES256` (ECDSA on P-256 with SHA-256).
+
+            * `ES256` - ES256
+        challenge_id:
+          type: string
+          format: uuid
+          description: The `challenge_id` of `auth_device_key_challenge`.
+        signature:
+          type: string
+          minLength: 1
+          description: The DER signature, in standard base64 with padding, of the
+            registration text.
+          maxLength: 256
+        attestation_chain:
+          type: array
+          items:
+            type: string
+            minLength: 1
+            maxLength: 8192
+          nullable: true
+          description: 'Android only: the certificate chain of the key attestation,
+            leaf first, each certificate DER in standard base64. Required for an Android
+            session; `null` or left out on iOS.'
+          maxItems: 10
+      required:
+      - algorithm
+      - challenge_id
+      - current_password
+      - public_key
+      - signature
+    DeviceKeySignInRequest:
+      type: object
+      description: '``language`` and ``time_zone``: the device the user signs in on
+        decides them.'
+      properties:
+        language:
+          allOf:
+          - $ref: '#/components/schemas/LanguageEnum'
+          description: |-
+            `en` or `ar`; the app sends `en` when the device language is neither.
+
+            * `en` - English
+            * `ar` - Arabic
+        time_zone:
+          type: string
+          minLength: 1
+          description: An IANA name such as `Europe/Moscow`. Leave it out when the
+            device cannot read it.
+          maxLength: 64
+        challenge_id:
+          type: string
+          format: uuid
+          description: The `challenge_id` of `auth_device_key_challenge`.
+        signature:
+          type: string
+          minLength: 1
+          description: The DER signature, in standard base64 with padding, of the
+            sign-in text.
+          maxLength: 256
+        device:
+          $ref: '#/components/schemas/DeviceRequest'
+      required:
+      - challenge_id
+      - device
+      - signature
     DeviceRequest:
       type: object
       description: The label of the device, for the user's own "active sessions" screen
@@ -1043,7 +1540,9 @@ components:
             `captcha_required`, `captcha_invalid`, `token_expired`, `token_invalid`,
             `session_signed_out`, `session_revoked_by_user`, `session_password_changed`,
             `session_email_changed`, `session_token_reuse`, `session_expired`, `email_not_verified`,
-            `sign_in_locked`, `throttled`, `code_invalid`, `code_expired`, `code_attempts_exceeded`,
+            `sign_in_locked`, `throttled`, `device_sign_in_failed`, `challenge_invalid`,
+            `public_key_invalid`, `attestation_invalid`, `platform_not_supported`,
+            `device_key_limit_reached`, `code_invalid`, `code_expired`, `code_attempts_exceeded`,
             `resend_too_soon`, `resend_limit_reached`, `email_already_registered`,
             `email_unchanged`, `invalid_password`, `password_too_short`, `password_too_long`,
             `password_too_similar`, `password_compromised`, `password_too_common`,
