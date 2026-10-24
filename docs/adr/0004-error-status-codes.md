@@ -29,7 +29,7 @@ conflict says so with the shared response, `@extend_schema(responses={..., 409: 
 | 412 | an `If-Match` version no longer matches the stored record ([ADR 0016](0016-safe-writes.md)) | declared per operation, like `409`; nothing changed |
 | 422 | an `Idempotency-Key` reused for a different request ([ADR 0016](0016-safe-writes.md)) | declared per operation, like `409` |
 | 429 | rate limit, sign-in lock or a cooldown | always sends `Retry-After` with the remaining whole seconds (RFC 9110) |
-| 503 | a safety control cannot run | sent with `Retry-After`, only by the calls that depend on a limit; those eleven operations declare it (`config.api_errors.SERVICE_UNAVAILABLE_RESPONSE`), with `type` `server_error` |
+| 503 | a safety control cannot run | sent with `Retry-After`, only by the calls that depend on a limit; those fourteen operations declare it (`config.api_errors.SERVICE_UNAVAILABLE_RESPONSE`), with `type` `server_error` |
 
 Rules:
 
@@ -85,6 +85,12 @@ Initial registry:
 | `account_has_transactions` | 409 | deleting an account that still has transactions |
 | `category_has_transactions` | 409 | reserved, no longer sent: deleting a category moves its transactions to Other ([ADR 0017](0017-deleting-a-category-moves-its-transactions.md)) |
 | `category_is_builtin` | 403 | changing or deleting a built-in category |
+| `device_sign_in_failed` | 401 | the one answer to any failure of sign-in with a device key, [ADR 0018](0018-sign-in-with-a-device-key.md) |
+| `challenge_invalid` | 400 | a device-key challenge is unknown, used or expired, or the proof of possession is wrong (`attr`: `challenge_id`) |
+| `public_key_invalid` | 400 | the device public key is not a valid P-256 key (`attr`: `public_key`) |
+| `attestation_invalid` | 400 | the Android key attestation failed a check; no reason is given (`attr`: `attestation_chain`) |
+| `platform_not_supported` | 400 | the feature is not available on this platform, such as a device key from a `web` session |
+| `device_key_limit_reached` | 409 | the account already has 5 device keys |
 
 **Decided, not yet implemented.** These codes are fixed by the records named here and are not in the table above, because a test keeps that table and `config.error_codes.ErrorCode` identical. Each joins the table and the enum in the pull request that implements its endpoint ([ADR 0016](0016-safe-writes.md), [ADR 0007](0007-salary-calculation-on-the-server.md), [ADR 0018](0018-sign-in-with-a-device-key.md)):
 
@@ -95,12 +101,6 @@ Initial registry:
 - `fixed_item_limit_reached` (409): a salary month already has 100 fixed items
 - `month_has_fixed_items` (409): changing the currency of a salary month that still has fixed items ([ADR 0007](0007-salary-calculation-on-the-server.md))
 - `precondition_failed` (412): the `If-Match` version is not the stored one, or `If-None-Match: *` found the record; reload it
-- `device_sign_in_failed` (401): the one answer to any failure of sign-in with a device key, [ADR 0018](0018-sign-in-with-a-device-key.md)
-- `challenge_invalid` (400): a device-key challenge is unknown, used or expired, or the proof of possession is wrong (`attr`: `challenge_id`)
-- `public_key_invalid` (400): the device public key is not a valid P-256 key (`attr`: `public_key`)
-- `attestation_invalid` (400): the Android key attestation failed a check; no reason is given (`attr`: `attestation_chain`)
-- `platform_not_supported` (400): the feature is not available on this platform, such as a device key from a `web` session
-- `device_key_limit_reached` (409): the account already has 5 device keys
 
 **Extra members.** An error item is `{code, detail, attr}`. Three optional integer members exist, each sent with one code
 only and documented in the shared error schema: `attempts_left` on `code_invalid` (the wrong tries the 6-digit code still

@@ -344,5 +344,6 @@ once the operations exist.
 | `attestation_chain` | the Android certificate chain, a list of base64 DER certificates; required for an Android session, `null` or left out on iOS |
 | `current_password` | the account password; a wrong one is `400 invalid_password` and shares the lock of the password change |
 
-Up to 5 keys per account, one per `device_id`, valid 30 days from the last use. The privacy sentence is the row of
+Up to 5 keys per account, one per `device_id`, valid 30 days from the last use. The list of keys holds at most 5, so
+it is one page in the envelope of every list (`next` and `previous` are `null`). The privacy sentence is the row of
 ADR 0009's table.

@@ -28,10 +28,14 @@ ordinary one (ADR 0006, ADR 0009).
 | `POST challenge/` with `device_id` | none | `200` `{challenge_id, challenge, expires_in}`; the same shape for any `device_id` |
 | `PUT current/` with `current_password`, `public_key`, `algorithm`, `challenge_id`, `signature`, `attestation_chain` | bearer | `201` or `200` with the key entry; the device is the session's own `device_id` |
 | `POST sign-in/` with `challenge_id`, `signature`, `device`, `language`, `time_zone` | none | the token pair and body of `sign-in` |
-| `GET /` | bearer | the person's keys, cursor pagination, `-created_at`, `-id` |
+| `GET /` | bearer | the person's keys, `-created_at`, `-id`, in the envelope of every list (`next`, `previous`, `results`) |
 | `DELETE {device_id}/` (`current` is this session's device) | bearer | `204`, also when nothing is there; another user's `device_id` is also `204` and changes nothing |
 
-A key entry: `device_id`, `device_name`, `platform`, `attested`, `is_current`, `created_at`, `last_used_at`, `expires_at`.
+A key entry: `id`, `device_id`, `device_name`, `platform`, `attested`, `is_current`, `created_at`, `last_used_at`,
+`expires_at`. The list holds at most 5 entries, so it is always one page: `next` and `previous` are `null`, and the
+cursor class of ADR 0003 (step 8.4) replaces this one-page answer later without a change of shape. A `DELETE` of a
+`device_id` that is not the caller's answers `204` and changes nothing, so it is the one place that does not answer
+`404` for another user's object: it must not tell whether the device has a key.
 The keys have their own list, because a signed-out phone has no session but its key must stay visible and removable
 from another device. The `device_id` is the random install id of ADR 0009.
 
@@ -95,8 +99,10 @@ Configuration, per environment, never in the repository (`.env.example` lists th
   of allowed signing-certificate SHA-256 digests; production needs the upload key and, once the app is on Google Play, the Play
   app-signing key;
 - the trusted roots are a public PEM file in the repository, updated by pull request when Google rotates them;
-- Google's revocation list is fetched at registration and cached for an hour; if it cannot be fetched and nothing is
-  cached, registration answers `503 service_unavailable`;
+- Google's revocation list is fetched at registration and cached for an hour, after the chain itself has checked out;
+  if it cannot be fetched and nothing is cached, registration answers `503 service_unavailable`. Certificate validity
+  dates are not checked, because Google states that the attestation keys of devices launched before 2021 have expired
+  certificates and are still trustworthy unless revoked;
 - `DEVICE_KEY_REQUIRE_ATTESTATION` defaults to true. It may be false only in development and tests, so an emulator with a
   software key can be used there; a settings check refuses false when `APP_ENVIRONMENT` is staging or production,
   as for the outbox (ADR 0010).
@@ -144,8 +150,9 @@ New codes, added to ADR 0004: `device_sign_in_failed` (401), `challenge_invalid`
 ## Consequences
 
 - The `users` app gains a `DeviceKey` model (an owner, a unique `device_id`, the SPKI bytes, the algorithm, the platform,
-  the device name, `attested` and the timestamps) and a service module for the checks; the verification uses the
-  `cryptography` package that the token library already pulls in.
+  the device name, `attested` and the timestamps) and a service module for the checks. The verification uses the
+  `cryptography` package, which the project did not have and now lists as a production dependency; the attestation
+  extension is read with a small strict DER reader (`users/der.py`) rather than another dependency.
 - Moving to passkeys later is a new set of operations with their own record; `v1` keeps the old signatures valid until
   the keys are retired.
 - The Flutter developer sends the package name and the signing-certificate digests of each flavor; the owner sets them in

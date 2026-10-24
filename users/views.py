@@ -1,3 +1,4 @@
+import uuid
 from typing import Any, ClassVar
 
 from drf_spectacular.utils import extend_schema
@@ -19,13 +20,19 @@ from config.api_errors import (
 from config.authentication import PublicAuthentication
 from config.error_codes import ErrorCode
 
-from . import services
+from . import device_keys, services
 from .models import EndReason, Language, Session, User
 from .network import client_ip
 from .serializers import (
     ChangePasswordSerializer,
     CodeSentSerializer,
     DeleteAccountSerializer,
+    DeviceKeyChallengeResponseSerializer,
+    DeviceKeyChallengeSerializer,
+    DeviceKeyListSerializer,
+    DeviceKeyRegisterSerializer,
+    DeviceKeySerializer,
+    DeviceKeySignInSerializer,
     EmailChangeConfirmSerializer,
     EmailChangeRequestSerializer,
     EmailChangeResponseSerializer,
@@ -48,6 +55,9 @@ from .serializers import (
 )
 from .throttles import (
     AccountDeleteThrottle,
+    DeviceKeyChallengeThrottle,
+    DeviceKeyRegisterThrottle,
+    DeviceKeySignInThrottle,
     EmailChangeConfirmThrottle,
     EmailChangeRequestThrottle,
     PasswordChangeThrottle,
@@ -640,3 +650,200 @@ class EmailChangeConfirmView(APIView):  # type: ignore[misc]
             code=serializer.validated_data["code"],
         )
         return Response(ProfileSerializer(user).data)
+
+
+# --- sign-in with a device key (ADR 0018) -------------------------------------------------------
+
+
+class DeviceKeyChallengeView(PublicAuthView):
+    throttle_classes: ClassVar[list[Any]] = [DeviceKeyChallengeThrottle]
+
+    @extend_schema(
+        operation_id="auth_device_key_challenge",
+        tags=TAG,
+        auth=[],
+        summary="Ask for a challenge to sign",
+        description=(
+            "Step 1 of a fingerprint sign-in, and of registering a key. Answers 32 random bytes "
+            "(`challenge`, base64url without padding) and their `challenge_id`; the challenge lives 2 minutes "
+            "and works once. The answer has the same shape for every `device_id`, known or not, so it reveals "
+            "nothing. Sign the text of ADR 0018 that contains the challenge exactly as sent. Errors: `429` "
+            "`throttled` with `Retry-After`; `503` `service_unavailable` while the limit store is down, with "
+            "`Retry-After`."
+        ),
+        parameters=[RETRY_AFTER_HEADER],
+        request=DeviceKeyChallengeSerializer,
+        responses={
+            200: DeviceKeyChallengeResponseSerializer,
+            503: SERVICE_UNAVAILABLE_RESPONSE,
+        },
+    )
+    def post(self, request: Request) -> Response:
+        serializer = DeviceKeyChallengeSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        issued = device_keys.issue_challenge(serializer.validated_data["device_id"])
+        return _token_response(
+            {
+                "challenge_id": issued.challenge_id,
+                "challenge": issued.challenge,
+                "expires_in": issued.expires_in,
+            }
+        )
+
+
+class DeviceKeySignInView(PublicAuthView):
+    throttle_classes: ClassVar[list[Any]] = [DeviceKeySignInThrottle]
+
+    @extend_schema(
+        operation_id="auth_device_key_sign_in",
+        tags=TAG,
+        auth=[],
+        summary="Sign in with the device key",
+        description=(
+            "Starts a session from a signature made with the hardware key of this device, with no password and "
+            "no email: the key identifies the account. The signed text is `money-scribe/device-sign-in/v1`, "
+            "the `challenge_id`, the challenge exactly as sent and the `device_id`, joined by newlines. The "
+            "answer is the one of `auth_sign_in`. Errors: every failure is one `401` `device_sign_in_failed` "
+            "(unknown device, a challenge that is unknown, used, expired or asked for another device, a bad "
+            "signature, an expired key, an inactive account), so the app shows the password form; `429` "
+            "`sign_in_locked` after 5 failures from the device or 20 from the client address in 15 minutes "
+            "(its own lock, apart from the password one) or `throttled`, each with `Retry-After`; `503` "
+            "`service_unavailable` while the limit store is down, with `Retry-After`."
+        ),
+        parameters=[RETRY_AFTER_HEADER],
+        request=DeviceKeySignInSerializer,
+        responses={
+            200: SignedInResponseSerializer,
+            401: UNAUTHORIZED_RESPONSE,
+            503: SERVICE_UNAVAILABLE_RESPONSE,
+        },
+    )
+    def post(self, request: Request) -> Response:
+        serializer = DeviceKeySignInSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        signed_in = device_keys.sign_in(
+            challenge_id=data["challenge_id"],
+            signature=data["signature"],
+            device=_device(data),
+            client=_client(request),
+            language=data.get("language"),
+            time_zone=data.get("time_zone"),
+        )
+        return _token_response(_signed_in_body(signed_in))
+
+
+class DeviceKeyListView(APIView):  # type: ignore[misc]
+    @extend_schema(
+        operation_id="auth_device_key_list",
+        tags=TAG,
+        summary="List the fingerprint sign-in keys",
+        description=(
+            "The person's own keys, newest first, with `is_current` on the one of the calling device. A "
+            "signed-out phone has no session but may still hold a key, so the keys have their own list. An "
+            "account with none is `200` with an empty `results`. The list holds at most 5 keys, so it is "
+            "one page in the envelope of every list (`next` and `previous` are `null`); it moves onto the "
+            "cursor class without a change of shape."
+        ),
+        responses={200: DeviceKeyListSerializer},
+    )
+    def get(self, request: Request) -> Response:
+        session: Session = request.auth
+        keys = DeviceKeySerializer(
+            device_keys.keys_of(request.user),
+            many=True,
+            context={"device_id": session.device_id},
+        )
+        return Response({"next": None, "previous": None, "results": keys.data})
+
+
+class DeviceKeyCurrentView(APIView):  # type: ignore[misc]
+    def get_throttles(self) -> list[Any]:
+        # Removing a key touches no limit store, so it is not limited and can never answer a 503.
+        if self.request.method == "PUT":
+            return [DeviceKeyRegisterThrottle()]
+        return []
+
+    @extend_schema(
+        operation_id="auth_device_key_register",
+        tags=TAG,
+        summary="Register the fingerprint sign-in key of this device",
+        description=(
+            "Step 2 of 2 (after `auth_device_key_challenge`). Registers the public key of the calling session's "
+            "device, or replaces the one it had, also when another account held it. Needs the current "
+            "password. The signature proves the phone holds the private key: it signs "
+            "`money-scribe/device-key-registration/v1`, the `challenge_id`, the challenge, the `device_id` and "
+            "the account id, joined by newlines. An Android key also needs its attestation chain, whose "
+            "challenge is the 32 raw bytes of the challenge. The owner is emailed. `201` for a new key, `200` "
+            "for a replaced one. Errors: `400` `invalid_password` (`attr` `current_password`), "
+            "`challenge_invalid` (`attr` `challenge_id`: unknown, used or expired, asked for another device, or "
+            "a wrong proof), `public_key_invalid` (`attr` `public_key`), `attestation_invalid` (`attr` "
+            "`attestation_chain`; no reason is given) or `platform_not_supported` (a `web` session); `409` "
+            "`device_key_limit_reached` (the account has 5 keys); `429` `password_attempts_exceeded` (the lock "
+            "shared with the password change) or `throttled`, each with `Retry-After`; `503` "
+            "`service_unavailable` while the limit store is down, or when Google's revocation list cannot be "
+            "reached, with `Retry-After`."
+        ),
+        parameters=[RETRY_AFTER_HEADER],
+        request=DeviceKeyRegisterSerializer,
+        responses={
+            200: DeviceKeySerializer,
+            201: DeviceKeySerializer,
+            409: CONFLICT_RESPONSE,
+            503: SERVICE_UNAVAILABLE_RESPONSE,
+        },
+    )
+    def put(self, request: Request) -> Response:
+        serializer = DeviceKeyRegisterSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        session: Session = request.auth
+        registered = device_keys.register_key(
+            user=request.user,
+            session=session,
+            current_password=data["current_password"],
+            public_key=data["public_key"],
+            challenge_id=data["challenge_id"],
+            signature=data["signature"],
+            chain=data.get("attestation_chain"),
+        )
+        body = DeviceKeySerializer(
+            registered.key, context={"device_id": session.device_id}
+        ).data
+        return Response(
+            body,
+            status=status.HTTP_201_CREATED
+            if registered.created
+            else status.HTTP_200_OK,
+        )
+
+    @extend_schema(
+        operation_id="auth_device_key_remove_current",
+        tags=TAG,
+        summary="Turn off fingerprint sign-in on this device",
+        description=(
+            "Deletes the key of the calling session's device. It answers `204` also when there is none."
+        ),
+        responses={204: None},
+    )
+    def delete(self, request: Request) -> Response:
+        session: Session = request.auth
+        device_keys.remove_key(user=request.user, device_id=session.device_id)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class DeviceKeyDetailView(APIView):  # type: ignore[misc]
+    @extend_schema(
+        operation_id="auth_device_key_remove",
+        tags=TAG,
+        summary="Remove the fingerprint sign-in key of a device",
+        description=(
+            "Deletes the person's key of that device, for example a lost phone's, from another device. It "
+            "answers `204` also when there is none, and for a `device_id` that is not theirs it changes "
+            "nothing and answers the same, so the call reveals nothing about other accounts."
+        ),
+        responses={204: None},
+    )
+    def delete(self, request: Request, device_id: uuid.UUID) -> Response:
+        device_keys.remove_key(user=request.user, device_id=device_id)
+        return Response(status=status.HTTP_204_NO_CONTENT)

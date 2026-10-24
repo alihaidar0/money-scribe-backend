@@ -113,7 +113,7 @@ CONFLICT_RESPONSE = OpenApiResponse(
 )
 
 # The limited calls (register, resend-code, verify-email, sign-in, the password reset calls, the password
-# change and the account deletion) fail closed when the limit store is down (ADR 0006, 0014), so they
+# change, the account deletion, the email change and the three device key calls) fail closed when the limit store is down (ADR 0006, 0014), so they
 # declare it per operation. No other operation can answer a 503.
 #   @extend_schema(parameters=[RETRY_AFTER_HEADER], responses={..., 503: SERVICE_UNAVAILABLE_RESPONSE})
 SERVICE_UNAVAILABLE_RESPONSE = OpenApiResponse(

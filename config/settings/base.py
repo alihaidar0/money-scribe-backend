@@ -277,6 +277,34 @@ PASSWORD_CONFIRM_LOCK_SECONDS = 900
 # hour, whatever the addresses are, or it could be used to send mail to strangers.
 EMAIL_CHANGE_REQUESTS_PER_HOUR = 5
 
+# Sign-in with a device key pair (ADR 0018). A key expires this many days after its last use, an account holds
+# at most this many, and a challenge lives this many seconds. The sign-in limit is its own, apart from the
+# password one: this many failures from one device, or from one client address over all devices, lock it for
+# SIGN_IN_LOCK_SECONDS.
+DEVICE_KEY_LIFETIME_DAYS = 30
+DEVICE_KEY_MAX_PER_USER = 5
+DEVICE_KEY_CHALLENGE_LIFETIME_SECONDS = 120
+DEVICE_KEY_SIGN_IN_MAX_FAILURES = 5
+DEVICE_KEY_ADDRESS_MAX_FAILURES = 20
+# An Android key must come with a key attestation that passes every check of users/attestation.py. Only
+# development and tests may switch this off (an emulator has no hardware key); users.E002 refuses it elsewhere.
+DEVICE_KEY_REQUIRE_ATTESTATION = os.environ.get(
+    "DEVICE_KEY_REQUIRE_ATTESTATION", "True"
+).lower() in {"1", "true", "yes", "on"}
+# The package name and the SHA-256 digests (hex, comma separated) of the signing certificates the app of this
+# environment may carry. A list, because the production app is signed by the store's key as well as the upload key.
+# Public identifiers, but kept in the environment of each deployment, never in the repository.
+DEVICE_KEY_ANDROID_PACKAGE = os.environ.get("DEVICE_KEY_ANDROID_PACKAGE", "").strip()
+DEVICE_KEY_ANDROID_CERT_SHA256 = [
+    digest.strip().lower().replace(":", "")
+    for digest in os.environ.get("DEVICE_KEY_ANDROID_CERT_SHA256", "").split(",")
+    if digest.strip()
+]
+# Google's attestation roots (public certificates); the list of revoked attestation keys it publishes is cached.
+DEVICE_KEY_TRUSTED_ROOTS_PATH = BASE_DIR / "users" / "attestation_roots.pem"
+DEVICE_KEY_REVOCATION_CACHE_SECONDS = 3600
+DEVICE_KEY_REVOCATION_TIMEOUT_SECONDS = 3
+
 # An account that never verifies its email is deleted, with its codes, after this many days.
 UNVERIFIED_ACCOUNT_RETENTION_DAYS = 7
 
@@ -324,6 +352,9 @@ REST_FRAMEWORK: dict[str, object] = {
         "account_delete": "10/hour",
         "email_change_request": "20/hour",
         "email_change_confirm": "60/hour",
+        "device_key_challenge": "60/min",
+        "device_key_register": "30/hour",
+        "device_key_sign_in": "20/min",
     },
 }
 DRF_STANDARDIZED_ERRORS = {
@@ -435,6 +466,10 @@ CELERY_BEAT_SCHEDULE = {
     "users-purge-expired-secrets": {
         "task": "users.tasks.purge_expired_secrets",
         "schedule": crontab(minute=47, hour=3),
+    },
+    "users-purge-device-keys": {
+        "task": "users.tasks.purge_expired_device_keys",
+        "schedule": crontab(minute=57, hour=3),
     },
 }
 

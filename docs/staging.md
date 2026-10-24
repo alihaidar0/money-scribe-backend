@@ -73,6 +73,8 @@ Use the same region for all three services (for example Frankfurt), or every que
 | `WEB_CONCURRENCY` | `1` (the free instance has 512 MB) |
 | `PWNED_PASSWORD_CHECK` | `True` |
 | `TURNSTILE_SECRET_KEY` | the secret key of the Turnstile widget ([`sign-in-challenge.md`](sign-in-challenge.md)); a secret, never in the repository |
+| `DEVICE_KEY_ANDROID_PACKAGE` | the package name of the staging app (fingerprint sign-in, [ADR 0018](adr/0018-sign-in-with-a-device-key.md)); `check --deploy` warns (`users.W002`) while it is empty |
+| `DEVICE_KEY_ANDROID_CERT_SHA256` | the SHA-256 digests, hex and comma separated, of the certificates that sign the staging app; leave `DEVICE_KEY_REQUIRE_ATTESTATION` unset (it must stay on here, `users.E002`) |
 
 Render sets `PORT` itself and the image listens on it. `RUN_MIGRATIONS` stays at its default (migrate when the container
 starts). No `CELERY_*` variable is needed while the worker is not run. Never copy a real value into the repository.

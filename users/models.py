@@ -197,3 +197,39 @@ class Session(models.Model):
     @property
     def is_ended(self) -> bool:
         return self.ended_at is not None
+
+
+class DeviceKey(models.Model):
+    """The public half of a hardware key that signs a phone in without the password (ADR 0018).
+
+    One per ``device_id``: a new key replaces the old one, also when another account held it. Only the
+    public key (SPKI DER) is stored, so nothing on the server can sign in. It expires ``DEVICE_KEY_LIFETIME_DAYS``
+    after its last use, and is deleted when the password or the email changes and with the account.
+    The device fields are copied from the session that registered it, never taken from the request.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid7, editable=False)
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="device_keys"
+    )
+    device_id = models.UUIDField(unique=True)
+    public_key = models.BinaryField()
+    algorithm = models.CharField(max_length=5, default="ES256")
+    platform = models.CharField(max_length=7, choices=Platform)
+    device_name = models.CharField(max_length=100)
+    # Whether the platform vouched for the key: an Android key with a verified attestation. iOS has none.
+    attested = models.BooleanField(default=False)
+    created_at = models.DateTimeField(default=timezone.now)
+    last_used_at = models.DateTimeField(null=True, blank=True)
+    expires_at = models.DateTimeField()
+
+    class Meta:
+        indexes: ClassVar[list[models.Index]] = [
+            models.Index(
+                fields=["user", "-created_at", "-id"], name="users_devicekey_by_user"
+            ),
+            models.Index(fields=["expires_at"], name="users_devicekey_expires"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.platform} device key of {self.user_id}"
