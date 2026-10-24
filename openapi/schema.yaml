@@ -1547,13 +1547,15 @@ components:
             `email_unchanged`, `invalid_password`, `password_too_short`, `password_too_long`,
             `password_too_similar`, `password_compromised`, `password_too_common`,
             `password_unchanged`, `password_attempts_exceeded`, `reset_token_invalid`,
-            `service_unavailable`, `invalid_amount`, `currency_mismatch`, `exceeds_remaining`,
-            `account_has_transactions`, `category_has_transactions`, `category_is_builtin`.
-            Codes raised by the framework for malformed or incomplete input: `required`,
-            `blank`, `null`, `invalid`, `max_length`, `min_length`, `parse_error`,
-            `authentication_failed`, `not_authenticated`, `permission_denied`, `not_found`,
-            `method_not_allowed`, `not_acceptable`, `unsupported_media_type`, `read_only`.
-            A client treats a code it does not know as a generic failure of the status.'
+            `idempotency_key_required`, `idempotency_key_invalid`, `idempotency_key_reused`,
+            `idempotency_in_progress`, `precondition_failed`, `service_unavailable`,
+            `invalid_amount`, `currency_mismatch`, `exceeds_remaining`, `account_has_transactions`,
+            `category_has_transactions`, `category_is_builtin`. Codes raised by the
+            framework for malformed or incomplete input: `required`, `blank`, `null`,
+            `invalid`, `max_length`, `min_length`, `parse_error`, `authentication_failed`,
+            `not_authenticated`, `permission_denied`, `not_found`, `method_not_allowed`,
+            `not_acceptable`, `unsupported_media_type`, `read_only`. A client treats
+            a code it does not know as a generic failure of the status.'
         detail:
           type: string
           description: Human-readable text; not for display.

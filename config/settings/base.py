@@ -15,6 +15,7 @@ from pathlib import Path
 
 import dj_database_url
 from celery.schedules import crontab
+from corsheaders.defaults import default_headers
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
@@ -174,7 +175,14 @@ CORS_ALLOWED_ORIGINS = [
 ]
 # A browser hides every response header except a few unless it is exposed; the web app reads the
 # countdown of a 429 from this one.
-CORS_EXPOSE_HEADERS = ["Retry-After"]
+CORS_EXPOSE_HEADERS = ["Retry-After", "ETag", "Idempotent-Replayed"]
+# The headers of the safe writes (ADR 0016), on top of the defaults, so the web build can send them.
+CORS_ALLOW_HEADERS = [
+    *default_headers,
+    "idempotency-key",
+    "if-match",
+    "if-none-match",
+]
 
 DATABASES = {
     "default": dict(
@@ -194,6 +202,7 @@ INSTALLED_APPS += [
     "drf_standardized_errors",
     "django_celery_beat",
     "users",
+    "idempotency",
     "outbox",
 ]
 
@@ -304,6 +313,11 @@ DEVICE_KEY_ANDROID_CERT_SHA256 = [
 DEVICE_KEY_TRUSTED_ROOTS_PATH = BASE_DIR / "users" / "attestation_roots.pem"
 DEVICE_KEY_REVOCATION_CACHE_SECONDS = 3600
 DEVICE_KEY_REVOCATION_TIMEOUT_SECONDS = 3
+
+# Safe writes (ADR 0016): an Idempotency-Key is honoured for this long, and a second request that meets a
+# first one still running waits this many seconds for it before it answers 409 idempotency_in_progress.
+IDEMPOTENCY_KEY_LIFETIME_SECONDS = 86400
+IDEMPOTENCY_LOCK_WAIT_SECONDS = 3
 
 # An account that never verifies its email is deleted, with its codes, after this many days.
 UNVERIFIED_ACCOUNT_RETENTION_DAYS = 7
@@ -468,6 +482,10 @@ CELERY_BEAT_SCHEDULE = {
     "users-purge-expired-secrets": {
         "task": "users.tasks.purge_expired_secrets",
         "schedule": crontab(minute=47, hour=3),
+    },
+    "idempotency-purge": {
+        "task": "idempotency.tasks.purge_expired_keys",
+        "schedule": crontab(minute=7, hour=4),
     },
     "users-purge-device-keys": {
         "task": "users.tasks.purge_expired_device_keys",

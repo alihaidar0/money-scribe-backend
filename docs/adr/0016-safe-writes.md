@@ -43,8 +43,10 @@ published specification, as the draft asks).
   change. The same value is the `ETag` of a single-record answer, as a strong tag: `ETag: "3"`. Lists carry `version`
   in each record, because the app edits from a list.
 - `PUT`, `PATCH` and `DELETE` honour `If-Match: "3"`. If the stored version differs, nothing changes and the answer is
-  `412 precondition_failed`; the app reloads the record and lets the person decide. The check and the update are one
-  statement (`UPDATE ... WHERE id = ... AND version = ...`), so two saves at once cannot both win.
+  `412 precondition_failed`; the app reloads the record and lets the person decide. The check and the update happen in
+  one transaction under a row lock (`SELECT ... FOR UPDATE`), so two saves at once cannot both win: the second waits,
+  then sees the new version. The version itself is raised in the `UPDATE` (`version = version + 1`), so even a save
+  without the check counts.
 - `If-Match` is optional: without it the last write wins. The app sends it on every edit and delete; the server does not
   force it (`428`) because a person's own two devices rarely collide, and a missing header must not block them. A
   `PUT` of a salary month that does not exist yet with an `If-Match` is a `412`.
@@ -62,8 +64,14 @@ published specification, as the draft asks).
 - ADR 0004 gains `412` and `422` as documented statuses, declared per operation like `409`, and the codes
   `idempotency_key_required`, `idempotency_key_invalid`, `idempotency_key_reused`, `idempotency_in_progress` and
   `precondition_failed`.
-- ADR 0005 gains the `version` column in its model conventions. One mixin and one helper (`config.api`) implement both
-  rules, so a resource gets them by inheriting; each endpoint test covers a repeated create and a stale edit.
+- ADR 0005 gains the `version` column in its model conventions and the `idempotency` app, which holds the stored
+  answers (an installed app is needed for a table, and `common` is not one). A resource gets the rules by inheriting:
+  the abstract `common.models.VersionedModel` for `version`, `config.api.IdempotentCreateMixin` on the view that
+  creates, and `config.api.VersionedMixin` on the view that reads, edits and deletes one record. Each endpoint's test
+  covers a repeated create and a stale edit, as `idempotency/tests` does for a throwaway resource.
+- A second copy of a create that meets the first still running waits for it on the database's unique index (at most
+  `IDEMPOTENCY_LOCK_WAIT_SECONDS`, 3), so the usual outcome of two copies is one create and one replay;
+  `409 idempotency_in_progress` is the rare case where the first outlasts the wait.
 - The CORS configuration exposes `ETag`, `Idempotent-Replayed` and `Retry-After`, and allows `Idempotency-Key` and
   `If-Match` as request headers, for the web build.
 - Stored answers hold financial data, so the table is in the account's cascade and is never logged.
