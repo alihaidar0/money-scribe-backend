@@ -369,10 +369,11 @@ listed at the end of this section. Each step is its own branch and pull request.
   by hand (deploys stay manual for now; the repository variable `DEPLOY_STAGING=true` would switch the automatic deploy
   on), the superuser, the `NUM_PROXIES` measured (`3`), and, optionally, an uptime monitor (deferred: without it staging sleeps after 15 minutes
   idle and the first request takes about a minute)
-- [ ] **9.6 The first contract release**: moved to the end of stage 3 by
-  [ADR 0019](adr/0019-first-release-after-the-last-endpoint.md): no version is released until every endpoint exists
-  (section 11). Until then the Flutter developer pins a commit of `openapi/schema.yaml`
-  ([`consuming-the-api.md`](consuming-the-api.md)), and the draft `v0.1.0` left by release pull request #48 stays a draft until then
+- [ ] **9.6 Publishing the first contract release**: moved to the end of stage 3 by
+  [ADR 0019](adr/0019-first-release-after-the-last-endpoint.md): the draft `v0.1.0` stays a draft and is published only
+  after every endpoint exists (section 11). Release pull requests may merge into `main` meanwhile; they only refresh the
+  draft. Until it is published the Flutter developer pins a commit of `openapi/schema.yaml`
+  ([`consuming-the-api.md`](consuming-the-api.md))
 - [ ] **9.7 The first test in the app**: the staging flavor points at the staging address. First check the admin panel and
   Swagger UI on staging ([`staging.md`](staging.md)), then run this list and record the result:
   - register, copy the code from the outbox in the admin panel, verify, and land in the app; sign out and sign in again
@@ -403,8 +404,8 @@ deploys it by hand when the endpoints agreed with the frontend are finished, and
 ([ADR 0019](adr/0019-first-release-after-the-last-endpoint.md)). A decision a feature needs gets its record first. The order below is the owner's (2026-10-24): the fingerprint
 sign-in first, because the store disclosures for it need time and it depends on no money feature, then salary, then the
 others. The Flutter developer's dependency view put the settings and the ledger before salary; salary needs neither, so it
-stays ahead of them. No step ships in a release: the first release comes after the last endpoint (section 11), and until
-then the app pins a commit of `openapi/schema.yaml` ([`consuming-the-api.md`](consuming-the-api.md)). A step is ticked
+stays ahead of them. No step publishes a release: the draft `v0.1.0` is published after the last endpoint (section 11),
+and until then the app pins a commit of `openapi/schema.yaml` ([`consuming-the-api.md`](consuming-the-api.md)). A step is ticked
 when the owner confirms it, and a step that needs the app on staging waits for the test result.
 
 - [ ] **10.1 `feat/auth-device-key`**: sign-in with a device key pair and a signed challenge (the model passkeys use,
@@ -474,7 +475,7 @@ when the owner confirms it, and a step that needs the app on staging waits for t
   app is **not** used: it can be read out of the app, so it would identify no one and protect nothing the tokens do not
   already protect
 - [ ] Every endpoint of the API exists (10.1 to 10.10) and the app was tested against one staging deploy that has them all:
-  the first release waits for this ([ADR 0019](adr/0019-first-release-after-the-last-endpoint.md))
+  publishing the draft `v0.1.0` waits for this ([ADR 0019](adr/0019-first-release-after-the-last-endpoint.md))
 - [ ] `version` in `pyproject.toml` is the version to release (`0.1.0` unless you change it; the draft release is named
   after it)
 - [ ] One pull request `develop` → `main`, titled `release: <summary>`, merged with a merge commit
@@ -532,8 +533,9 @@ release candidate is stable.
 
 - [ ] Sync before starting: fetch, fast-forward `main` and `develop`, switch to `develop`, remove merged local branches
 - [ ] Weekly: review Dependabot pull requests (they target `develop`), merge the ones you want
-- [ ] After the first release only (ADR 0019): open a `develop` → `main` release pull request when `develop` holds an
-  update worth shipping and is verified
+- [ ] Open a `develop` → `main` release pull request when `develop` holds something worth shipping and is verified
+  (before the first publish it only refreshes the draft, ADR 0019)
 - [ ] After a merge into `main`: check the draft release `v<version>` and publish it only when you want the release
+  (the first one, `v0.1.0`, only after the last endpoint)
 - [ ] When `django-celery-beat` supports Django 6.1 (its releases require `Django<6.1` today): remove the `django`
   ignore entry in `.github/dependabot.yml` and let Dependabot propose the Django 6.1 update

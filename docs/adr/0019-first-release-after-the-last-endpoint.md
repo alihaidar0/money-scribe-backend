@@ -1,7 +1,9 @@
-# ADR 0019: The first release comes after the last endpoint, and staging is deployed at agreed points
+# ADR 0019: The first release is published after the last endpoint, and staging is deployed at agreed points
 
 - Status: accepted
 - Date: 2026-10-24
+- Amended: 2026-10-24, the same day and before any release used it. Release pull requests may merge before the last
+  endpoint; only the publishing of the draft waits.
 
 ## Context
 
@@ -15,23 +17,24 @@ still being agreed, and every step of stage 3 would need its own release for lit
 
 ### Releases
 
-- **No version is released until every endpoint of the API exists** (the end of stage 3: the ledger, the debts, the
-  reports, the CSV and the notifications, on top of what is built). Until then there is no release pull request, no
-  published release and no tag. Merges into `develop` keep refreshing the rolling draft "Staging", which is never
-  published. The draft `v0.1.0` that the release pull request #48 left behind is **kept as a draft** and is not
-  published until then.
-- **The first release is `v0.1.0`**, the version in `pyproject.toml` today. It is one `develop` → `main` pull request
-  after the last endpoint, with the usual checks (`docs/steps.md`, section 11); that merge refreshes the draft `v0.1.0`
-  (its notes and its `openapi.yaml`, which are those of the last release pull request until then), and the owner checks
-  and publishes it. Raise `version` in `pyproject.toml` before that merge only if the first release should carry another
-  number; the draft of the old number then stays behind and can be deleted on the Releases page.
-- **After the first release, a release is an update.** A release pull request is opened when `develop` holds something
-  worth shipping, as `docs/api-workflow.md` describes: a new endpoint or field raises the
+- **No version is published until every endpoint of the API exists** (the end of stage 3: the ledger, the debts, the
+  reports, the CSV and the notifications, on top of what is built). Until then there is no published release and no
+  tag. A release pull request `develop` → `main` may still be opened and merged whenever the owner wants `main` and the
+  draft up to date: the merge only creates or refreshes the draft `v0.1.0` (ADR 0002), and a draft is not a release,
+  so nothing is immutable and the client does not pin it. The draft `v0.1.0` **stays a draft**; the rolling draft
+  "Staging", refreshed by merges into `develop`, is never published.
+- **The first release is `v0.1.0`**, the version in `pyproject.toml` today. The owner publishes the draft once, after
+  the last endpoint and a final release pull request with the usual checks (`docs/steps.md`, section 11), whose merge
+  refreshes the notes and the `openapi.yaml` of the draft. Raise `version` in `pyproject.toml` before that merge only
+  if the first release should carry another number; the draft of the old number then stays behind and can be deleted
+  on the Releases page.
+- **After the first release is published, a release is an update.** A release pull request is opened when `develop`
+  holds something worth shipping, as `docs/api-workflow.md` describes: a new endpoint or field raises the
   minor version, a fix raises the patch, and a change that breaks a published path is never made in `v1` (it needs
   `/api/v2/` or a deprecation period).
 - **Meanwhile the client pins a commit**, not a tag: the file `openapi/schema.yaml` as it is at a commit of `develop`
   (`docs/consuming-the-api.md`, "Before the first release exists"), and the staff-only Swagger UI of staging shows the
-  contract that is deployed. The client moves to a tag when the first release exists.
+  contract that is deployed. The client moves to a tag when the first release is published.
 
 ### Staging
 
@@ -43,10 +46,11 @@ still being agreed, and every step of stage 3 would need its own release for lit
 
 ## Consequences
 
-- Rule 9 ("after every merge into `develop`, say whether a release PR is needed") answers "no release pull request until
-  the first release" for now, and still says what is waiting on `develop`.
-- Step 9.6 (the first contract release) moves to the end of stage 3 (section 11); step 10's loop no longer ends in a
-  tagged release or in an automatic staging deploy.
+- Rule 9 ("after every merge into `develop`, say whether a release PR is needed") keeps its normal answer, and adds that
+  nothing is published before the last endpoint: the owner decides when a release pull request is merged, and the
+  draft is never suggested for publishing earlier.
+- Step 9.6 (publishing the first contract release) moves to the end of stage 3 (section 11); step 10's loop no longer
+  ends in a tagged release or in an automatic staging deploy.
 - The risk is a large first release and a long time without a staging test. It is limited by CI on every pull request
   (including the schema, style and breaking-change checks), by the clean-copy test run before every hand-over, and by the
   owner's right to deploy staging earlier.

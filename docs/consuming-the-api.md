@@ -34,9 +34,10 @@ Commit both files. A pull request that changes `api/openapi.yaml` is the only wa
   fine-grained token with read-only access to that repository's contents, stored as a secret.
 - **Before the first release exists:** pin a commit instead. Download the file as it is at that
   commit (`gh api repos/OWNER/BACKEND_REPO/contents/openapi/schema.yaml?ref=<commit> -H "Accept: application/vnd.github.raw+json" > api/openapi.yaml`)
-  and note the commit in `api/BACKEND_VERSION`. Move to a tag at the first release. No version is released until every
-  endpoint exists ([ADR 0019](adr/0019-first-release-after-the-last-endpoint.md)), so pinning a commit is the normal way
-  for now, not a stopgap; after the first release every release is an update of that contract.
+  and note the commit in `api/BACKEND_VERSION`. Move to a tag at the first release. No version is published until every
+  endpoint exists ([ADR 0019](adr/0019-first-release-after-the-last-endpoint.md)); a draft release is not a tag, so
+  pinning a commit is the normal way for now, not a stopgap. After the first release is published, every release is an
+  update of that contract.
 - **An endpoint still in a draft pull request:** the schema diff in that pull request is the agreed
   shape; build against it only after both developers approved it.
 
