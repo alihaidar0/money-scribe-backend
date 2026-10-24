@@ -170,6 +170,14 @@ the separator, no grouping, no exponent and no leading `+`, and at most 15 digit
 the kind or direction carries the sign; the schema type `Amount` is unsigned and `SignedAmount` allows a leading `-` for
 computed values such as balances and day totals. Too many digits answer `400 invalid_amount`.
 
+In code, `common/money.py` is the one place that reads and writes an amount: `Money` (integer minor units, half away
+from zero rounding through `divide_half_up`, one currency at a time, nothing beyond 999 999 999 999 999 minor units) and
+`Money.parse` / `Money.to_string` for the wire form, which is exact: fewer or more digits than the currency has, a `+`,
+a leading zero, grouping, an exponent, a JSON number and `-0` are all `400 invalid_amount`. Serializers use
+`common/serializers.py`: `AmountField` and `SignedAmountField` next to a `CurrencyField`, with `MoneySerializerMixin`
+turning each amount into a `Money` once the currency is known. The schema names the two types `Amount` and
+`SignedAmount` (`common/openapi.py`); a currency that is not one of the ten supported answers `400 invalid_choice`.
+
 ## Salary
 
 The server computes salary months from the inputs the client sends and returns the results; the client never sends
