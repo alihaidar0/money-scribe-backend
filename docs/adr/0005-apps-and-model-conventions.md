@@ -20,7 +20,7 @@ Apps follow the entity groups of the client's domain. An app is created when its
 | `salary` | salary months and the calculation (ADR 0007) | `users`, `common` |
 | `debts` | debts and repayments | `users`, `common` |
 | `preferences` | default currency, pay schedule, notification preferences | `users`, `common` |
-| `notifications` | push device tokens, each tied to a session, and reminders (Celery Beat) | `users`, `preferences` |
+| `notifications` | push device FIDs, each tied to a session, and reminders (Celery Beat) | `users`, `preferences` |
 | `reports` | read models only (overview, day totals, category spend, comparisons, debts and period reports) | `ledger`, `salary`, `debts`, `users` |
 
 - `common/` is a plain Python package at the repository root, not an installed app: no models and no migrations. It holds
@@ -40,6 +40,8 @@ Model conventions for every new model:
   with no owner and a stable `key`, created by a data migration, read-only for everyone, and listed together with the
   signed-in user's own categories.
 - **Timestamps:** `created_at` and `updated_at`, UTC.
+- **Version:** an editable model also has `version`, a `PositiveIntegerField` that starts at 1 and rises with every change,
+  in the same statement as the change ([ADR 0016](0016-safe-writes.md)).
 - **Money:** `BigIntegerField` minor units plus a `CharField(max_length=3)` currency code, with a `CheckConstraint` where
   the amount must be positive. The wire format is ADR 0008.
 - **Tests:** `<app>/tests/`, with factories in `tests/factories.py`.

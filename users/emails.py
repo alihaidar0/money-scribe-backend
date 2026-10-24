@@ -117,6 +117,21 @@ _EMAIL_CHANGED = {
     ),
 }
 
+_DEVICE_KEY_ADDED = {
+    Language.ENGLISH: (
+        "Fingerprint sign-in was turned on in Money Scribe",
+        'Fingerprint sign-in was just turned on for the device "{device}" on your Money Scribe account.\n'
+        "That device can now sign in without your password. You can turn it off in the app at any time.\n"
+        "If this was not you, change your password in the app now: that turns fingerprint sign-in off everywhere.\n",
+    ),
+    Language.ARABIC: (
+        "تم تفعيل تسجيل الدخول ببصمة الإصبع في Money Scribe",
+        'تم للتو تفعيل تسجيل الدخول ببصمة الإصبع للجهاز "{device}" في حسابك على Money Scribe.\n'
+        "يستطيع هذا الجهاز الآن تسجيل الدخول دون كلمة المرور، ويمكنك إيقاف ذلك من التطبيق في أي وقت.\n"
+        "إذا لم تكن أنت، فغيّر كلمة المرور من التطبيق الآن: فهذا يوقف تسجيل الدخول ببصمة الإصبع على كل الأجهزة.\n",
+    ),
+}
+
 
 def _send(email: str, subject: str, body: str, what: str) -> None:
     """Send one email. A delivery failure is logged without details; the user can ask again."""
@@ -193,3 +208,16 @@ def send_email_changed_notice(*, email: str, language: str) -> None:
         Language(language), _EMAIL_CHANGED[Language.ENGLISH]
     )
     _send(email, subject, body, "an email change notice")
+
+
+def send_device_key_added_notice(
+    *, email: str, language: str, device_name: str
+) -> None:
+    """Tell the owner that a device can now sign in with a fingerprint, so a stranger's key is noticed.
+
+    It names the device the way the app labelled it and carries no link and no code.
+    """
+    subject, template = _DEVICE_KEY_ADDED.get(
+        Language(language), _DEVICE_KEY_ADDED[Language.ENGLISH]
+    )
+    _send(email, subject, template.format(device=device_name), "a device key notice")

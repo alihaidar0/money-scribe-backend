@@ -13,42 +13,80 @@ Common rules:
   half.
 - Ids are UUID strings ([ADR 0005](adr/0005-apps-and-model-conventions.md)). Text is trimmed before it is validated.
 - A rule that fails answers `400` with the codes of [ADR 0004](adr/0004-error-status-codes.md).
+- Every record has `id`, `created_at`, `updated_at` and, when it can be edited, a read-only `version`
+  ([ADR 0016](adr/0016-safe-writes.md)). Every `POST` that creates a record needs an `Idempotency-Key` header, and an
+  edit or delete should carry `If-Match` with the record's `version`.
+- Every list is paginated by the one cursor class ([ADR 0003](adr/0003-cursor-pagination.md)), including accounts and
+  categories, which are short: the app follows `next`.
 
 ## Salary month
 
-Addressed by `YYYY-MM`; one per user and currency; `PUT` creates or replaces it, `GET` reads it, `DELETE` removes it.
+Addressed by `YYYY-MM`; one per user and month, with the currency as a field of the month; `PUT` creates or replaces it,
+`GET` reads it, `DELETE` removes it.
 
 | Field | Rule |
 | --- | --- |
 | year and month | the key of the month |
-| `currency` | one currency for the whole month |
+| `currency` | one currency for the whole month; it cannot change while the month has fixed items (`409 month_has_fixed_items`), because their amounts are stored in the currency's minor units |
 | `base_salary` | amount, greater than 0 |
 | `food_per_day` | amount, 0 or more |
 | `working_days_in_month` | whole number, 1 to 31 |
 | `working_hours_in_month` | whole number, 1 or more |
 | `extra_hours_hundredths` | whole number, 0 or more (the user types hours with up to 2 decimals) |
-| `tax_rate_bp` | whole number, 0 to 10000 (the user types a percent with up to 2 decimals; the app defaults to 13%) |
+| `tax_rate_basis_points` | whole number, 0 to 10000 (the user types a percent with up to 2 decimals; the app defaults to 13%) |
 | `payment_mode` | `one_payment` or `two_payments`, kept with the saved month |
 | `working_days_first_half` | whole number, 0 up to `working_days_in_month`; used only with two payments |
 | `first_pay_day`, `second_pay_day` | day of month, 1 to 28, kept with the saved month |
 
 A saved month can be corrected later, including switching between one and two payments. Its fixed items keep their `part`
 (ADR 0007). The results, the fixed-item totals, the balance after fixed items per part, and, with two payments, the
-balance of the whole month are computed by the server.
+balance of the whole month are computed by the server; the app never sends them, and it computes the same figures
+only for its live preview. The two sides are kept in step by a shared file of invented test cases (ADR 0007).
+
+The currencies are RUB, USD, EUR, GBP, TRY, SAR, AED and EGP (2 digits), JPY (0) and KWD (3), the same list as the app.
+`PUT` answers `201` when it creates the month and `200` when it replaces it; it accepts `If-Match` (a loaded month) or
+`If-None-Match: *` (a new one), both optional ([ADR 0016](adr/0016-safe-writes.md)). The month key stays within years
+2000 to 2099. With one payment the single entry of `payments` has the `part` `first`, and `working_days_first_half` is
+`null` or left out.
+
+Operations: the history list (newest first, each month with its results), read, `PUT` (create or replace), `DELETE`
+(removes the month and its fixed items), the **defaults** read, and the **copy** of fixed items.
+
+- **Defaults** (`GET .../defaults/`) give the inputs to pre-fill the form of a month. Carried from the most recent saved
+  month: `working_hours_in_month` and `tax_rate_basis_points`, and the amounts `base_salary` and `food_per_day` under the
+  currency rule below. Never carried: `working_days_in_month` and `working_days_first_half` (`null`) and
+  `extra_hours_hundredths` (`0`). The pay schedule (`payment_mode`, `first_pay_day`, `second_pay_day`) comes from the
+  Settings when the person has set the value there, then from the most recent saved month, then from the app's own
+  defaults (one payment, days 20 and 5). A Settings value that was never set does not count, so an untouched Settings
+  page does not hide the schedule of the last month.
+  - **Currency.** The Settings default currency when the person has set one, else the currency of the most recent saved
+    month, else `RUB`. The carried amounts are returned only when that currency equals the most recent saved month's;
+    otherwise they are `null`, because a RUB amount is not a USD amount. The other carried fields still carry.
+  - Until the Settings exist, the most recent month is the only source.
+- **Copy** (`POST /api/v1/salary/months/{month}/fixed-items/copy/`, `Idempotency-Key` required) copies the fixed items of
+  another month into this one and answers `200` with the target month. The optional body field `from` is a `YYYY-MM`
+  (default: the most recent saved month before this one). Both months must be saved (`404` otherwise, also when there is
+  no earlier month), `from` cannot be the month itself (`400` on `from`) and must have the same currency
+  (`400 currency_mismatch` on `from`). The items are added to the ones already there, with new ids, version 1 and the
+  copied `name`, `amount`, `kind` and `part`. If the result would pass 100 items, nothing is copied
+  (`409 fixed_item_limit_reached`). A source with no items copies nothing and is not an error.
 
 ## Fixed item
 
-Belongs to a month and is returned inline with it. Create, edit and delete.
+Belongs to a month and is returned inline with it, so there is no separate list. Create, edit and delete.
 
 | Field | Rule |
 | --- | --- |
-| `name` | text, 1 to 50 characters |
+| `name` | text, trimmed, then 1 to 50 characters |
 | `amount` | amount, greater than 0 |
 | `kind` | `income` or `expense` |
 | `part` | `first` or `second`, ignored for a month with one payment (then every item counts); defaults to `first` |
 
-A fixed item has no currency of its own: it uses the month's. A request that carries another currency answers
-`400 currency_mismatch`.
+A fixed item has no currency of its own: it uses the month's. A request may leave `currency` out; one that carries
+another currency answers `400 currency_mismatch`. Adding an item to a month that is not saved answers `404`. A month holds at most 100 items; the 101st answers `409 fixed_item_limit_reached`. A month can
+be saved with no items, and deleting a month deletes its items. Each item has its own `version`, so two devices editing
+different items do not conflict; an item change does not change the month's `version` or its results, only the
+fixed-item totals and the balances.
 
 ## Transaction
 
@@ -63,8 +101,10 @@ A fixed item has no currency of its own: it uses the month's. A request that car
 | `note` | text, optional, up to 100 characters |
 
 Create, edit and delete. The list is ordered `-date`, `-created_at`, `-id`, so within a day the entry added last comes
-first, and takes the filters `date_from`, `date_to`, `account`, `category` and `kind`
-([ADR 0003](adr/0003-cursor-pagination.md)). Day totals take the same filters.
+first, and takes the filters `date_from`, `date_to`, `account`, `category`, `kind` and `search`
+([ADR 0003](adr/0003-cursor-pagination.md)). `search` matches the `note` as a case-insensitive substring (1 to 100
+characters). The two pay periods of a month are asked for with the date range (days 1 to 15 and day 16 to the end), so
+the list has no `part` filter; the reports do (see Reports). Day totals take the same filters.
 
 ## Account
 
@@ -73,7 +113,9 @@ first, and takes the filters `date_from`, `date_to`, `account`, `category` and `
 | `name` | text, 1 to 30 characters |
 | `kind` | `card`, `cash` or `other` |
 
-Create, edit and delete. Deleting an account that has transactions answers `409 account_has_transactions`.
+Create, edit, reorder and delete. Deleting an account that has transactions answers `409 account_has_transactions`.
+The list is ordered by the user's order, then `id`. Reordering is one operation that sends the whole list of ids, so
+the order changes all at once; its shape is agreed in the request issue.
 
 ## Category
 
@@ -85,8 +127,11 @@ Create, edit and delete. Deleting an account that has transactions answers `409 
 | `is_custom` | read-only |
 | `key` | read-only; a stable key on built-in categories, `null` on custom ones |
 
-Create, edit and delete for custom categories only. Built-in categories are read-only: changing or deleting one answers
-`403 category_is_builtin`. Deleting a category that has transactions answers `409 category_has_transactions`.
+Create, edit, reorder and delete for custom categories only. Built-in categories are read-only: changing or deleting one
+answers `403 category_is_builtin`. Deleting a custom category that has transactions succeeds (`204`) and moves them to
+the built-in `other` in the same database transaction ([ADR 0017](adr/0017-deleting-a-category-moves-its-transactions.md)).
+The list returns the built-in categories first, in a fixed order, then the custom ones in the user's order; only the
+custom ones can be reordered.
 
 **Built-in categories** are shared rows created by a data migration and returned with the user's own. Each carries its
 `id`, a stable `key` that the app localizes (English and Arabic), an `icon`, a `kind` and an English `name` as a fallback
@@ -115,7 +160,8 @@ not enumerate them; it validates the slug shape only.
 | `note` | text, optional, up to 100 characters |
 
 A **repayment** has an `amount` greater than 0 and not more than the remaining debt (`400 exceeds_remaining`) and a
-`date`. When a repayment is edited, its own previous amount does not count: the remaining amount for the check is the
+`date`. It uses the debt's currency and the answer carries it; a request that sends another one answers
+`400 currency_mismatch` on `currency`, as for a fixed item. When a repayment is edited, its own previous amount does not count: the remaining amount for the check is the
 debt minus the **other** repayments. Both are created, edited and deleted. The server returns the derived `repaid`,
 `remaining` (never below 0), `is_settled`, `progress` and `status` (`settled`, `overdue` or `open`), because the overview
 and the debts report use them too. "Overdue" needs the user's day, so a read takes an optional `today` calendar day; it
@@ -148,10 +194,54 @@ permission stay on the device and have no field.
 
 ## Push notifications
 
-The device sends its Firebase token and the user turns the permission on or off on the device. A notification never
+The device sends its Firebase installation ID (FID) and the user turns the permission on or off on the device. A notification never
 contains an amount or a name. The server builds the text in the user's `language`, so it also shows when the app is
-closed, and adds a data key so the app can open the right screen. The token belongs to the session and is removed when
+closed, and adds a data key so the app can open the right screen. The FID belongs to the session and is removed when
 the session ends ([ADR 0009](adr/0009-sessions-and-devices.md)). The endpoints come with the `notifications` feature.
+
+**Why the FID and not the registration token** (decided 2026-10-24, with the Flutter developer). The Firebase Admin SDK
+names the installation ID as the recommended target of a message and deprecates the registration token. The Python
+`firebase-admin` package supports it from 7.5.0 (`Message(fid=...)`), and the server pins that version or later. The wire
+field is `fid`, 1 to 255 characters from `A-Za-z0-9_-` (a Firebase FID is 22 today; the server does not require exactly
+that, in case Firebase changes the length); the register request carries nothing else, because the platform and the app version already come from the
+session's device record. The app excludes Firebase installation data from Android backups, because Firebase keeps one
+token per FID and a restored backup can invalidate the live one.
+
+The rules, agreed with the Flutter developer (the request and response shapes and the error codes are agreed in the
+endpoint request issue, then published in the schema):
+
+- **Ownership.** A FID is stored under the user and the session that registered it, with one FID per `device_id`:
+  a new FID from the same device replaces the old one. A FID is never shared between accounts; when another account
+  registers the same FID, it moves to that account. The platform comes from the session's device record, so the
+  register request does not carry it. Registering from a `web` session is refused with a documented error, because web
+  push is not planned. Push is Android only for now; iOS comes later through the same endpoints.
+- **Operations.** Two authenticated operations, both idempotent and both using the standard error body and the existing
+  rate limits: register or replace the FID, and remove it (it succeeds when there is nothing to remove). Repeating a
+  register with the same FID changes nothing, so the app can retry it safely. The app registers only while the person
+  allows notifications and again whenever Firebase changes the FID. It removes the FID when it notices that
+  notifications are off while the person stays signed in. The switch lives in the system settings, so the app notices it
+  at start or on return to the app and the removal can be delayed; the retention below covers the gap.
+- **Removal on the server.** The FID of a session is deleted when the session ends for any reason: sign-out, revoked
+  by the user, password changed or reset, email changed, refresh-token reuse or expiry. Every FID of an account is
+  deleted in the same transaction as the rest of its data when the account is deleted.
+- **Invalid FIDs.** A FID that Firebase reports as unregistered or invalid is deleted at once.
+- **No leakage.** A FID is never written to a log, never returned by any endpoint, and sent only to Firebase.
+- **Content.** A notification has no amounts, names or other financial data. It is worded in the `language` stored on
+  the account (see Settings), not in a language kept per device. The app changes that language with the settings
+  `PATCH`; a push FID request carries no language.
+- **Data key.** The data of a push has one key, `screen`, whose value is one of a fixed list of screen identifiers. The
+  first list holds only what pay-day reminders need (`salary`). Every new value is added to the schema and these docs
+  before the server sends it. The data never holds amounts, names or record contents. There is no record id for now; if a
+  later notification must point at one record, an opaque id is added as its own agreed change. The app treats the data as
+  untrusted: it maps a value from its own list, ignores an unknown one and never opens an address or route taken from
+  the message.
+- **Retention.** A push FID is kept until its session ends or expires, and at most 90 days. This is the sentence the
+  privacy policy and the store data forms quote.
+- **App side.** The app registers after sign-in (and on a new FID, as above). On sign-out it calls remove
+  first with a short timeout and continues on any failure, then unregisters the local FID. On account deletion
+  it unregisters the local FID after the server confirms. The app treats every `401` other than `token_expired` as a session the server ended, deletes
+  the local FID and does not call remove. This classification stays stable
+  ([API conventions](api-conventions.md)).
 
 ## Profile and account
 
@@ -226,11 +316,34 @@ total (income minus expense).
 | Field | Rule |
 | --- | --- |
 | export | which data (`transactions`, `debts` or `salary_months`) and a period: `all_time`, `this_year`, or `custom` with `from` and `to` |
-| import | a file; the answer is how many rows were imported and which rows were skipped, each with its row number and a reason, `invalid_amount` or `missing_date` |
+| import | rows as JSON, parsed by the app: a bulk call per resource with at most 500 rows and an `Idempotency-Key`; the answer is how many rows were imported and which were skipped, each with its row number and a reason, `invalid_amount` or `missing_date` (or the code of any other rule the row broke) |
 
-An export must import back without loss; amounts use the form of ADR 0008, and the round trip is tested.
+The server never parses an uploaded file: the app reads the CSV and sends rows, which pass through the same rules as a
+single create, and each row succeeds or is skipped on its own. An export is built by the server (it only writes), and a
+cell that starts with `=`, `+`, `-` or `@` is neutralized against spreadsheet formula injection in a documented way that
+the app reverses on import. An export must import back without loss; amounts use the form of ADR 0008, and the round trip
+is tested. The exact shapes are agreed in the request issue of step 10.9.
 
 ## Sessions
 
 The `device` object, the session fields, the three session operations and their retention are in
 [ADR 0009](adr/0009-sessions-and-devices.md).
+
+## Device keys (fingerprint sign-in)
+
+The rules, calls and error codes are in [ADR 0018](adr/0018-sign-in-with-a-device-key.md); the shapes are in the schema
+once the operations exist.
+
+| Field | Rule |
+| --- | --- |
+| `device_id` | the install id of ADR 0009, a UUID |
+| `challenge_id`, `challenge` | the answer of `challenge/`; the challenge is 32 random bytes in base64url and works once for 2 minutes |
+| `public_key` | the device's P-256 public key, SPKI in standard base64 with padding (a raw 65-byte point is also read) |
+| `algorithm` | `ES256` only |
+| `signature` | ECDSA P-256 over SHA-256 of the signed text, DER, standard base64 with padding |
+| `attestation_chain` | the Android certificate chain, a list of base64 DER certificates; required for an Android session, `null` or left out on iOS |
+| `current_password` | the account password; a wrong one is `400 invalid_password` and shares the lock of the password change |
+
+Up to 5 keys per account, one per `device_id`, valid 30 days from the last use. The list of keys holds at most 5, so
+it is one page in the envelope of every list (`next` and `previous` are `null`). The privacy sentence is the row of
+ADR 0009's table.

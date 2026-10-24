@@ -4,7 +4,7 @@ from celery import shared_task
 from django.conf import settings
 from django.utils import timezone
 
-from .models import EmailCode, PasswordResetToken, User
+from .models import DeviceKey, EmailCode, PasswordResetToken, User
 
 
 @shared_task
@@ -38,3 +38,15 @@ def purge_expired_secrets() -> int:
     codes, _ = EmailCode.objects.filter(expires_at__lte=now).delete()
     reset_tokens, _ = PasswordResetToken.objects.filter(expires_at__lte=now).delete()
     return codes + reset_tokens
+
+
+@shared_task
+def purge_expired_device_keys() -> int:
+    """Delete device keys that expired (30 days unused); returns how many.
+
+    An expired key is refused at sign-in whatever this job does, so correctness never depends on it:
+    it only stops public keys, device ids and device names from being kept after their purpose is over
+    (ADR 0018, data minimisation).
+    """
+    deleted, _ = DeviceKey.objects.filter(expires_at__lte=timezone.now()).delete()
+    return deleted

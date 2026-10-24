@@ -5,6 +5,7 @@ requires-python = ">=3.14"
 dependencies = [
     "argon2-cffi>=25.1.0",
     "celery>=5.6.3",
+    "cryptography>=50.0.2",
     "dj-database-url>=3.1.2",
     "django>=6.0.9",
     "django-celery-beat>=2.9.0",
