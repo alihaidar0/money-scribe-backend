@@ -55,6 +55,7 @@ Sigstore
 simplejwt
 siteverify
 spectacular
+SPKI
 stoplight
 tini
 tufin

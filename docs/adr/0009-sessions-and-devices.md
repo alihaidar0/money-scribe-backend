@@ -41,7 +41,7 @@ user's own screen, not a security check, and the server never trusts it for acce
 - Several sessions can share one `device_id` over time; each stays a separate session.
 - There is no GPS and no location lookup. A coarse location from the address can be added later with a licensed offline
   database if the screen needs it, as its own decision.
-- The push token of the device belongs to its session: ending the session removes it, so a signed-out device gets no
+- The push FID of the device belongs to its session: ending the session removes it, so a signed-out device gets no
   more pushes (ADR 0005, `notifications`).
 
 **Retention.** Ended sessions stay as history for **90 days after they end**, then a scheduled task (Celery Beat, daily)
@@ -53,7 +53,7 @@ setting, decided with the hosting step.
 | Operation | What it does |
 | --- | --- |
 | list sessions | `state=active` (default) or `ended`, cursor pagination ordered `-last_active_at`, `-id`; each entry has `session_id`, `is_current`, `device_id` (so the app can group the sessions of one device), device name, platform, `os_version`, `app_version`, the truncated address, `last_active_at`, `created_at` and, for ended ones, `ended_at` and `end_reason`. The full address is never returned |
-| end one session | ends it and its refresh token and removes its push token; another user's session answers `404` |
+| end one session | ends it and its refresh token and removes its push FID; another user's session answers `404` |
 | end all other sessions | keeps the current one |
 
 **New-device email.** When a sign-in comes from a `device_id` that has no session for that user within the retention
@@ -70,7 +70,8 @@ These emails are throttled.
 | truncated IP address | show and investigate sign-ins | same |
 | user agent (web) | show the user their sessions | same |
 | sign-in, last-active and end times and the end reason | show the user their sessions | same |
-| the Firebase push token of the device (once the `notifications` feature exists) | send push notifications to the device | until the session ends or expires, at most 90 days; deleted at once when Firebase reports it invalid, and with the account |
+| the Firebase installation ID (FID) of the device (once the `notifications` feature exists) | send push notifications to the device | until the session ends or expires, at most 90 days; deleted at once when Firebase reports it invalid, and with the account |
+| the public key of the device's sign-in key, its `device_id`, device name, platform, whether it was attested, and its times ([ADR 0018](0018-sign-in-with-a-device-key.md)) | let the person sign in with a fingerprint after a sign-out | until the key is removed, at most 30 days after its last use; deleted when the password or email changes, and with the account |
 | the first five characters of the SHA-1 hash of a new password | the server asks the Pwned Passwords breach service whether the password is known (k-anonymity: the password, the full hash and the user are never sent) | not stored; sent at registration and at later password changes |
 
 Not collected: GPS or any device location, advertising ids, hardware ids, contacts. This data is for account security

@@ -20,6 +20,9 @@ A decision that changes gets a new record that supersedes the old one; the old f
 | [0013](0013-sign-in-bot-challenge.md) | A Cloudflare Turnstile challenge for sign-in after repeated failures | accepted |
 | [0014](0014-password-reset-change-and-account-deletion.md) | Password reset with a single-use token, password change, account deletion and the lock on the current password | accepted |
 | [0015](0015-profile-name-and-email-change.md) | Editing the name, and changing the sign-in email with a code to the new address | accepted |
+| [0016](0016-safe-writes.md) | Safe writes: an `Idempotency-Key` on creates, a `version` with `ETag` and `If-Match` on edits | accepted |
+| [0017](0017-deleting-a-category-moves-its-transactions.md) | Deleting a category moves its transactions to Other; an account with transactions still refuses | accepted |
+| [0018](0018-sign-in-with-a-device-key.md) | Sign-in with a device key pair and a signed challenge (fingerprint), moving to passkeys when a domain exists | accepted |
 
 The fields and limits of each resource are in [`../api-fields.md`](../api-fields.md).
 
