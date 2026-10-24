@@ -96,11 +96,8 @@ Initial registry:
 | `idempotency_key_reused` | 422 | the key was already used for a different request |
 | `idempotency_in_progress` | 409 | the first request with this key is still running; `Retry-After` |
 | `precondition_failed` | 412 | the `If-Match` version is not the stored one, or `If-None-Match: *` found the record; reload it |
-
-**Decided, not yet implemented.** These codes are fixed by the records named here and are not in the table above, because a test keeps that table and `config.error_codes.ErrorCode` identical. Each joins the table and the enum in the pull request that implements its endpoint ([ADR 0016](0016-safe-writes.md), [ADR 0007](0007-salary-calculation-on-the-server.md), [ADR 0018](0018-sign-in-with-a-device-key.md)):
-
-- `fixed_item_limit_reached` (409): a salary month already has 100 fixed items
-- `month_has_fixed_items` (409): changing the currency of a salary month that still has fixed items ([ADR 0007](0007-salary-calculation-on-the-server.md))
+| `fixed_item_limit_reached` | 409 | a salary month already has 100 fixed items |
+| `month_has_fixed_items` | 409 | changing the currency of a salary month that still has fixed items ([ADR 0007](0007-salary-calculation-on-the-server.md)) |
 
 **Extra members.** An error item is `{code, detail, attr}`. Three optional integer members exist, each sent with one code
 only and documented in the shared error schema: `attempts_left` on `code_invalid` (the wrong tries the 6-digit code still

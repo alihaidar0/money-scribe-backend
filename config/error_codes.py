@@ -60,6 +60,10 @@ class ErrorCode(StrEnum):
     IDEMPOTENCY_IN_PROGRESS = "idempotency_in_progress"
     PRECONDITION_FAILED = "precondition_failed"
 
+    # Salary (ADR 0007)
+    FIXED_ITEM_LIMIT_REACHED = "fixed_item_limit_reached"
+    MONTH_HAS_FIXED_ITEMS = "month_has_fixed_items"
+
     # The server cannot do its job safely right now
     SERVICE_UNAVAILABLE = "service_unavailable"
 
