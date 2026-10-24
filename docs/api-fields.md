@@ -31,8 +31,8 @@ Addressed by `YYYY-MM`; one per user and month, with the currency as a field of 
 | `base_salary` | amount, greater than 0 |
 | `food_per_day` | amount, 0 or more |
 | `working_days_in_month` | whole number, 1 to 31 |
-| `working_hours_in_month` | whole number, 1 or more |
-| `extra_hours_hundredths` | whole number, 0 or more (the user types hours with up to 2 decimals) |
+| `working_hours_in_month` | whole number, 1 to 744 (a month has at most 744 hours) |
+| `extra_hours_hundredths` | whole number, 0 to 74400 (744 hours; the user types hours with up to 2 decimals) |
 | `tax_rate_basis_points` | whole number, 0 to 10000 (the user types a percent with up to 2 decimals; the app defaults to 13%) |
 | `payment_mode` | `one_payment` or `two_payments`, kept with the saved month |
 | `working_days_first_half` | whole number, 0 up to `working_days_in_month`; used only with two payments |

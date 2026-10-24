@@ -104,7 +104,7 @@ def test_one_record_answers_its_etag_and_the_list_carries_the_versions(
     assert one["ETag"] == '"1"'
     assert one.json()["version"] == 1
     assert "ETag" not in listed
-    assert [item["version"] for item in listed.json()] == [1]
+    assert [item["version"] for item in listed.json()["results"]] == [1]
 
 
 def test_the_version_cannot_be_set_from_the_request(

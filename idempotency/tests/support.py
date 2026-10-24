@@ -12,7 +12,11 @@ from django.db import models
 from django.urls import URLPattern, URLResolver, include, path
 from drf_spectacular.utils import extend_schema, extend_schema_view
 from rest_framework import serializers
-from rest_framework.generics import ListCreateAPIView, RetrieveUpdateDestroyAPIView
+from rest_framework.generics import (
+    ListAPIView,
+    ListCreateAPIView,
+    RetrieveUpdateDestroyAPIView,
+)
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -75,6 +79,7 @@ class NoteSerializer(serializers.ModelSerializer):  # type: ignore[misc]
 )
 class NoteList(OwnerScopedMixin, IdempotentCreateMixin, ListCreateAPIView):  # type: ignore[misc]
     owner_field = "owner_id"
+    cursor_ordering = ("-title", "-id")
     queryset = Note.objects.all()
     serializer_class = NoteSerializer
 
@@ -85,6 +90,26 @@ class NoteList(OwnerScopedMixin, IdempotentCreateMixin, ListCreateAPIView):  # t
         if serializer.validated_data["title"] == SLOW:
             time.sleep(HOLD_SECONDS)
         serializer.save(owner_id=self.request.user.pk)
+
+
+class AscendingNotes(OwnerScopedMixin, ListAPIView):  # type: ignore[misc]
+    """The same notes in the other directions, to test every mix of ascending and descending fields."""
+
+    owner_field = "owner_id"
+    queryset = Note.objects.all()
+    serializer_class = NoteSerializer
+    cursor_ordering: ClassVar[tuple[str, ...]] = ("title", "id")
+
+    def get_owner(self) -> Any:
+        return self.request.user.pk
+
+
+class MixedNotes(AscendingNotes):
+    cursor_ordering = ("title", "-id")
+
+
+class UnorderedNotes(AscendingNotes):
+    cursor_ordering = ()
 
 
 @extend_schema_view(
@@ -155,6 +180,9 @@ class NoteByTitle(APIView):  # type: ignore[misc]
 api_patterns: list[URLPattern | URLResolver] = [
     path("notes/", NoteList.as_view()),
     path("notes/<uuid:pk>/", NoteDetail.as_view()),
+    path("notes-ascending/", AscendingNotes.as_view()),
+    path("notes-mixed/", MixedNotes.as_view()),
+    path("notes-unordered/", UnorderedNotes.as_view()),
     path("notes/by-title/<str:title>/", NoteByTitle.as_view()),
 ]
 urlpatterns = [

@@ -203,6 +203,7 @@ INSTALLED_APPS += [
     "django_celery_beat",
     "users",
     "idempotency",
+    "salary",
     "outbox",
 ]
 
@@ -345,6 +346,8 @@ REST_FRAMEWORK: dict[str, object] = {
     # opts out, so a forgotten permission fails closed.
     "DEFAULT_AUTHENTICATION_CLASSES": ["config.authentication.BearerAuthentication"],
     "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.IsAuthenticated"],
+    # One keyset cursor class for every list (ADR 0003); a list names its ordering as `cursor_ordering`.
+    "DEFAULT_PAGINATION_CLASS": "config.pagination.ApiCursorPagination",
     # JSON in and out: no browsable API in any environment. A view that takes files adds its parser.
     "DEFAULT_RENDERER_CLASSES": ["rest_framework.renderers.JSONRenderer"],
     "DEFAULT_PARSER_CLASSES": ["rest_framework.parsers.JSONParser"],
