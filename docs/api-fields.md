@@ -62,7 +62,7 @@ Operations: the history list (newest first, each month with its results), read, 
   - **Currency.** The Settings default currency when the person has set one, else the currency of the most recent saved
     month, else `RUB`. The carried amounts are returned only when that currency equals the most recent saved month's;
     otherwise they are `null`, because a RUB amount is not a USD amount. The other carried fields still carry.
-  - Until the Settings exist, the most recent month is the only source.
+  - The Settings (`GET` and `PATCH /api/v1/settings/`) are live: what the person set there is what the first source reads.
 - **Copy** (`POST /api/v1/salary/months/{month}/fixed-items/copy/`, `Idempotency-Key` required) copies the fixed items of
   another month into this one and answers `200` with the target month. The optional body field `from` is a `YYYY-MM`
   (default: the most recent saved month before this one). Both months must be saved (`404` otherwise, also when there is
@@ -170,17 +170,26 @@ The app sends explicit dates for "this month" and "this year" in reports and in 
 
 ## Settings
 
+`GET /api/v1/settings/` and `PATCH /api/v1/settings/`, one row per user, made the first time it is read. The names are
+the ones of the salary month (`payment_mode`, not `mode`).
+
 | Field | Rule |
 | --- | --- |
-| default currency | one of the supported currencies; defaults to `RUB` |
-| default payment mode | `one_payment` or `two_payments`; defaults to `one_payment` |
-| `first_pay_day`, `second_pay_day` | day of month, 1 to 28; default 20 and 5 |
-| `remind_on_pay_days` | true or false; defaults to `false` |
-| `time_zone` | an IANA name such as `Europe/Moscow`, validated; defaults to `UTC` |
-| `language` | `en` or `ar`; defaults to `en` |
+| `default_currency` | one of the supported currencies; `null` on a change goes back to "not set"; shows `RUB` until set |
+| `payment_mode` | `one_payment` or `two_payments`; `null` goes back to "not set"; shows `one_payment` until set |
+| `first_pay_day`, `second_pay_day` | day of month, 1 to 28, each on its own; `null` goes back to "not set"; show 20 and 5 until set |
+| `remind_on_pay_days` | true or false (a JSON boolean); defaults to `false` |
+| `time_zone` | an IANA name such as `Europe/Moscow`, validated; lives on the user; defaults to `UTC` |
+| `language` | `en` or `ar`; lives on the user; defaults to `en` |
+| `version` | read only; the `ETag` of the settings; a `PATCH` may send `If-Match` (`412` when stale, nothing changes) |
 
-The defaults are the app's own, used when a field has never been set. Theme, the PIN app lock and the notification
-permission stay on the device and have no field.
+The answer always carries every field. A `PATCH` changes only the fields sent; a field that is not a setting is
+`400 read_only`, and nothing sent changes nothing (not even the version). `language`, `time_zone` and
+`remind_on_pay_days` cannot be `null`.
+
+The defaults are the app's own, used when a field has never been set; a field never set is told apart from one set to
+the same value, because the salary form's defaults use only what the person has set (docs above, Salary month).
+Theme, the PIN app lock and the notification permission stay on the device and have no field.
 
 - `time_zone` lets the server send a pay-day reminder at a sensible local time and work out the user's "today". The app
   reads the name from the browser on the web and from the operating system on Android and iOS, and leaves the field out

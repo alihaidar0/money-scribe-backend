@@ -17,9 +17,8 @@ sides run. A change of a formula is a new ``CALCULATION_VERSION``.
 
 from dataclasses import dataclass
 
+from common.enums import PaymentMode
 from common.money import Money, divide_half_up
-
-from .models import PaymentMode
 
 BASIS_POINTS = 10000
 

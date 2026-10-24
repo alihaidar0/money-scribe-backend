@@ -6,11 +6,13 @@ change the currency under an item.
 """
 
 import datetime
+from dataclasses import dataclass
 from typing import Any
 
 from django.db import transaction
 from rest_framework.exceptions import ErrorDetail, NotFound, ValidationError
 
+from common.enums import PaymentMode
 from common.money import AmountOutOfRange, Currency, Money
 from config.error_codes import ErrorCode
 from config.exceptions import conflict
@@ -21,7 +23,6 @@ from .models import (
     CALCULATION_VERSION,
     MAX_FIXED_ITEMS,
     FixedItem,
-    PaymentMode,
     SalaryMonth,
 )
 from .presentation import build_month, ordered
@@ -225,30 +226,41 @@ def copy_items(
 # --- the defaults -----------------------------------------------------------------------------
 
 
+@dataclass(frozen=True)
+class SettingsDefaults:
+    """What the person set in the Settings; ``None`` is "never set" and the next source decides."""
+
+    currency: Currency | None = None
+    payment_mode: PaymentMode | None = None
+    first_pay_day: int | None = None
+    second_pay_day: int | None = None
+
+
 def defaults_for(
-    owner: User, month: datetime.date, *, settings_currency: Currency | None = None
+    owner: User, month: datetime.date, *, settings: SettingsDefaults | None = None
 ) -> dict[str, Any]:
     """The inputs that pre-fill the form of a month (docs/api-fields.md).
 
-    The currency is the Settings default when the person set one (the Settings arrive in a later step), else the
-    currency of the most recent saved month, else ``RUB``. The amounts of that month carry over only when the
-    currency is the same, because a rouble amount is not a dollar amount. The pay schedule is the Settings value
-    when set, then the most recent saved month, then the app's own defaults. The working days and the first-half
-    days are never carried, and the extra hours start at zero. The month being asked for is never its own source.
-
-    ``settings_currency`` is the person's default currency from the Settings (a later step passes it in); until then
-    it is ``None`` and the most recent month decides.
+    Each value has its own sources, in this order. The currency: the Settings, then the most recent saved month, then
+    ``RUB``. The pay schedule (``payment_mode`` and each pay day on its own): the Settings, then that month, then the
+    app's defaults. Only what the person has actually set counts as the Settings: an untouched one falls through. The
+    amounts of the most recent month (``base_salary``, ``food_per_day``) carry over only when the currency is the same,
+    because a rouble amount is not a dollar amount; the hours and the tax rate always carry. The working days and the
+    first-half days are never carried and the extra hours start at zero. The month being asked for is never its own
+    source.
     """
+    chosen = settings or SettingsDefaults()
     latest = (
         SalaryMonth.objects.filter(owner=owner)
         .exclude(month=month)
         .order_by("-month")
         .first()
     )
-    currency = settings_currency or (
+    currency = chosen.currency or (
         latest.money_currency if latest else DEFAULT_CURRENCY
     )
     carries = latest is not None and latest.money_currency is currency
+    mode = chosen.payment_mode.value if chosen.payment_mode else None
     return {
         "currency": currency.value,
         "base_salary": latest.money(latest.base_salary) if latest and carries else None,
@@ -261,8 +273,11 @@ def defaults_for(
         "tax_rate_basis_points": (
             latest.tax_rate_basis_points if latest else DEFAULT_TAX_RATE_BASIS_POINTS
         ),
-        "payment_mode": latest.payment_mode if latest else DEFAULT_PAYMENT_MODE.value,
+        "payment_mode": mode
+        or (latest.payment_mode if latest else DEFAULT_PAYMENT_MODE.value),
         "working_days_first_half": None,
-        "first_pay_day": latest.first_pay_day if latest else DEFAULT_FIRST_PAY_DAY,
-        "second_pay_day": latest.second_pay_day if latest else DEFAULT_SECOND_PAY_DAY,
+        "first_pay_day": chosen.first_pay_day
+        or (latest.first_pay_day if latest else DEFAULT_FIRST_PAY_DAY),
+        "second_pay_day": chosen.second_pay_day
+        or (latest.second_pay_day if latest else DEFAULT_SECOND_PAY_DAY),
     }

@@ -8,9 +8,9 @@ from typing import Any
 
 import pytest
 
+from common.enums import PaymentMode
 from common.money import MAX_MINOR_UNITS, AmountOutOfRange, Currency, Money
 from salary.calculation import SalaryInputs, SalaryResults, calculate
-from salary.models import PaymentMode
 
 VECTORS = json.loads((Path(__file__).parent / "vectors.json").read_text())["cases"]
 

@@ -31,6 +31,7 @@ from config.preconditions import (
     with_etag,
 )
 from idempotency import services as idempotency
+from preferences import services as preferences
 
 from . import services
 from .models import FixedItem, SalaryMonth
@@ -176,15 +177,25 @@ class SalaryMonthDefaults(APIView):  # type: ignore[misc]
             "The inputs of the form for a month, whether or not it is saved. Carried from the most recent saved month "
             "(never the month itself): `working_hours_in_month`, `tax_rate_basis_points`, and `base_salary` and "
             "`food_per_day` only when the currency is the same (else `null`). The pay schedule is that month's, then "
-            "the app's own defaults (one payment, days 20 and 5; tax 1300). `working_days_in_month` and "
-            "`working_days_first_half` are `null` and `extra_hours_hundredths` is `0`."
+            "the app's own defaults (one payment, days 20 and 5; tax 1300). The currency and the pay schedule the person "
+            "has set in the Settings come first (a value never set falls through to the month). "
+            "`working_days_in_month` and `working_days_first_half` are `null` and `extra_hours_hundredths` is `0`."
         ),
         parameters=[MONTH],
         responses={200: DefaultsSerializer},
     )
     def get(self, request: Request, month: datetime.date) -> Response:
+        chosen = preferences.set_values(request.user)
+        settings = services.SettingsDefaults(
+            currency=chosen.default_currency,
+            payment_mode=chosen.payment_mode,
+            first_pay_day=chosen.first_pay_day,
+            second_pay_day=chosen.second_pay_day,
+        )
         return Response(
-            DefaultsSerializer(services.defaults_for(request.user, month)).data
+            DefaultsSerializer(
+                services.defaults_for(request.user, month, settings=settings)
+            ).data
         )
 
 

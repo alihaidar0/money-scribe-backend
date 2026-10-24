@@ -390,7 +390,7 @@ def test_the_amounts_do_not_carry_to_another_currency(
 ) -> None:
     """When the Settings name another currency (a later step), a rouble amount is not offered as dollars."""
     from common.money import Currency
-    from salary.services import defaults_for
+    from salary.services import SettingsDefaults, defaults_for
 
     put_month(
         client,
@@ -400,10 +400,14 @@ def test_the_amounts_do_not_carry_to_another_currency(
     )
 
     other = defaults_for(
-        account[0], datetime.date(2026, 10, 1), settings_currency=Currency.USD
+        account[0],
+        datetime.date(2026, 10, 1),
+        settings=SettingsDefaults(currency=Currency.USD),
     )
     same = defaults_for(
-        account[0], datetime.date(2026, 10, 1), settings_currency=Currency.RUB
+        account[0],
+        datetime.date(2026, 10, 1),
+        settings=SettingsDefaults(currency=Currency.RUB),
     )
 
     assert other["currency"] == "USD"
@@ -421,3 +425,152 @@ def test_the_defaults_need_a_token_and_a_month_key(
 ) -> None:
     assert client.get(f"{API}/months/2026-10/defaults/").status_code == 401
     assert defaults(client, account[1], "2026-13").status_code == 404
+
+
+# --- the defaults and the Settings ------------------------------------------------------------
+
+
+def set_settings(client: APIClient, token: str, **values: Any) -> None:
+    response = client.patch("/api/v1/settings/", values, headers=bearer(token))
+    assert response.status_code == 200, response.json()
+
+
+def test_a_pay_schedule_the_person_set_wins_over_the_most_recent_month(
+    client: APIClient, account: tuple[User, str]
+) -> None:
+    put_month(
+        client,
+        account[1],
+        "2026-09",
+        month_body(payment_mode="one_payment", first_pay_day=1, second_pay_day=2),
+    )
+    set_settings(
+        client,
+        account[1],
+        payment_mode="two_payments",
+        first_pay_day=15,
+        second_pay_day=3,
+    )
+
+    body = defaults(client, account[1]).json()
+
+    assert (body["payment_mode"], body["first_pay_day"], body["second_pay_day"]) == (
+        "two_payments",
+        15,
+        3,
+    )
+
+
+def test_a_setting_that_was_never_set_falls_through_to_the_month_one_value_at_a_time(
+    client: APIClient, account: tuple[User, str]
+) -> None:
+    put_month(
+        client,
+        account[1],
+        "2026-09",
+        month_body(payment_mode="two_payments", first_pay_day=1, second_pay_day=2),
+    )
+    set_settings(client, account[1], first_pay_day=15)  # only this one
+
+    body = defaults(client, account[1]).json()
+
+    assert (body["payment_mode"], body["first_pay_day"], body["second_pay_day"]) == (
+        "two_payments",
+        15,
+        2,
+    )
+
+
+def test_an_untouched_settings_page_hides_nothing(
+    client: APIClient, account: tuple[User, str]
+) -> None:
+    put_month(
+        client, account[1], "2026-09", month_body(first_pay_day=9, second_pay_day=8)
+    )
+    client.get(
+        "/api/v1/settings/", headers=bearer(account[1])
+    )  # reading makes the row and sets nothing
+
+    body = defaults(client, account[1]).json()
+
+    assert (body["first_pay_day"], body["second_pay_day"]) == (9, 8)
+
+
+def test_resetting_a_setting_makes_the_month_decide_again(
+    client: APIClient, account: tuple[User, str]
+) -> None:
+    put_month(client, account[1], "2026-09", month_body(first_pay_day=9))
+    set_settings(client, account[1], first_pay_day=15)
+    set_settings(client, account[1], first_pay_day=None)
+
+    assert defaults(client, account[1]).json()["first_pay_day"] == 9
+
+
+def test_the_default_currency_wins_and_the_amounts_of_another_currency_are_not_carried(
+    client: APIClient, account: tuple[User, str]
+) -> None:
+    put_month(
+        client,
+        account[1],
+        "2026-09",
+        month_body(working_hours_in_month=168, tax_rate_basis_points=900),
+    )
+    set_settings(client, account[1], default_currency="USD")
+
+    body = defaults(client, account[1]).json()
+
+    assert body["currency"] == "USD"
+    assert body["base_salary"] is None and body["food_per_day"] is None
+    assert (body["working_hours_in_month"], body["tax_rate_basis_points"]) == (168, 900)
+
+
+def test_the_default_currency_of_the_months_own_currency_carries_the_amounts(
+    client: APIClient, account: tuple[User, str]
+) -> None:
+    put_month(client, account[1], "2026-09", month_body(base_salary="777.00"))
+    set_settings(client, account[1], default_currency="RUB")
+
+    body = defaults(client, account[1]).json()
+
+    assert (body["currency"], body["base_salary"]) == ("RUB", "777.00")
+
+
+def test_the_settings_apply_with_no_month_saved_at_all(
+    client: APIClient, account: tuple[User, str]
+) -> None:
+    set_settings(
+        client,
+        account[1],
+        default_currency="KWD",
+        payment_mode="two_payments",
+        first_pay_day=12,
+    )
+
+    body = defaults(client, account[1]).json()
+
+    assert (
+        body["currency"],
+        body["payment_mode"],
+        body["first_pay_day"],
+        body["second_pay_day"],
+    ) == (
+        "KWD",
+        "two_payments",
+        12,
+        5,
+    )
+    assert body["base_salary"] is None
+
+
+def test_another_users_settings_never_reach_the_defaults(
+    client: APIClient, account: tuple[User, str]
+) -> None:
+    stranger = APIClient()
+    _, other = start_session(stranger)
+    set_settings(
+        stranger, other["access_token"], default_currency="JPY", first_pay_day=28
+    )
+
+    body = defaults(client, account[1]).json()
+
+    assert (body["currency"], body["first_pay_day"]) == ("RUB", 20)

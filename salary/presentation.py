@@ -14,9 +14,10 @@ from collections.abc import Iterable
 from types import SimpleNamespace
 from typing import Any
 
+from common.enums import PaymentMode
 from common.money import Currency, Money
 
-from .models import FixedItem, ItemKind, Part, PaymentMode, SalaryMonth
+from .models import FixedItem, ItemKind, Part, SalaryMonth
 
 
 def ordered(items: Iterable[FixedItem]) -> list[FixedItem]:

@@ -1577,8 +1577,10 @@ paths:
         Carried from the most recent saved month (never the month itself): `working_hours_in_month`,
         `tax_rate_basis_points`, and `base_salary` and `food_per_day` only when the
         currency is the same (else `null`). The pay schedule is that month''s, then
-        the app''s own defaults (one payment, days 20 and 5; tax 1300). `working_days_in_month`
-        and `working_days_first_half` are `null` and `extra_hours_hundredths` is `0`.'
+        the app''s own defaults (one payment, days 20 and 5; tax 1300). The currency
+        and the pay schedule the person has set in the Settings come first (a value
+        never set falls through to the month). `working_days_in_month` and `working_days_first_half`
+        are `null` and `extra_hours_hundredths` is `0`.'
       summary: The inputs to pre-fill a month
       parameters:
       - in: path
@@ -1790,6 +1792,105 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
           description: The `Idempotency-Key` was already used for a different request.
             The `code` is `idempotency_key_reused`.
+  /api/v1/settings/:
+    get:
+      operationId: settings_read
+      description: Every setting, with the app's own default for one that was never
+        set (language `en`, time zone `UTC`, currency `RUB`, one payment, pay days
+        20 and 5, reminders off). The first read makes the row, so there is always
+        a `version` and an `ETag`.
+      summary: Read the settings
+      tags:
+      - settings
+      security:
+      - bearerAuth: []
+      responses:
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error400Response'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '200':
+          headers:
+            ETag:
+              schema:
+                type: string
+              description: 'The `version` of the record in the answer, as a quoted
+                string: `"3"`.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Settings'
+          description: ''
+    patch:
+      operationId: settings_update
+      description: 'Changes the fields sent and answers all the settings. The language
+        and the time zone are the ones the emails, the reminders and "today" use (sign-in
+        still sets them from the device it happens on). `default_currency`, `payment_mode`,
+        `first_pay_day` and `second_pay_day` can be sent as `null` to go back to "not
+        set". Send `If-Match` with the `version` read: a stale one is `412` and changes
+        nothing. Errors: `400` on the field that is wrong (`invalid_choice`, `invalid`,
+        `min_value`, `max_value`, `null` for a field that cannot be cleared), `400`
+        `read_only` for a field that is not a setting.'
+      summary: Change the settings
+      parameters:
+      - in: header
+        name: If-Match
+        schema:
+          type: string
+        description: 'The `version` of the record the edit was made from, as a quoted
+          string: `"3"` (`*` matches any record). If the stored version is another
+          one nothing changes and the answer is `412` `precondition_failed`. Without
+          the header the last write wins.'
+      tags:
+      - settings
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedSettingsUpdateRequest'
+      security:
+      - bearerAuth: []
+      responses:
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error400Response'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '200':
+          headers:
+            ETag:
+              schema:
+                type: string
+              description: 'The `version` of the record in the answer, as a quoted
+                string: `"3"`.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Settings'
+          description: ''
+        '412':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: 'The `If-Match` version is not the stored one, or `If-None-Match:
+            *` found the record. Nothing was changed: reload the record. The `code`
+            is `precondition_failed`.'
 components:
   schemas:
     AlgorithmEnum:
@@ -2467,6 +2568,9 @@ components:
       description: |-
         * `en` - English
         * `ar` - Arabic
+    NullEnum:
+      enum:
+      - null
     PaginatedSalaryMonthList:
       type: object
       required:
@@ -2611,6 +2715,67 @@ components:
           minLength: 1
           description: The display name, 1 to 100 characters, trimmed.
           maxLength: 100
+    PatchedSettingsUpdateRequest:
+      type: object
+      description: The settings the person may change. Only the fields sent change;
+        any other field is ``400 read_only``.
+      properties:
+        language:
+          allOf:
+          - $ref: '#/components/schemas/LanguageEnum'
+          description: |-
+            `en` or `ar`; the app sends `en` when the device language is neither.
+
+            * `en` - English
+            * `ar` - Arabic
+        time_zone:
+          type: string
+          minLength: 1
+          description: An IANA name such as `Europe/Moscow`. Leave it out when the
+            device cannot read it.
+          maxLength: 64
+        default_currency:
+          nullable: true
+          description: |-
+            `null` goes back to "not set": the app's default (`RUB`) applies.
+
+            * `RUB` - RUB
+            * `USD` - USD
+            * `EUR` - EUR
+            * `GBP` - GBP
+            * `TRY` - TRY
+            * `SAR` - SAR
+            * `AED` - AED
+            * `EGP` - EGP
+            * `JPY` - JPY
+            * `KWD` - KWD
+          oneOf:
+          - $ref: '#/components/schemas/CurrencyEnum'
+          - $ref: '#/components/schemas/NullEnum'
+        payment_mode:
+          nullable: true
+          description: |-
+            How the person is paid. `null` goes back to "not set" (`one_payment`).
+
+            * `one_payment` - One payment
+            * `two_payments` - Two payments
+          oneOf:
+          - $ref: '#/components/schemas/PaymentModeEnum'
+          - $ref: '#/components/schemas/NullEnum'
+        first_pay_day:
+          type: integer
+          maximum: 28
+          minimum: 1
+          nullable: true
+          description: 1 to 28. `null` goes back to "not set" (20).
+        second_pay_day:
+          type: integer
+          maximum: 28
+          minimum: 1
+          nullable: true
+          description: 1 to 28. `null` goes back to "not set" (5).
+        remind_on_pay_days:
+          type: boolean
     Payment:
       type: object
       properties:
@@ -3046,6 +3211,66 @@ components:
       required:
       - errors
       - type
+    Settings:
+      type: object
+      description: Every setting, with the app's own default for one that was never
+        set.
+      properties:
+        language:
+          type: string
+          readOnly: true
+          description: '`en` or `ar`.'
+        time_zone:
+          type: string
+          readOnly: true
+          description: An IANA name such as `Asia/Riyadh`.
+        default_currency:
+          allOf:
+          - $ref: '#/components/schemas/CurrencyEnum'
+          readOnly: true
+          description: |-
+            The ISO 4217 code of the currency.
+
+            * `RUB` - RUB
+            * `USD` - USD
+            * `EUR` - EUR
+            * `GBP` - GBP
+            * `TRY` - TRY
+            * `SAR` - SAR
+            * `AED` - AED
+            * `EGP` - EGP
+            * `JPY` - JPY
+            * `KWD` - KWD
+        payment_mode:
+          allOf:
+          - $ref: '#/components/schemas/PaymentModeEnum'
+          readOnly: true
+        first_pay_day:
+          type: integer
+          readOnly: true
+        second_pay_day:
+          type: integer
+          readOnly: true
+        remind_on_pay_days:
+          type: boolean
+          readOnly: true
+        version:
+          type: integer
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - default_currency
+      - first_pay_day
+      - language
+      - payment_mode
+      - remind_on_pay_days
+      - second_pay_day
+      - time_zone
+      - updated_at
+      - version
     SignInRequest:
       type: object
       description: '``language`` and ``time_zone``: the device the user signs in on

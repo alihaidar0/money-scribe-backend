@@ -5,12 +5,14 @@ from typing import Any
 from rest_framework import serializers
 from rest_framework.exceptions import ErrorDetail, ValidationError
 
+from common.enums import PaymentMode
 from common.money import Currency
 from common.serializers import (
     AmountField,
     CurrencyField,
     MoneySerializerMixin,
     SignedAmountField,
+    WholeNumberField,
     currency_mismatch,
 )
 
@@ -19,20 +21,8 @@ from .models import (
     MAX_WORKING_HOURS,
     ItemKind,
     Part,
-    PaymentMode,
 )
 from .presentation import present_item
-
-
-class WholeNumberField(serializers.IntegerField):  # type: ignore[misc]
-    """A JSON integer. A string, a decimal and a boolean are refused, so ``"20"`` is not a number of days."""
-
-    def to_internal_value(self, data: Any) -> int:
-        if type(data) is not int:
-            self.fail("invalid")
-        value: int = super().to_internal_value(data)
-        return value
-
 
 # --- what the client sends --------------------------------------------------------------------
 

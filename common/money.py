@@ -1,4 +1,4 @@
-"""Money: integer minor units plus a currency (ADR 0005, ADR 0008, ``.claude/rules/django-backend.md``).
+"""Money: integer minor units plus a currency (ADR 0005, ADR 0008).
 
 An amount is never a float. It is a whole number of the currency's smallest unit (kopecks, cents, fils) next to a
 currency code, so arithmetic is exact. The rules this module owns:

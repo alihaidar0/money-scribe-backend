@@ -75,11 +75,16 @@ class SignedAmountField(AmountField):
     pattern = SIGNED_AMOUNT_PATTERN
 
 
+# The supported currencies as choices. The schema names this set once, ``CurrencyEnum``, whatever the field is
+# called (``currency``, ``default_currency``): see ``ENUM_NAME_OVERRIDES`` in the settings.
+CURRENCY_CHOICES = [(c.value, c.value) for c in Currency]
+
+
 class CurrencyField(serializers.ChoiceField):  # type: ignore[misc]
     """The ISO 4217 code of a supported currency."""
 
     def __init__(self, **kwargs: Any) -> None:
-        kwargs.setdefault("choices", [(c.value, c.value) for c in Currency])
+        kwargs.setdefault("choices", CURRENCY_CHOICES)
         kwargs.setdefault("help_text", "The ISO 4217 code of the currency.")
         super().__init__(**kwargs)
 
@@ -134,6 +139,47 @@ class MoneySerializerMixin(serializers.Serializer):  # type: ignore[misc]
         if errors:
             raise ValidationError(errors)
         return attrs
+
+
+class WholeNumberField(serializers.IntegerField):  # type: ignore[misc]
+    """A JSON integer. A string, a decimal and a boolean are refused, so ``"20"`` is not a number of days."""
+
+    def to_internal_value(self, data: Any) -> int:
+        if type(data) is not int:
+            self.fail("invalid")
+        value: int = super().to_internal_value(data)
+        return value
+
+
+class StrictBooleanField(serializers.BooleanField):  # type: ignore[misc]
+    """A JSON ``true`` or ``false``; ``"true"``, ``1`` and ``null`` are refused."""
+
+    def to_internal_value(self, data: Any) -> bool:
+        if type(data) is not bool:
+            self.fail("invalid")
+        return bool(data)
+
+
+class RefuseUnknownFieldsMixin(serializers.Serializer):  # type: ignore[misc]
+    """A field that the serializer does not have is ``400 read_only`` on that field, never silently ignored.
+
+    For the edit of a record that has fields the client may not set (a version, a result, an id): a client that
+    sends one learns at once that it was not applied.
+    """
+
+    def to_internal_value(self, data: Any) -> dict[str, Any]:
+        if isinstance(data, dict):
+            refused = {
+                field: [
+                    ErrorDetail("This field cannot be changed here.", code="read_only")
+                ]
+                for field in data
+                if field not in self.fields
+            }
+            if refused:
+                raise ValidationError(refused)
+        value: dict[str, Any] = super().to_internal_value(data)
+        return value
 
 
 def currency_mismatch(field: str = "currency") -> ValidationError:

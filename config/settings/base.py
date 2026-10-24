@@ -203,6 +203,7 @@ INSTALLED_APPS += [
     "django_celery_beat",
     "users",
     "idempotency",
+    "preferences",
     "salary",
     "outbox",
 ]
@@ -419,6 +420,9 @@ SPECTACULAR_SETTINGS = {
     "ENUM_NAME_OVERRIDES": {
         "ClientErrorEnum": f"{_ERROR_ENUMS}.ClientErrorEnum.choices",
         "ServerErrorEnum": f"{_ERROR_ENUMS}.ServerErrorEnum.choices",
+        # The same set of choices appears under several field names (currency, default_currency, payment_mode).
+        "CurrencyEnum": "common.serializers.CURRENCY_CHOICES",
+        "PaymentModeEnum": "common.enums.PaymentMode.choices",
     },
     # Replaces drf-spectacular's own enum hook (the package's hook calls the same logic).
     "POSTPROCESSING_HOOKS": [
