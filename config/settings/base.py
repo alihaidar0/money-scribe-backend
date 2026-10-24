@@ -424,6 +424,9 @@ SPECTACULAR_SETTINGS = {
         "CurrencyEnum": "common.serializers.CURRENCY_CHOICES",
         "PaymentModeEnum": "common.enums.PaymentMode.choices",
     },
+    # A nullable enum field is `nullable: true` plus one enum reference, not `oneOf: [Enum, NullEnum]`: Dart
+    # client generators turn the union into a class that must implement an enum, which does not compile.
+    "ENUM_ADD_EXPLICIT_BLANK_NULL_CHOICE": False,
     # Replaces drf-spectacular's own enum hook (the package's hook calls the same logic).
     "POSTPROCESSING_HOOKS": [
         "drf_standardized_errors.openapi_hooks.postprocess_schema_enums",
