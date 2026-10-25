@@ -17,14 +17,17 @@ from config.api_errors import (
     UNPROCESSABLE_RESPONSE,
 )
 
-from . import services
-from .models import Account, Category
+from . import filters, services
+from .models import Account, Category, Transaction
 from .permissions import CustomCategoriesOnly
 from .serializers import (
     AccountInputSerializer,
     AccountSerializer,
     CategoryInputSerializer,
     CategorySerializer,
+    TransactionCreateSerializer,
+    TransactionSerializer,
+    TransactionUpdateSerializer,
 )
 
 ACCOUNTS = ["accounts"]
@@ -125,6 +128,9 @@ class AccountDetail(OwnerScopedMixin, VersionedMixin, RetrieveUpdateDestroyAPIVi
         serializer.instance = services.update_account(
             account=serializer.instance, data=serializer.validated_data
         )
+
+    def perform_destroy(self, instance: Account) -> None:
+        services.delete_account(instance)
 
 
 # --- categories -------------------------------------------------------------------------------
@@ -232,4 +238,117 @@ class CategoryDetail(
     def perform_update(self, serializer: Any) -> None:
         serializer.instance = services.update_category(
             category=serializer.instance, data=serializer.validated_data
+        )
+
+    def perform_destroy(self, instance: Category) -> None:
+        services.delete_category(instance)
+
+
+# --- transactions -----------------------------------------------------------------------------
+
+TRANSACTIONS = ["transactions"]
+
+
+@extend_schema_view(
+    get=extend_schema(
+        operation_id="transaction_list",
+        tags=TRANSACTIONS,
+        summary="The person's transactions",
+        description=(
+            "Newest day first, then the entry added last first (`-date`, `-created_at`, `-id`). Cursor pagination "
+            "(`limit` 50 by default, 100 at most; follow `next`). The filters narrow the list; the same ones (except "
+            "`search`) narrow the day totals. `search` is a case-insensitive substring of the note, 2 to 100 "
+            "characters. An id that matches nothing, or no match at all, is `200` with an empty `results`."
+        ),
+        parameters=[filters.TransactionFilterSerializer],
+        responses={200: TransactionSerializer},
+    ),
+    post=extend_schema(
+        operation_id="transaction_create",
+        tags=TRANSACTIONS,
+        summary="Add a transaction",
+        description=(
+            "Needs an `Idempotency-Key`. `amount` is a decimal string with exactly the digits of `currency` and "
+            "greater than 0; the `kind` carries the sign. The `date` is a calendar day from 2000-01-01 to 2099-12-31 "
+            "(`400` `date_out_of_range`). The category must be a built-in one or the person's own and must allow the "
+            "`kind` (`400` `category_not_allowed` on `category_id`); an unknown id, or one that belongs to someone "
+            "else, is `400` `does_not_exist` on its field, with the same answer for both. A person has at most "
+            "100 000 transactions (`409` `transaction_limit_reached`)."
+        ),
+        parameters=[IDEMPOTENCY_KEY_HEADER, IDEMPOTENT_REPLAYED_HEADER, ETAG_HEADER],
+        request=TransactionCreateSerializer,
+        responses={
+            201: TransactionSerializer,
+            409: CONFLICT_RESPONSE,
+            422: UNPROCESSABLE_RESPONSE,
+        },
+    ),
+)
+class TransactionList(OwnerScopedMixin, IdempotentCreateMixin, ListCreateAPIView):  # type: ignore[misc]
+    queryset = Transaction.objects.all()
+    cursor_ordering = ("-date", "-created_at", "-id")
+
+    def get_queryset(self) -> QuerySet[Transaction]:
+        queryset: QuerySet[Transaction] = super().get_queryset()
+        if self.request.method != "GET":
+            return queryset
+        parsed = filters.parse(filters.TransactionFilterSerializer, self.request)
+        return filters.apply(queryset, parsed)
+
+    def get_serializer_class(self) -> type[BaseSerializer[Any]]:
+        method = getattr(self.request, "method", "GET")
+        return (
+            TransactionCreateSerializer if method == "POST" else TransactionSerializer
+        )
+
+    def perform_create(self, serializer: Any) -> None:
+        serializer.instance = services.create_transaction(
+            owner=self.request.user, data=serializer.validated_data
+        )
+
+
+@extend_schema_view(
+    get=extend_schema(
+        operation_id="transaction_read",
+        tags=TRANSACTIONS,
+        summary="Read a transaction",
+        description="The transaction, or `404` when it is not the person's. Answers the `ETag` of its `version`.",
+        parameters=[ETAG_HEADER],
+        responses={200: TransactionSerializer},
+    ),
+    patch=extend_schema(
+        operation_id="transaction_update",
+        tags=TRANSACTIONS,
+        summary="Change a transaction",
+        description=(
+            "Changes any of `kind`, `amount`, `date`, `category_id`, `account_id`, `note`; the rules are those of the "
+            "create, and a change of the kind or the category checks the category again. The `currency` cannot be "
+            "changed: sending it, even the stored one, is `400` `read_only`, like any other field that cannot be "
+            "written. Send `If-Match` with the `version`: a stale one (a category delete that moved this transaction "
+            "counts) is `412` and changes nothing."
+        ),
+        parameters=[IF_MATCH_HEADER, ETAG_HEADER],
+        request=TransactionUpdateSerializer,
+        responses={200: TransactionSerializer, 412: PRECONDITION_FAILED_RESPONSE},
+    ),
+    delete=extend_schema(
+        operation_id="transaction_delete",
+        tags=TRANSACTIONS,
+        summary="Delete a transaction",
+        description=(
+            "Deletes the transaction for good (`204`); `If-Match` is checked as for a change. A repeated delete is "
+            "`404`: treat it as done."
+        ),
+        parameters=[IF_MATCH_HEADER],
+        responses={204: None, 412: PRECONDITION_FAILED_RESPONSE},
+    ),
+)
+class TransactionDetail(OwnerScopedMixin, VersionedMixin, RetrieveUpdateDestroyAPIView):  # type: ignore[misc]
+    queryset = Transaction.objects.all()
+    serializer_class = TransactionUpdateSerializer
+    http_method_names = ("get", "patch", "delete", "options")
+
+    def perform_update(self, serializer: Any) -> None:
+        serializer.instance = services.update_transaction(
+            record=serializer.instance, data=serializer.validated_data
         )

@@ -449,8 +449,8 @@ when the owner confirms it, and a step that needs the app on staging waits for t
   category's transactions to `other` (ADR 0017)
 - [ ] **10.7 debts**: debts with repayments, derived `repaid`, `remaining`, `is_settled`, `progress` and `status`, with the
   `today` parameter
-- [ ] **10.8 reports**: month overview, day totals, category spend, month comparison, debts report and period report, with
-  the `part` filter
+- [ ] **10.8 reports**: month overview, category spend, month comparison, debts report and period report, with the `part`
+  filter (the day totals came with 10.6, in the new `reports` app)
 - [ ] **10.9 CSV export and import** of transactions, debts and salary months: the server builds the export; the import is
   a bulk call of rows the app has parsed (the server never parses an uploaded file), with skipped-row reporting and a
   lossless round trip

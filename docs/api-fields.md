@@ -94,19 +94,28 @@ fixed-item totals and the balances.
 
 | Field | Rule |
 | --- | --- |
-| `amount` | amount, greater than 0 |
-| `currency` | ISO code; the account has no currency, the transaction carries it |
 | `kind` | `expense` or `income` |
-| `date` | calendar day |
-| `category` | id of a category, required; it must allow the kind |
-| `account` | id of an account, required |
-| `note` | text, optional, up to 100 characters |
+| `amount` | amount, greater than 0 |
+| `currency` | ISO code, required on create and fixed for good (`400 read_only` on a change, even with the stored value); the account has no currency, the transaction carries it |
+| `date` | calendar day, 2000-01-01 to 2099-12-31 (`400 date_out_of_range`); no limit relative to today |
+| `category_id` | id of a built-in category or of the person's own, required; it must allow the kind (`400 category_not_allowed`) |
+| `account_id` | id of one of the person's accounts, required |
+| `note` | text, optional, up to 100 characters, empty by default |
 
-Create, edit and delete. The list is ordered `-date`, `-created_at`, `-id`, so within a day the entry added last comes
-first, and takes the filters `date_from`, `date_to`, `account`, `category`, `kind` and `search`
-([ADR 0003](adr/0003-cursor-pagination.md)). `search` matches the `note` as a case-insensitive substring (1 to 100
-characters). The two pay periods of a month are asked for with the date range (days 1 to 15 and day 16 to the end), so
-the list has no `part` filter; the reports do (see Reports). Day totals take the same filters.
+An unknown id and an id that belongs to someone else give the same answer, `400 does_not_exist` on that field. A person has
+at most 100 000 transactions (`409 transaction_limit_reached`).
+
+Create, edit and delete (a hard delete: no soft delete, no tombstone). The list is ordered `-date`, `-created_at`, `-id`, so
+within a day the entry added last comes first, and takes the filters `date_from`, `date_to` (inclusive),
+`category_id` and `account_id` (each repeatable, at most 20 values: `400 too_many_values`), `kind` and `search`
+([ADR 0003](adr/0003-cursor-pagination.md)). `search` matches the note only, as a case-insensitive substring of 2 to 100
+characters (`%` and `_` are ordinary characters); the category and account names are not searched, because the app shows
+the built-in names in its own languages. `date_from` after `date_to` is `400 invalid_date_range`. The two pay periods of a
+month are asked for with the date range (days 1 to 15 and day 16 to the end), so the list has no `part` filter; the reports
+do (see Reports). Day totals take the same filters except `search`.
+
+When a custom category is deleted its transactions move to `other` and each gets a new `version`, so a form that was open on
+one gets `412` when saved ([ADR 0017](adr/0017-deleting-a-category-moves-its-transactions.md)).
 
 ## Account
 
@@ -116,8 +125,8 @@ the list has no `part` filter; the reports do (see Reports). Day totals take the
 | `kind` | `card`, `cash` or `other` |
 
 Create, edit and delete; there is no reorder (the app has none). The list is ordered by creation (`created_at`, `id`).
-Deleting an account that has transactions answers `409 account_has_transactions` (built with the transactions). A person
-has at most 20 accounts (`409 account_limit_reached`).
+Deleting an account that has transactions answers `409 account_has_transactions` and changes nothing. A person has at most
+20 accounts (`409 account_limit_reached`).
 
 **The first two accounts.** When an email is verified the server makes "Card" (`card`) and "Cash" (`cash`) in the
 language of the account (Arabic: "بطاقة" and "نقدًا", the app's own labels of the two kinds). They are made in one
@@ -138,8 +147,7 @@ users app announces the verification with a signal and never imports the ledger 
 Create, edit and delete for custom categories only, at most 50 per person (`409 category_limit_reached`); there is no
 reorder. Built-in categories are read-only: changing or deleting one answers `403 category_is_builtin`, before the
 version is checked. Deleting a custom category that has transactions succeeds (`204`) and moves them to the built-in
-`other` in the same database transaction ([ADR 0017](adr/0017-deleting-a-category-moves-its-transactions.md); built with
-the transactions). The list returns the built-in categories first, in a fixed order, then the custom ones in the order
+`other` in the same database transaction ([ADR 0017](adr/0017-deleting-a-category-moves-its-transactions.md)). The list returns the built-in categories first, in a fixed order, then the custom ones in the order
 they were made.
 
 **Built-in categories** are shared rows created by a data migration with fixed ids, and returned with the person's own.
@@ -321,11 +329,12 @@ password change and the account deletion.
 
 ## Reports and read models
 
-Overview and report endpoints are read models computed on the server. They take `part=first|second|all`, where the parts
-are calendar halves (days 1 to 15 and day 16 to the end of the month). Day totals are
-`GET /api/v1/reports/day-totals/` with the transaction filters, `date_from` and `date_to` required and at most 366 days
-apart: one entry per day that has entries and per currency, newest day first like the list, with one net `SignedAmount`
-total (income minus expense).
+Overview and report endpoints are read models computed on the server. The month reports and the Overview take the parts as
+calendar halves (days 1 to 15 and day 16 to the end of the month; their shapes are in their request issues). Day totals are
+`GET /api/v1/reports/day-totals/` with the transaction filters except `search`, `date_from` and `date_to` optional and no
+limit on the span. A page is `limit` days (50 by default, 100 at most), newest day first like the list; each item is one day
+with its currencies inside, `{date, totals: [{currency, total}]}`, where `total` is a signed amount (income minus expense) of
+that day in that currency, so a day always arrives whole ([ADR 0003](adr/0003-cursor-pagination.md)).
 
 ## CSV
 

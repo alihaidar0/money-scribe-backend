@@ -2,6 +2,8 @@
 
 - Status: accepted
 - Date: 2026-10-15
+- Amended: 2026-10-25, with the Flutter developer. The day totals are paginated, one item per day with its currencies
+  inside, and the filters are validated by a serializer. The text below is the amended decision.
 
 ## Context
 
@@ -48,19 +50,29 @@ depend on how ids are generated. The index is `(owner, date, created_at, id)`.
 | repayments, debts | `-id` unless the screen needs a date order, then `-date`, `-id` |
 | sessions | `-last_active_at`, `-id` |
 
-**Filters.** A list takes its filters as explicit query parameters, documented in the schema, validated with `400` on a
-bad value, and implemented with `django-filter` (decided at implementation, with its drf-spectacular support).
-Transactions take `date_from` and `date_to` (inclusive calendar dates), `account`, `category` and `kind`; the client
-filters by a month or by half of a month with the two dates.
+**Filters.** A list takes its filters as explicit query parameters, documented in the schema and validated with `400` on a
+bad value, on the parameter itself and with a stable code. One serializer per list describes and checks them
+(`ledger/filters.py`), so the schema and the validation cannot differ, a repeated parameter (`category_id`) and a rule
+across two (`date_from` after `date_to` is `invalid_date_range`) are handled in one place, and no dependency is added;
+`django-filter`, first planned here, was not needed. Transactions take `date_from` and `date_to` (inclusive calendar
+dates), `category_id` and `account_id` (repeatable, at most 20 values), `kind` and `search` (a case-insensitive substring
+of the note, 2 to 100 characters, on a trigram index); the client filters by a month or by half of a month with the two
+dates. A parameter the list does not know is ignored.
 
-**Day totals are not computed from pages.** A day can be split across two pages, so a client summing the pages shows a
-wrong total until the next page arrives. The server provides a read model instead: `GET /api/v1/reports/day-totals/`
-takes the same filters as the list (`date_from`, `date_to`, `account`, `category`, `kind`), requires `date_from` and
-`date_to` (at most 366 days apart), and returns one entry per day **that has entries** and per currency, newest day first
-like the list, with one signed net total (income minus expense). Income and expense totals can be added later without
-breaking a client. It is a report, so it is not paginated.
+**Day totals are not computed from pages, and they are paginated by day.** A day can be split across two pages of the list,
+so a client summing the pages shows a wrong total until the next page arrives. The server provides a read model instead:
+`GET /api/v1/reports/day-totals/` takes the same filters as the list except `search` (a total of only the matching rows would
+mislead), with `date_from` and `date_to` optional and no limit on the span. Its page is `limit` **days** (50 by default,
+100 at most), the days that have a record, newest first. Each item is one day with its currencies inside,
+`{date, totals: [{currency, total}]}`, so a day always arrives complete and a page never holds more than `limit` items; `total`
+is one signed amount (income minus expenses of that day and currency). The cursor is the last day of the page (the one
+ordering field, unique per item), in the same envelope as every other list. The order is the list's, so the first page of
+totals starts on the day of the first page of the list and the two are read in step, however sparse the data or oddly
+dated one record is. The first design, a window of at most 366 days without paging, would have cost about seventy calls
+for one record dated 2099. A total past the largest amount is `400 invalid_amount`. Income and expense totals can be added
+later without breaking a client.
 
-Not paginated: read models, settings and single objects. A salary month returns its fixed items inline: they are bounded
+Not paginated: the other read models, settings and single objects. A salary month returns its fixed items inline: they are bounded
 and are not a list of their own.
 
 ## Alternatives considered
@@ -76,4 +88,5 @@ and are not a list of their own.
 - The OpenAPI schema documents `limit`, `cursor` and the envelope once, as a generic paginated response, plus the
   filters of each list.
 - Implemented in `config/pagination.py` with the first list, the salary history (step 10.4), and used by each list
-  endpoint after it; day totals arrive with the `reports` app.
+  endpoint after it. The day totals, with their own pagination by day (`reports/pagination.py`), arrive with the
+  transactions (step 10.6).

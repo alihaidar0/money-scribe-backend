@@ -3,12 +3,18 @@ from typing import Any
 from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
 
-from common.serializers import RefuseUnknownFieldsMixin, TextField
+from common.serializers import (
+    AmountField,
+    CurrencyField,
+    MoneySerializerMixin,
+    RefuseUnknownFieldsMixin,
+    TextField,
+)
 from config.error_codes import ErrorCode
 
 from . import services
 from .defaults import CUSTOM_ICONS
-from .models import AccountKind, CategoryKind
+from .models import FIRST_DAY, LAST_DAY, AccountKind, CategoryKind, TransactionKind
 
 
 def _name_taken() -> ValidationError:
@@ -99,4 +105,91 @@ class CategoryInputSerializer(RefuseUnknownFieldsMixin, serializers.Serializer):
 
     def to_representation(self, instance: Any) -> dict[str, Any]:
         data: dict[str, Any] = CategorySerializer(instance, context=self.context).data
+        return data
+
+
+# --- transactions -----------------------------------------------------------------------------
+
+
+class TransactionSerializer(serializers.Serializer):  # type: ignore[misc]
+    id = serializers.UUIDField(read_only=True)
+    kind = serializers.ChoiceField(choices=TransactionKind.choices, read_only=True)
+    amount = AmountField(read_only=True, source="money")
+    currency = CurrencyField(read_only=True)
+    date = serializers.DateField(read_only=True)
+    category_id = serializers.UUIDField(read_only=True)
+    account_id = serializers.UUIDField(read_only=True)
+    note = serializers.CharField(read_only=True)
+    version = serializers.IntegerField(read_only=True)
+    created_at = serializers.DateTimeField(read_only=True)
+    updated_at = serializers.DateTimeField(read_only=True)
+
+
+def _day_in_range(value: Any) -> Any:
+    if not FIRST_DAY <= value <= LAST_DAY:
+        raise serializers.ValidationError(
+            f"A day from {FIRST_DAY} to {LAST_DAY}.",
+            code=ErrorCode.DATE_OUT_OF_RANGE.value,
+        )
+    return value
+
+
+class TransactionCreateSerializer(
+    RefuseUnknownFieldsMixin,
+    MoneySerializerMixin,
+    serializers.Serializer,  # type: ignore[misc]
+):
+    """A transaction to add. Anything else (`id`, `version`, ...) is `400 read_only`."""
+
+    kind = serializers.ChoiceField(choices=TransactionKind.choices)
+    amount = AmountField(allow_zero=False)
+    currency = CurrencyField(
+        help_text="Of the record, and fixed for good: it cannot be changed afterwards."
+    )
+    date = serializers.DateField(
+        validators=[_day_in_range],
+        help_text="A calendar day, 2000-01-01 to 2099-12-31.",
+    )
+    category_id = serializers.UUIDField(
+        help_text="A built-in category or one of the person's own, and one that allows the `kind`."
+    )
+    account_id = serializers.UUIDField(help_text="One of the person's accounts.")
+    note = TextField(
+        max_length=100,
+        required=False,
+        allow_blank=True,
+        default="",
+        help_text="0 to 100 characters, trimmed.",
+    )
+
+    def to_representation(self, instance: Any) -> dict[str, Any]:
+        data: dict[str, Any] = TransactionSerializer(
+            instance, context=self.context
+        ).data
+        return data
+
+
+class TransactionUpdateSerializer(
+    RefuseUnknownFieldsMixin,
+    MoneySerializerMixin,
+    serializers.Serializer,  # type: ignore[misc]
+):
+    """A change to a transaction: the fields of the create except `currency`, which is `400 read_only`."""
+
+    kind = serializers.ChoiceField(choices=TransactionKind.choices)
+    amount = AmountField(allow_zero=False)
+    date = serializers.DateField(
+        validators=[_day_in_range],
+        help_text="A calendar day, 2000-01-01 to 2099-12-31.",
+    )
+    category_id = serializers.UUIDField()
+    account_id = serializers.UUIDField()
+    note = TextField(
+        max_length=100, allow_blank=True, help_text="0 to 100 characters, trimmed."
+    )
+
+    def to_representation(self, instance: Any) -> dict[str, Any]:
+        data: dict[str, Any] = TransactionSerializer(
+            instance, context=self.context
+        ).data
         return data

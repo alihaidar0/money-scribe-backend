@@ -103,19 +103,21 @@ Initial registry:
 | `name_taken` | 400 | the name is already used, case-insensitively after trimming, by another account or another custom category of the same user, or by a built-in category key or name; `attr` is `name` |
 | `account_limit_reached` | 409 | the user already has 20 accounts |
 | `category_limit_reached` | 409 | the user already has 50 custom categories; the built-in ones do not count |
+| `does_not_exist` | 400 | an id in a body field (`category_id`, `account_id`) is unknown or belongs to another user, with the same answer for both; `attr` is the field. An id in the URL is `404` |
+| `category_not_allowed` | 400 | the category does not allow the kind of the transaction; `attr` is `category_id` |
+| `transaction_limit_reached` | 409 | the user already has 100 000 transactions |
+| `date_out_of_range` | 400 | a calendar day outside 2000-01-01 to 2099-12-31; `attr` is the field |
+| `invalid_date_range` | 400 | `date_from` is after `date_to` in a list or day totals filter; `attr` is `date_to` |
+| `too_many_values` | 400 | more than 20 ids in a repeatable filter (`category_id`, `account_id`); `attr` is the parameter |
 
 **Decided, not yet implemented.** Agreed with the Flutter developer on 2026-10-25. Each moves into the table above, with its
 `ErrorCode` member, in the pull request that implements it; the issue of each endpoint can still refine the details.
 
-- `does_not_exist` (400): DRF's own code, used as it is. An id in a body field (`category_id`, `account_id`) is unknown or
-  belongs to another user, with the same answer for both; `attr` is the field. An id in the URL is `404`.
-- `category_not_allowed` (400): the category does not allow the kind of the transaction; `attr` is `category_id`.
 - `amount_below_repaid` (400): lowering a debt below what was repaid; `attr` is `amount`.
 - `due_before_start` (400): a due date before the start date; `attr` is `due_date`.
 - `repayment_before_start` (400): a repayment dated before the debt starts; `attr` is `date`.
 - `start_after_repayment` (400): moving a debt's start date past an existing repayment; `attr` is `start_date`.
-- `transaction_limit_reached`, `debt_limit_reached` and `repayment_limit_reached` (409): the user has 100 000 transactions,
-  500 debts, or the debt has 200 repayments.
+- `debt_limit_reached` and `repayment_limit_reached` (409): the user has 500 debts, or the debt has 200 repayments.
 - `session_limit_reached` (401): the session was ended because the account reached its limit of 10 active sessions.
 - A new optional member `remaining` (an amount string in the debt's currency) on `exceeds_remaining`, so the app can show
   what is left.
