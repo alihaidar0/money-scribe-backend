@@ -1441,6 +1441,15 @@ paths:
           string: `"3"` (`*` matches any record). If the stored version is another
           one nothing changes and the answer is `412` `precondition_failed`. Without
           the header the last write wins.'
+      - in: header
+        name: If-None-Match
+        schema:
+          type: string
+        description: 'Only `*` is accepted: the record must not exist yet. Send it
+          when the form is for a record the app did not find, so one created meanwhile
+          on another device is not replaced. If the record exists nothing changes
+          and the answer is `412` `precondition_failed`. Without the header a request
+          on an existing record replaces it.'
       - in: path
         name: month
         schema:

@@ -21,6 +21,7 @@ from config.api_errors import (
     IDEMPOTENCY_KEY_HEADER,
     IDEMPOTENT_REPLAYED_HEADER,
     IF_MATCH_HEADER,
+    IF_NONE_MATCH_HEADER,
     PRECONDITION_FAILED_RESPONSE,
     UNPROCESSABLE_RESPONSE,
 )
@@ -106,7 +107,7 @@ class SalaryMonthDetail(APIView):  # type: ignore[misc]
             "amount, `invalid_choice` for a currency); `409` `month_has_fixed_items` for another currency while the "
             "month has fixed items; `412` `precondition_failed`."
         ),
-        parameters=[MONTH, IF_MATCH_HEADER, ETAG_HEADER],
+        parameters=[MONTH, IF_MATCH_HEADER, IF_NONE_MATCH_HEADER, ETAG_HEADER],
         request=SalaryMonthInputSerializer,
         responses={
             200: SalaryMonthSerializer,

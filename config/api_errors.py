@@ -163,6 +163,7 @@ class ApiAutoSchema(AutoSchema):
 #   @extend_schema(parameters=[IDEMPOTENCY_KEY_HEADER, IDEMPOTENT_REPLAYED_HEADER, ETAG_HEADER],
 #                  responses={201: S, 409: CONFLICT_RESPONSE, 422: UNPROCESSABLE_RESPONSE})
 #   @extend_schema(parameters=[IF_MATCH_HEADER, ETAG_HEADER], responses={200: S, 412: PRECONDITION_FAILED_RESPONSE})
+# A PUT that creates a record under a key the client chose also takes IF_NONE_MATCH_HEADER.
 IDEMPOTENCY_KEY_HEADER = OpenApiParameter(
     name="Idempotency-Key",
     type=OpenApiTypes.STR,
@@ -191,6 +192,17 @@ IF_MATCH_HEADER = OpenApiParameter(
         'The `version` of the record the edit was made from, as a quoted string: `"3"` (`*` matches any record). '
         "If the stored version is another one nothing changes and the answer is `412` `precondition_failed`. "
         "Without the header the last write wins."
+    ),
+)
+IF_NONE_MATCH_HEADER = OpenApiParameter(
+    name="If-None-Match",
+    type=OpenApiTypes.STR,
+    location=OpenApiParameter.HEADER,
+    required=False,
+    description=(
+        "Only `*` is accepted: the record must not exist yet. Send it when the form is for a record the app did not "
+        "find, so one created meanwhile on another device is not replaced. If the record exists nothing changes and "
+        "the answer is `412` `precondition_failed`. Without the header a request on an existing record replaces it."
     ),
 )
 ETAG_HEADER = OpenApiParameter(
