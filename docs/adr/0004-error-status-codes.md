@@ -80,8 +80,8 @@ Initial registry:
 | `reset_token_invalid` | 400 | the password reset token is unknown, used, expired or its account is deactivated (`attr`: `reset_token`); ask for a new code |
 | `service_unavailable` | 503 | a safety control (the limit store) is down, so the request is refused; `Retry-After` |
 | `invalid_amount` | 400 | not a valid amount for the currency (ADR 0008) |
-| `currency_mismatch` | 400 | a fixed item carries a currency other than its month's, or a repayment one other than its debt's (`attr`: `currency`) |
-| `exceeds_remaining` | 400 | a repayment is larger than the remaining debt (`attr`: `amount`) |
+| `currency_mismatch` | 400 | a fixed item carries a currency other than its month's (`attr`: `currency`); a repayment has no currency of its own, so one in the request is `read_only` |
+| `exceeds_remaining` | 400 | a repayment is larger than the remaining debt (`attr`: `amount`); the error item also carries `remaining`, what the repayment may be at most, an amount string in the debt's currency |
 | `account_has_transactions` | 409 | deleting an account that still has transactions |
 | `category_has_transactions` | 409 | reserved, no longer sent: deleting a category moves its transactions to Other ([ADR 0017](0017-deleting-a-category-moves-its-transactions.md)) |
 | `category_is_builtin` | 403 | changing or deleting a built-in category |
@@ -109,24 +109,24 @@ Initial registry:
 | `date_out_of_range` | 400 | a calendar day outside 2000-01-01 to 2099-12-31; `attr` is the field |
 | `invalid_date_range` | 400 | `date_from` is after `date_to` in a list or day totals filter; `attr` is `date_to` |
 | `too_many_values` | 400 | more than 20 ids in a repeatable filter (`category_id`, `account_id`); `attr` is the parameter |
+| `amount_below_repaid` | 400 | lowering a debt below what was repaid; `attr` is `amount` |
+| `due_before_start` | 400 | a due date before the start date, also when the start date is the one that moved; `attr` is `due_date` |
+| `repayment_before_start` | 400 | a repayment dated before the debt starts; `attr` is `date` |
+| `start_after_repayment` | 400 | moving a debt's start date past an existing repayment; `attr` is `start_date` |
+| `debt_limit_reached` | 409 | the user already has 500 debts |
+| `repayment_limit_reached` | 409 | the debt already has 200 repayments |
 
 **Decided, not yet implemented.** Agreed with the Flutter developer on 2026-10-25. Each moves into the table above, with its
 `ErrorCode` member, in the pull request that implements it; the issue of each endpoint can still refine the details.
 
-- `amount_below_repaid` (400): lowering a debt below what was repaid; `attr` is `amount`.
-- `due_before_start` (400): a due date before the start date; `attr` is `due_date`.
-- `repayment_before_start` (400): a repayment dated before the debt starts; `attr` is `date`.
-- `start_after_repayment` (400): moving a debt's start date past an existing repayment; `attr` is `start_date`.
-- `debt_limit_reached` and `repayment_limit_reached` (409): the user has 500 debts, or the debt has 200 repayments.
 - `session_limit_reached` (401): the session was ended because the account reached its limit of 10 active sessions.
-- A new optional member `remaining` (an amount string in the debt's currency) on `exceeds_remaining`, so the app can show
-  what is left.
 
-**Extra members.** An error item is `{code, detail, attr}`. Three optional integer members exist, each sent with one code
+**Extra members.** An error item is `{code, detail, attr}`. Four optional members exist, each sent with one code
 only and documented in the shared error schema: `attempts_left` on `code_invalid` (the wrong tries the 6-digit code still
 allows), `min_length` on `password_too_short` and `max_length` on `password_too_long` (the limits the server enforces,
-read from the settings). With them a client words "at least {n} characters" from the server's own value, so a change of
-password policy needs no app release, and it enforces no rule of its own. A client that meets a `password_*` code it does
+read from the settings), and `remaining` on `exceeds_remaining` (an amount string in the debt's currency: what the
+repayment may be at most, so the app can show what is left). With the two limits a client words "at least {n} characters"
+from the server's own value, so a change of password policy needs no app release, and it enforces no rule of its own. A client that meets a `password_*` code it does
 not know shows the English `detail`. A new optional member is not a breaking change.
 
 **The schema.** `code` is a plain string, not an enum, so a client survives a code it does not know yet. The registry

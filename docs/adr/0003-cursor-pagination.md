@@ -47,7 +47,7 @@ depend on how ids are generated. The index is `(owner, date, created_at, id)`.
 | List | Ordering |
 | --- | --- |
 | transactions | `-date`, `-created_at`, `-id` (newest day first, then the entry added last first within a day) |
-| repayments, debts | `-id` unless the screen needs a date order, then `-date`, `-id` |
+| debts | `-created_at`, `-id` (newest first); a debt carries its repayments inline, by `date`, then `id`, so repayments have no list of their own |
 | sessions | `-last_active_at`, `-id` |
 
 **Filters.** A list takes its filters as explicit query parameters, documented in the schema and validated with `400` on a
@@ -57,7 +57,9 @@ across two (`date_from` after `date_to` is `invalid_date_range`) are handled in 
 `django-filter`, first planned here, was not needed. Transactions take `date_from` and `date_to` (inclusive calendar
 dates), `category_id` and `account_id` (repeatable, at most 20 values), `kind` and `search` (a case-insensitive substring
 of the note, 2 to 100 characters, on a trigram index); the client filters by a month or by half of a month with the two
-dates. A parameter the list does not know is ignored.
+dates. Debts take `direction`, `status` (repeatable) and `search` (a case-insensitive substring of the person, 2 to 50
+characters) and a `today` that replaces the person's day when the status is worked out (`debts/filters.py`). A parameter
+the list does not know is ignored.
 
 **Day totals are not computed from pages, and they are paginated by day.** A day can be split across two pages of the list,
 so a client summing the pages shows a wrong total until the next page arrives. The server provides a read model instead:

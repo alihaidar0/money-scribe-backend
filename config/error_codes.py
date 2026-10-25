@@ -66,6 +66,14 @@ class ErrorCode(StrEnum):
     INVALID_DATE_RANGE = "invalid_date_range"
     TOO_MANY_VALUES = "too_many_values"
 
+    # Debts and repayments (ADR 0004)
+    AMOUNT_BELOW_REPAID = "amount_below_repaid"
+    DUE_BEFORE_START = "due_before_start"
+    REPAYMENT_BEFORE_START = "repayment_before_start"
+    START_AFTER_REPAYMENT = "start_after_repayment"
+    DEBT_LIMIT_REACHED = "debt_limit_reached"
+    REPAYMENT_LIMIT_REACHED = "repayment_limit_reached"
+
     # Safe writes (ADR 0016)
     IDEMPOTENCY_KEY_REQUIRED = "idempotency_key_required"
     IDEMPOTENCY_KEY_INVALID = "idempotency_key_invalid"

@@ -19,6 +19,8 @@ from drf_standardized_errors.openapi_serializers import (
 )
 from rest_framework import serializers
 
+from common.serializers import AmountField
+
 from .error_codes import ErrorCode
 
 # Codes that DRF and the validators raise on their own, next to the registry.
@@ -78,6 +80,13 @@ class ErrorItemSerializer(serializers.Serializer):  # type: ignore[misc]
         required=False,
         min_value=1,
         help_text="Only on `password_too_long`: the longest password the server accepts.",
+    )
+    remaining = AmountField(
+        required=False,
+        help_text=(
+            "Only on `exceeds_remaining`: what the repayment may be at most, an amount in the debt's currency "
+            "(what the debt still allows, without the repayment that is being changed)."
+        ),
     )
 
 
