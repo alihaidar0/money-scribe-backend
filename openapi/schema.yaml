@@ -2394,6 +2394,814 @@ paths:
           headers:
             X-Request-ID:
               $ref: '#/components/headers/XRequestId'
+  /api/v1/debts/:
+    get:
+      operationId: debt_list
+      description: Newest first (`-created_at`, `-id`), each with its `repayments`
+        inline and its derived `repaid`, `remaining` and `status`. Cursor pagination
+        (`limit` 50 by default, 100 at most; follow `next`). `status` repeats and
+        matches any of the values; `search` is a case-insensitive substring of the
+        person, 2 to 50 characters. A filter that matches nothing is `200` with an
+        empty `results`.
+      summary: The person's debts
+      parameters:
+      - name: cursor
+        required: false
+        in: query
+        description: An opaque position taken from `next` or `previous`; never built
+          by the client.
+        schema:
+          type: string
+      - in: query
+        name: direction
+        schema:
+          enum:
+          - lent
+          - borrowed
+          type: string
+          minLength: 1
+        description: |-
+          * `lent` - Lent
+          * `borrowed` - Borrowed
+      - name: limit
+        required: false
+        in: query
+        description: 'How many results a page holds: 50 by default, at most 100.'
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+      - in: query
+        name: search
+        schema:
+          type: string
+          minLength: 2
+          maxLength: 50
+        description: A case-insensitive substring of the person, 2 to 50 characters;
+          `%` and `_` are ordinary characters. A list asked with `search` counts in
+          the search rate group.
+      - in: query
+        name: status
+        schema:
+          type: array
+          items:
+            type: string
+            enum:
+            - open
+            - overdue
+            - settled
+          maxItems: 3
+        description: Repeat to match any of the statuses.
+      - in: query
+        name: today
+        schema:
+          type: string
+          format: date
+        description: A calendar day (`YYYY-MM-DD`) that replaces the person's current
+          day when the `status` is worked out. The app leaves it out.
+      tags:
+      - debts
+      security:
+      - bearerAuth: []
+      responses:
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error400Response'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Retry-After:
+              description: Whole seconds to wait before the request may be repeated;
+                at least 1.
+              schema:
+                type: integer
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedDebtList'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+    post:
+      operationId: debt_create
+      description: Needs an `Idempotency-Key`. `amount` is a decimal string with exactly
+        the digits of `currency` and greater than 0. The dates are calendar days from
+        2000-01-01 to 2099-12-31 (`400` `date_out_of_range`) and the `due_date`, if
+        any, is not before the `start_date` (`400` `due_before_start`). The debt starts
+        with no repayments. A person has at most 500 debts (`409` `debt_limit_reached`).
+      summary: Add a debt
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: 'A random id, once per user action, as a quoted string of 16
+          to 64 letters, digits, hyphens or underscores (a UUID fits): `"8e03978e-40d5-43e8-bc93-6894a57f9324"`.
+          Repeat the same request with the same key after a lost answer and nothing
+          is created twice; the answer is replayed with `Idempotent-Replayed: true`.
+          The key is honoured for 24 hours. Without it: `400` `idempotency_key_required`
+          (`attr` `idempotency_key`).'
+        required: true
+      tags:
+      - debts
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DebtCreateRequest'
+        required: true
+      security:
+      - bearerAuth: []
+      responses:
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error400Response'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Retry-After:
+              description: Whole seconds to wait before the request may be repeated;
+                at least 1.
+              schema:
+                type: integer
+        '201':
+          headers:
+            Idempotent-Replayed:
+              schema:
+                type: string
+              description: '`true` when this is the stored answer of an earlier request
+                with the same key.'
+            ETag:
+              schema:
+                type: string
+              description: 'The `version` of the record in the answer, as a quoted
+                string: `"3"`.'
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Debt'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request conflicts with the current state; the `code` says
+            what conflicts.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The `Idempotency-Key` was already used for a different request.
+            The `code` is `idempotency_key_reused`.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+  /api/v1/debts/{id}/:
+    get:
+      operationId: debt_read
+      description: The debt with its repayments, or `404` when it is not the person's.
+        Answers the `ETag` of its `version`.
+      summary: Read a debt
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: query
+        name: today
+        schema:
+          type: string
+          format: date
+        description: A calendar day (`YYYY-MM-DD`) that replaces the person's current
+          day when the `status` is worked out. The app leaves it out.
+      tags:
+      - debts
+      security:
+      - bearerAuth: []
+      responses:
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error400Response'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Retry-After:
+              description: Whole seconds to wait before the request may be repeated;
+                at least 1.
+              schema:
+                type: integer
+        '200':
+          headers:
+            ETag:
+              schema:
+                type: string
+              description: 'The `version` of the record in the answer, as a quoted
+                string: `"3"`.'
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Debt'
+          description: ''
+    patch:
+      operationId: debt_update
+      description: 'Changes any of `person`, `amount`, `start_date`, `due_date`, `note`;
+        fields not sent keep their value. `{"due_date": null}` clears the due date
+        and `"note": ""` the note; `note: null` is `400`. The `direction` and the
+        `currency` cannot be changed: sending them, even the stored value, is `400`
+        `read_only`, like every derived field and any unknown field. The `amount`
+        cannot go below what was repaid (`400` `amount_below_repaid`) and the `start_date`
+        cannot go past a repayment (`400` `start_after_repayment`). Send `If-Match`
+        with the `version`: a stale one is `412` and changes nothing.'
+      summary: Change a debt
+      parameters:
+      - in: header
+        name: If-Match
+        schema:
+          type: string
+        description: 'The `version` of the record the edit was made from, as a quoted
+          string: `"3"` (`*` matches any record). If the stored version is another
+          one nothing changes and the answer is `412` `precondition_failed`. Without
+          the header the last write wins.'
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - debts
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedDebtUpdateRequest'
+      security:
+      - bearerAuth: []
+      responses:
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error400Response'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Retry-After:
+              description: Whole seconds to wait before the request may be repeated;
+                at least 1.
+              schema:
+                type: integer
+        '200':
+          headers:
+            ETag:
+              schema:
+                type: string
+              description: 'The `version` of the record in the answer, as a quoted
+                string: `"3"`.'
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Debt'
+          description: ''
+        '412':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: 'The `If-Match` version is not the stored one, or `If-None-Match:
+            *` found the record. Nothing was changed: reload the record. The `code`
+            is `precondition_failed`.'
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+    delete:
+      operationId: debt_delete
+      description: 'Deletes the debt and its repayments in one transaction (`204`);
+        `If-Match` is checked as for a change. A repeated delete is `404`: treat it
+        as done.'
+      summary: Delete a debt
+      parameters:
+      - in: header
+        name: If-Match
+        schema:
+          type: string
+        description: 'The `version` of the record the edit was made from, as a quoted
+          string: `"3"` (`*` matches any record). If the stored version is another
+          one nothing changes and the answer is `412` `precondition_failed`. Without
+          the header the last write wins.'
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - debts
+      security:
+      - bearerAuth: []
+      responses:
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error400Response'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Retry-After:
+              description: Whole seconds to wait before the request may be repeated;
+                at least 1.
+              schema:
+                type: integer
+        '204':
+          description: No response body
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '412':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: 'The `If-Match` version is not the stored one, or `If-None-Match:
+            *` found the record. Nothing was changed: reload the record. The `code`
+            is `precondition_failed`.'
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+  /api/v1/debts/{id}/repayments/:
+    post:
+      operationId: debt_repayment_create
+      description: 'Needs an `Idempotency-Key`. Answers `201` with the whole debt,
+        so the app has the new `repaid`, `remaining` and `status` at once; its `ETag`
+        is the debt''s `version`, which a repayment does not change. The repayment
+        is in the debt''s currency: a `currency` in the request is `400` `read_only`.
+        An `amount` above what remains is `400` `exceeds_remaining` on `amount`, and
+        the error also carries `remaining`. A `date` before the debt''s `start_date`
+        is `400` `repayment_before_start`. A debt has at most 200 repayments (`409`
+        `repayment_limit_reached`). The debt is locked while the repayment is added,
+        so two devices cannot overpay it together.'
+      summary: Add a repayment
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: 'A random id, once per user action, as a quoted string of 16
+          to 64 letters, digits, hyphens or underscores (a UUID fits): `"8e03978e-40d5-43e8-bc93-6894a57f9324"`.
+          Repeat the same request with the same key after a lost answer and nothing
+          is created twice; the answer is replayed with `Idempotent-Replayed: true`.
+          The key is honoured for 24 hours. Without it: `400` `idempotency_key_required`
+          (`attr` `idempotency_key`).'
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - debts
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RepaymentInputRequest'
+        required: true
+      security:
+      - bearerAuth: []
+      responses:
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error400Response'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Retry-After:
+              description: Whole seconds to wait before the request may be repeated;
+                at least 1.
+              schema:
+                type: integer
+        '201':
+          headers:
+            Idempotent-Replayed:
+              schema:
+                type: string
+              description: '`true` when this is the stored answer of an earlier request
+                with the same key.'
+            ETag:
+              schema:
+                type: string
+              description: 'The `version` of the record in the answer, as a quoted
+                string: `"3"`.'
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Debt'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request conflicts with the current state; the `code` says
+            what conflicts.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The `Idempotency-Key` was already used for a different request.
+            The `code` is `idempotency_key_reused`.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+  /api/v1/debts/{id}/repayments/{repayment_id}/:
+    patch:
+      operationId: debt_repayment_update
+      description: 'Changes `amount` and `date`; the rules are those of the create,
+        and the repayment''s own previous amount does not count towards what remains.
+        Answers `200` with the whole debt and the debt''s `ETag`. Send `If-Match`
+        with the **repayment''s** `version` (`repayments[].version`): a stale one
+        is `412` and changes nothing. A repayment of another debt is `404`.'
+      summary: Change a repayment
+      parameters:
+      - in: header
+        name: If-Match
+        schema:
+          type: string
+        description: 'The `version` of the record the edit was made from, as a quoted
+          string: `"3"` (`*` matches any record). If the stored version is another
+          one nothing changes and the answer is `412` `precondition_failed`. Without
+          the header the last write wins.'
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: repayment_id
+        schema:
+          type: string
+          format: uuid
+        description: The id of a repayment of this debt; another debt's repayment
+          is `404`.
+        required: true
+      tags:
+      - debts
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedRepaymentInputRequest'
+      security:
+      - bearerAuth: []
+      responses:
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error400Response'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Retry-After:
+              description: Whole seconds to wait before the request may be repeated;
+                at least 1.
+              schema:
+                type: integer
+        '200':
+          headers:
+            ETag:
+              schema:
+                type: string
+              description: 'The `version` of the record in the answer, as a quoted
+                string: `"3"`.'
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Debt'
+          description: ''
+        '412':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: 'The `If-Match` version is not the stored one, or `If-None-Match:
+            *` found the record. Nothing was changed: reload the record. The `code`
+            is `precondition_failed`.'
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+    delete:
+      operationId: debt_repayment_delete
+      description: 'Deletes the repayment and answers `200` with the whole debt; `If-Match`
+        is the repayment''s `version`, checked as for a change. A repeated delete
+        is `404`: treat it as done.'
+      summary: Delete a repayment
+      parameters:
+      - in: header
+        name: If-Match
+        schema:
+          type: string
+        description: 'The `version` of the record the edit was made from, as a quoted
+          string: `"3"` (`*` matches any record). If the stored version is another
+          one nothing changes and the answer is `412` `precondition_failed`. Without
+          the header the last write wins.'
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: repayment_id
+        schema:
+          type: string
+          format: uuid
+        description: The id of a repayment of this debt; another debt's repayment
+          is `404`.
+        required: true
+      tags:
+      - debts
+      security:
+      - bearerAuth: []
+      responses:
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error400Response'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Retry-After:
+              description: Whole seconds to wait before the request may be repeated;
+                at least 1.
+              schema:
+                type: integer
+        '200':
+          headers:
+            ETag:
+              schema:
+                type: string
+              description: 'The `version` of the record in the answer, as a quoted
+                string: `"3"`.'
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Debt'
+          description: ''
+        '412':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: 'The `If-Match` version is not the stored one, or `If-None-Match:
+            *` found the record. Nothing was changed: reload the record. The `code`
+            is `precondition_failed`.'
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
   /api/v1/reports/day-totals/:
     get:
       operationId: report_day_totals
@@ -4294,6 +5102,192 @@ components:
       required:
       - date
       - totals
+    Debt:
+      type: object
+      description: |-
+        A debt with its repayments and the figures the server derives from them.
+
+        The serializer is given a ``Debt`` and the person's ``today`` (in the context) and writes the derived values.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        direction:
+          allOf:
+          - $ref: '#/components/schemas/DebtDirectionEnum'
+          readOnly: true
+        person:
+          type: string
+          readOnly: true
+        amount:
+          allOf:
+          - $ref: '#/components/schemas/Amount'
+          readOnly: true
+          description: A decimal string with exactly the number of digits of the currency,
+            such as `12.50`.
+        currency:
+          allOf:
+          - $ref: '#/components/schemas/CurrencyEnum'
+          readOnly: true
+          description: |-
+            The ISO 4217 code of the currency.
+
+            * `RUB` - RUB
+            * `USD` - USD
+            * `EUR` - EUR
+            * `GBP` - GBP
+            * `TRY` - TRY
+            * `SAR` - SAR
+            * `AED` - AED
+            * `EGP` - EGP
+            * `JPY` - JPY
+            * `KWD` - KWD
+        start_date:
+          type: string
+          format: date
+          readOnly: true
+        due_date:
+          type: string
+          format: date
+          readOnly: true
+          nullable: true
+        note:
+          type: string
+          readOnly: true
+        repaid:
+          allOf:
+          - $ref: '#/components/schemas/Amount'
+          readOnly: true
+          description: The sum of the repayments.
+        remaining:
+          allOf:
+          - $ref: '#/components/schemas/Amount'
+          readOnly: true
+          description: The amount minus `repaid`, never below 0.
+        status:
+          allOf:
+          - $ref: '#/components/schemas/DebtStatusEnum'
+          readOnly: true
+          description: |-
+            `settled` when nothing remains; `overdue` when a `due_date` is before the person's day and the debt is not settled; otherwise `open`.
+
+            * `open` - Open
+            * `overdue` - Overdue
+            * `settled` - Settled
+        repayments:
+          type: array
+          items:
+            $ref: '#/components/schemas/Repayment'
+          readOnly: true
+          description: By `date`, then `id`.
+        version:
+          type: integer
+          readOnly: true
+          description: The `ETag` of every answer whose body is the debt, and the
+            `If-Match` of its change or delete.
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - amount
+      - created_at
+      - currency
+      - direction
+      - due_date
+      - id
+      - note
+      - person
+      - remaining
+      - repaid
+      - repayments
+      - start_date
+      - status
+      - updated_at
+      - version
+    DebtCreateRequest:
+      type: object
+      description: A debt to add. Anything else (`id`, `repaid`, `status`, `repayments`,
+        `version`, ...) is `400 read_only`.
+      properties:
+        direction:
+          allOf:
+          - $ref: '#/components/schemas/DebtDirectionEnum'
+          description: |-
+            `lent` is money the person gave, `borrowed` money the person received. Fixed for good.
+
+            * `lent` - Lent
+            * `borrowed` - Borrowed
+        person:
+          type: string
+          minLength: 1
+          description: 1 to 50 characters, trimmed.
+          maxLength: 50
+        amount:
+          allOf:
+          - $ref: '#/components/schemas/Amount'
+          description: A decimal string with exactly the number of digits of the currency,
+            such as `12.50`.
+        currency:
+          allOf:
+          - $ref: '#/components/schemas/CurrencyEnum'
+          description: |-
+            Of the debt, and fixed for good.
+
+            * `RUB` - RUB
+            * `USD` - USD
+            * `EUR` - EUR
+            * `GBP` - GBP
+            * `TRY` - TRY
+            * `SAR` - SAR
+            * `AED` - AED
+            * `EGP` - EGP
+            * `JPY` - JPY
+            * `KWD` - KWD
+        start_date:
+          type: string
+          format: date
+          description: A calendar day, 2000-01-01 to 2099-12-31.
+        due_date:
+          type: string
+          format: date
+          nullable: true
+          description: 'A calendar day, 2000-01-01 to 2099-12-31. Not before `start_date`
+            (`400 due_before_start`). `null` or left out: no due date.'
+        note:
+          type: string
+          default: ''
+          description: 0 to 100 characters, trimmed.
+          maxLength: 100
+      required:
+      - amount
+      - currency
+      - direction
+      - person
+      - start_date
+    DebtDirectionEnum:
+      enum:
+      - lent
+      - borrowed
+      type: string
+      description: |-
+        * `lent` - Lent
+        * `borrowed` - Borrowed
+    DebtStatusEnum:
+      enum:
+      - open
+      - overdue
+      - settled
+      type: string
+      description: |-
+        * `open` - Open
+        * `overdue` - Overdue
+        * `settled` - Settled
     Defaults:
       type: object
       description: The inputs that pre-fill the form of a month that is not saved
@@ -4678,7 +5672,9 @@ components:
             `password_unchanged`, `password_attempts_exceeded`, `reset_token_invalid`,
             `name_taken`, `account_limit_reached`, `category_limit_reached`, `does_not_exist`,
             `category_not_allowed`, `transaction_limit_reached`, `date_out_of_range`,
-            `invalid_date_range`, `too_many_values`, `idempotency_key_required`, `idempotency_key_invalid`,
+            `invalid_date_range`, `too_many_values`, `amount_below_repaid`, `due_before_start`,
+            `repayment_before_start`, `start_after_repayment`, `debt_limit_reached`,
+            `repayment_limit_reached`, `idempotency_key_required`, `idempotency_key_invalid`,
             `idempotency_key_reused`, `idempotency_in_progress`, `precondition_failed`,
             `fixed_item_limit_reached`, `month_has_fixed_items`, `service_unavailable`,
             `invalid_characters`, `request_too_large`, `invalid_amount`, `currency_mismatch`,
@@ -4714,6 +5710,12 @@ components:
           minimum: 1
           description: 'Only on `password_too_long`: the longest password the server
             accepts.'
+        remaining:
+          allOf:
+          - $ref: '#/components/schemas/Amount'
+          description: 'Only on `exceeds_remaining`: what the repayment may be at
+            most, an amount in the debt''s currency (what the debt still allows, without
+            the repayment that is being changed).'
       required:
       - attr
       - code
@@ -4957,6 +5959,28 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/DayTotal'
+    PaginatedDebtList:
+      type: object
+      required:
+      - next
+      - previous
+      - results
+      properties:
+        next:
+          type: string
+          format: uri
+          nullable: true
+          description: The URL of the next page, or `null` on the last one. Follow
+            it as it is.
+        previous:
+          type: string
+          format: uri
+          nullable: true
+          description: The URL of the previous page, or `null` on the first one.
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Debt'
     PaginatedSalaryMonthList:
       type: object
       required:
@@ -5110,6 +6134,36 @@ components:
             * `travel` - travel
             * `subscriptions` - subscriptions
             * `other` - other
+    PatchedDebtUpdateRequest:
+      type: object
+      description: 'A change to a debt: the fields of the create except `direction`
+        and `currency`, which are `400 read_only`.'
+      properties:
+        person:
+          type: string
+          minLength: 1
+          description: 1 to 50 characters, trimmed.
+          maxLength: 50
+        amount:
+          allOf:
+          - $ref: '#/components/schemas/Amount'
+          description: In the debt's currency. Not below what was repaid (`400 amount_below_repaid`);
+            above it, a settled debt is open again.
+        start_date:
+          type: string
+          format: date
+          description: A calendar day, 2000-01-01 to 2099-12-31. Not after the date
+            of a repayment (`400 start_after_repayment`).
+        due_date:
+          type: string
+          format: date
+          nullable: true
+          description: A calendar day, 2000-01-01 to 2099-12-31. Not before `start_date`.
+            `null` clears it.
+        note:
+          type: string
+          description: 0 to 100 characters, trimmed. `""` clears it; `null` is `400`.
+          maxLength: 100
     PatchedFixedItemInputRequest:
       type: object
       description: 'A fixed item to add or to change. It has no currency of its own:
@@ -5162,6 +6216,23 @@ components:
           minLength: 1
           description: The display name, 1 to 100 characters, trimmed.
           maxLength: 100
+    PatchedRepaymentInputRequest:
+      type: object
+      description: |-
+        A repayment to add or to change. It is in the debt's currency; a `currency` here is `400 read_only`.
+
+        The debt is in the context (``debt``): its currency reads the amount.
+      properties:
+        amount:
+          allOf:
+          - $ref: '#/components/schemas/Amount'
+          description: In the currency of the debt, greater than 0 and not more than
+            what remains (`400 exceeds_remaining`, which also carries `remaining`).
+        date:
+          type: string
+          format: date
+          description: A calendar day, 2000-01-01 to 2099-12-31. Not before the debt's
+            `start_date` (`400 repayment_before_start`).
     PatchedSettingsUpdateRequest:
       type: object
       description: The settings the person may change. Only the fields sent change;
@@ -5396,6 +6467,62 @@ components:
       - code_expires_in
       - email
       - resend_available_in
+    Repayment:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        amount:
+          allOf:
+          - $ref: '#/components/schemas/Amount'
+          readOnly: true
+          description: In the currency of the debt.
+        date:
+          type: string
+          format: date
+          readOnly: true
+        version:
+          type: integer
+          readOnly: true
+          description: The `If-Match` of a change or a delete of this repayment (not
+            the `ETag` of an answer).
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - amount
+      - created_at
+      - date
+      - id
+      - updated_at
+      - version
+    RepaymentInputRequest:
+      type: object
+      description: |-
+        A repayment to add or to change. It is in the debt's currency; a `currency` here is `400 read_only`.
+
+        The debt is in the context (``debt``): its currency reads the amount.
+      properties:
+        amount:
+          allOf:
+          - $ref: '#/components/schemas/Amount'
+          description: In the currency of the debt, greater than 0 and not more than
+            what remains (`400 exceeds_remaining`, which also carries `remaining`).
+        date:
+          type: string
+          format: date
+          description: A calendar day, 2000-01-01 to 2099-12-31. Not before the debt's
+            `start_date` (`400 repayment_before_start`).
+      required:
+      - amount
+      - date
     ResendCodeRequest:
       type: object
       properties:
