@@ -36,7 +36,7 @@ from config.exceptions import (
     throttled,
 )
 
-from . import challenge, emails, events, limits, tokens
+from . import challenge, emails, events, limits, signals, tokens
 from .models import (
     DeviceKey,
     EmailCode,
@@ -353,6 +353,8 @@ def verify_email(
     def accept(user: User, record: EmailCode) -> SignedIn:
         user.email_verified_at = now
         remember_client(user, language, time_zone)
+        # The first accounts of a new person are made by the apps that depend on this one (ADR 0005).
+        signals.email_verified.send(sender=User, user=user)
         return start_session(user, device, client, now, method=SignInMethod.EMAIL_CODE)
 
     return _redeem_code(

@@ -53,6 +53,11 @@ class ErrorCode(StrEnum):
     PASSWORD_ATTEMPTS_EXCEEDED = "password_attempts_exceeded"
     RESET_TOKEN_INVALID = "reset_token_invalid"
 
+    # The ledger: accounts and categories (ADR 0004, 0017)
+    NAME_TAKEN = "name_taken"
+    ACCOUNT_LIMIT_REACHED = "account_limit_reached"
+    CATEGORY_LIMIT_REACHED = "category_limit_reached"
+
     # Safe writes (ADR 0016)
     IDEMPOTENCY_KEY_REQUIRED = "idempotency_key_required"
     IDEMPOTENCY_KEY_INVALID = "idempotency_key_invalid"

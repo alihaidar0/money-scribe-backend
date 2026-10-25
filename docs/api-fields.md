@@ -112,42 +112,47 @@ the list has no `part` filter; the reports do (see Reports). Day totals take the
 
 | Field | Rule |
 | --- | --- |
-| `name` | text, 1 to 30 characters |
+| `name` | text, 1 to 30 characters; unique per person, in any case (`400 name_taken`) |
 | `kind` | `card`, `cash` or `other` |
 
-Create, edit, reorder and delete. Deleting an account that has transactions answers `409 account_has_transactions`.
-The list is ordered by the user's order, then `id`. Reordering is one operation that sends the whole list of ids, so
-the order changes all at once; its shape is agreed in the request issue.
+Create, edit and delete; there is no reorder (the app has none). The list is ordered by creation (`created_at`, `id`).
+Deleting an account that has transactions answers `409 account_has_transactions` (built with the transactions). A person
+has at most 20 accounts (`409 account_limit_reached`).
+
+**The first two accounts.** When an email is verified the server makes "Card" (`card`) and "Cash" (`cash`) in the
+language of the account (Arabic: "بطاقة" and "نقدًا", the app's own labels of the two kinds). They are made in one
+transaction with creation times a millisecond apart, so the card is always first, and they are ordinary accounts:
+editable, deletable and counted towards the limit. A data migration gave them to the people who were already verified. The
+users app announces the verification with a signal and never imports the ledger ([ADR 0005](adr/0005-apps-and-model-conventions.md)).
 
 ## Category
 
 | Field | Rule |
 | --- | --- |
-| `name` | text, 1 to 30 characters |
-| `icon` | a slug, `^[a-z0-9_]{1,40}$`; the app maps known names to its icons and falls back to a default for an unknown one |
-| `kind` | `expense`, `income` or `both`; the server sets `both` for a custom category |
+| `name` | text, 1 to 30 characters; of a custom category, unique among the person's custom ones in any case and not a built-in key or English name (`400 name_taken`) |
+| `icon` | a slug in the response, so the app falls back to `other` for one it does not know; on create and edit one of `gifts`, `health`, `entertainment`, `shopping`, `education`, `travel`, `subscriptions`, `other` (`400 invalid_choice`) |
+| `kind` | `expense`, `income` or `both`; read-only: a custom category is always `both` |
 | `is_custom` | read-only |
 | `key` | read-only; a stable key on built-in categories, `null` on custom ones |
 
-Create, edit, reorder and delete for custom categories only. Built-in categories are read-only: changing or deleting one
-answers `403 category_is_builtin`. Deleting a custom category that has transactions succeeds (`204`) and moves them to
-the built-in `other` in the same database transaction ([ADR 0017](adr/0017-deleting-a-category-moves-its-transactions.md)).
-The list returns the built-in categories first, in a fixed order, then the custom ones in the user's order; only the
-custom ones can be reordered.
+Create, edit and delete for custom categories only, at most 50 per person (`409 category_limit_reached`); there is no
+reorder. Built-in categories are read-only: changing or deleting one answers `403 category_is_builtin`, before the
+version is checked. Deleting a custom category that has transactions succeeds (`204`) and moves them to the built-in
+`other` in the same database transaction ([ADR 0017](adr/0017-deleting-a-category-moves-its-transactions.md); built with
+the transactions). The list returns the built-in categories first, in a fixed order, then the custom ones in the order
+they were made.
 
-**Built-in categories** are shared rows created by a data migration and returned with the user's own. Each carries its
-`id`, a stable `key` that the app localizes (English and Arabic), an `icon`, a `kind` and an English `name` as a fallback
-for a key the app does not know yet. The first list, which the owner may still change:
+**Built-in categories** are shared rows created by a data migration with fixed ids, and returned with the person's own.
+Each carries its `id`, a stable `key` that the app localizes (English and Arabic), an `icon` equal to the key, a `kind`
+and an English `name` as a fallback for a key the app does not know yet:
 
-| Key | Icon | Kind |
-| --- | --- | --- |
-| `groceries`, `dining`, `transport`, `housing`, `utilities` | the same slug | `expense` |
-| `scholarship` | `scholarship` | `income` |
-| `gifts`, `other` | the same slug | `both` |
+| Key | Kind |
+| --- | --- |
+| `groceries`, `dining`, `transport`, `housing`, `utilities` | `expense` |
+| `scholarship` | `income` |
+| `other` | `both` |
 
-The icon slugs the app knows today are `groceries`, `dining`, `transport`, `housing`, `utilities`, `health`,
-`entertainment`, `shopping`, `education`, `travel`, `gifts`, `subscriptions`, `scholarship` and `other`. The server does
-not enumerate them; it validates the slug shape only.
+`gifts` is not a built-in category: it is an icon a custom category can use.
 
 ## Debt and repayment
 

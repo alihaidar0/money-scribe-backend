@@ -440,10 +440,13 @@ when the owner confirms it, and a step that needs the app on staging waits for t
   ([ADR 0022](adr/0022-security-events.md)). No new endpoint; the read of the events comes with the sessions step (8.4).
   The shapes agreed on 2026-10-25 for 10.6 to 10.9 and 8.4 are in their request issues, and the lines of those steps are
   brought in line in the pull request of each
-- [ ] **10.6 ledger**: accounts (delete refused with `409` when transactions exist; reorder); categories (the built-in
-  rows with their keys, read-only; custom ones, reorder; deleting a custom one moves its transactions to `other`, ADR
-  0017); transactions (the category must allow the kind; ordered `-date`, `-created_at`, `-id` with the filters,
-  including `search` on the note, through `django-filter`)
+- [ ] **10.6 ledger**, in two branches. `feat/ledger-accounts-categories` (request issue #64): accounts (the first two,
+  "Card" and "Cash", are made when the email is verified, through the `users.signals.email_verified` signal; limit 20;
+  no reorder) and categories (the seven built-in rows with fixed ids and keys, read-only; custom ones, limit 50, icons of
+  the picker only; no reorder). `feat/ledger-transactions` (#65): transactions (the category must allow the kind;
+  ordered `-date`, `-created_at`, `-id`, with the filters and `search` on the note), the paginated day totals (ADR 0003
+  is amended there), and the two rules that need them: `409 account_has_transactions`, and the move of a deleted
+  category's transactions to `other` (ADR 0017)
 - [ ] **10.7 debts**: debts with repayments, derived `repaid`, `remaining`, `is_settled`, `progress` and `status`, with the
   `today` parameter
 - [ ] **10.8 reports**: month overview, day totals, category spend, month comparison, debts report and period report, with

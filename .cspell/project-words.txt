@@ -108,3 +108,7 @@ USERPROFILE
 pmcs
 pmmk
 pmsu
+
+# Arabic text in the docs (the default account names)
+بطاقة
+نقدًا

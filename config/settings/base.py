@@ -206,6 +206,7 @@ INSTALLED_APPS += [
     "idempotency",
     "preferences",
     "salary",
+    "ledger",
     "outbox",
 ]
 
@@ -437,6 +438,11 @@ SPECTACULAR_SETTINGS = {
         # The same set of choices appears under several field names (currency, default_currency, payment_mode).
         "CurrencyEnum": "common.serializers.CURRENCY_CHOICES",
         "PaymentModeEnum": "common.enums.PaymentMode.choices",
+        # Three resources have a `kind` of their own. The fixed item's keeps the name it always had (`KindEnum`), so
+        # naming the other two does not rename a component a client already uses.
+        "KindEnum": "salary.models.ItemKind.choices",
+        "AccountKindEnum": "ledger.models.AccountKind.choices",
+        "CategoryKindEnum": "ledger.models.CategoryKind.choices",
     },
     # A nullable enum field is `nullable: true` plus one enum reference, not `oneOf: [Enum, NullEnum]`: Dart
     # client generators turn the union into a class that must implement an enum, which does not compile.
