@@ -52,6 +52,9 @@ Model conventions for every new model:
 ## Consequences
 
 - Adding a model is a decision about which app owns it; this table is the place to check.
+- An app announces an event to the apps that depend on it with a Django signal and never imports them: `users.signals.email_verified`
+  (sent inside the transaction that verifies an email) is received by `ledger`, which makes the first two accounts
+  (`docs/api-fields.md`). A receiver that fails rolls the verification back.
 - `reports` cannot grow its own tables without a new decision, which keeps read models derived from the source rows.
 - The first model outside `users` is the point to apply these conventions and, if one proves wrong, to amend this ADR
   before it spreads.
