@@ -9,8 +9,9 @@ from datetime import timedelta
 from typing import Any
 
 from django.db import IntegrityError, transaction
-from django.db.models import Q
+from django.db.models import F, Q
 from django.db.models.functions import Lower
+from django.utils import timezone
 from rest_framework.exceptions import ErrorDetail, PermissionDenied, ValidationError
 
 from config.error_codes import ErrorCode
@@ -21,9 +22,11 @@ from .defaults import DEFAULT_ACCOUNTS
 from .models import (
     MAX_ACCOUNTS,
     MAX_CUSTOM_CATEGORIES,
+    MAX_TRANSACTIONS,
     Account,
     Category,
     CategoryKind,
+    Transaction,
 )
 
 
@@ -98,6 +101,17 @@ def update_account(*, account: Account, data: dict[str, Any]) -> Account:
         account.kind = data["kind"]
         changed = True
     return _save_account(account) if changed else account
+
+
+def delete_account(account: Account) -> None:
+    """Delete an account the caller has locked; one that has transactions is ``409 account_has_transactions``.
+
+    The transactions are not moved: there is no neutral account to move money to, and moving it silently would change
+    balances (ADR 0017). Creating a transaction locks its account too, so a transaction cannot slip in meanwhile.
+    """
+    if Transaction.objects.filter(account=account).exists():
+        raise conflict(ErrorCode.ACCOUNT_HAS_TRANSACTIONS)
+    account.delete()
 
 
 def create_default_accounts(user: User) -> list[Account]:
@@ -196,3 +210,143 @@ def update_category(*, category: Category, data: dict[str, Any]) -> Category:
         category.icon = data["icon"]
         changed = True
     return _save_category(category) if changed else category
+
+
+def delete_category(category: Category) -> None:
+    """Delete a custom category the caller has locked; its transactions move to the built-in ``other`` (ADR 0017).
+
+    The move and the delete are one database transaction, so nothing is left without a category and a failure
+    changes nothing. Only the category changes on a moved transaction (and its ``updated_at`` and ``version``, in the
+    same statement, as for any change); an amount, a date or an account never does. ``other`` is of the kind
+    ``both``, so it allows every kind of transaction.
+    """
+    other = Category.objects.get(key="other", owner__isnull=True)
+    Transaction.objects.filter(category=category).update(
+        category=other, updated_at=timezone.now(), version=F("version") + 1
+    )
+    category.delete()
+
+
+# --- transactions -----------------------------------------------------------------------------
+
+
+def _does_not_exist(field: str) -> tuple[str, list[ErrorDetail]]:
+    return field, [
+        ErrorDetail("This id does not exist.", code=ErrorCode.DOES_NOT_EXIST.value)
+    ]
+
+
+def resolve_references(
+    owner: User, *, category_id: Any = None, account_id: Any = None
+) -> tuple[Category | None, Account | None]:
+    """The category and the account a request names, or ``400 does_not_exist`` on the field that is wrong.
+
+    An id that is unknown and an id of another person's custom category or account give the same answer, so the
+    answer cannot be used to probe ids. A custom category and an account are locked, so one cannot be deleted while
+    a transaction that uses it is being saved; a built-in category is never deleted and shared by everyone, so it is
+    not locked.
+    """
+    category: Category | None = None
+    account: Account | None = None
+    missing: dict[str, list[ErrorDetail]] = {}
+    if category_id is not None:
+        category = Category.objects.filter(
+            Q(owner__isnull=True) | Q(owner=owner), pk=category_id
+        ).first()
+        if category is not None and category.owner_id is not None:
+            category = (
+                Category.objects.select_for_update()
+                .filter(pk=category.pk, owner=owner)
+                .first()
+            )
+        if category is None:
+            missing.update([_does_not_exist("category_id")])
+    if account_id is not None:
+        account = (
+            Account.objects.select_for_update()
+            .filter(pk=account_id, owner=owner)
+            .first()
+        )
+        if account is None:
+            missing.update([_does_not_exist("account_id")])
+    if missing:
+        raise ValidationError(missing)
+    return category, account
+
+
+def ensure_category_allows(category: Category, kind: str) -> None:
+    """``400 category_not_allowed`` on ``category_id`` when the category is not for this kind of transaction."""
+    if category.kind not in (CategoryKind.BOTH, kind):
+        raise ValidationError(
+            {
+                "category_id": [
+                    ErrorDetail(
+                        "This category does not allow this kind of transaction.",
+                        code=ErrorCode.CATEGORY_NOT_ALLOWED.value,
+                    )
+                ]
+            }
+        )
+
+
+def create_transaction(*, owner: User, data: dict[str, Any]) -> Transaction:
+    """Add a transaction; the 100 001st is ``409 transaction_limit_reached``. The caller is inside a transaction."""
+    lock_owner(owner)
+    if Transaction.objects.filter(owner=owner).count() >= MAX_TRANSACTIONS:
+        raise conflict(ErrorCode.TRANSACTION_LIMIT_REACHED)
+    category, account = resolve_references(
+        owner, category_id=data["category_id"], account_id=data["account_id"]
+    )
+    if (
+        category is None or account is None
+    ):  # both ids were given, so resolve_references raised otherwise
+        raise RuntimeError("A category and an account were resolved.")
+    ensure_category_allows(category, data["kind"])
+    money = data["amount"]
+    return Transaction.objects.create(
+        owner=owner,
+        kind=data["kind"],
+        amount=money.minor,
+        currency=money.currency.value,
+        date=data["date"],
+        category=category,
+        account=account,
+        note=data.get("note", ""),
+    )
+
+
+def update_transaction(*, record: Transaction, data: dict[str, Any]) -> Transaction:
+    """Apply a partial edit to a transaction the caller has locked. A request that changes nothing saves nothing.
+
+    The currency is not editable (the serializer refuses it): it would reinterpret the stored amount. A change of the
+    kind or of the category checks the category again.
+    """
+    owner = record.owner
+    category, account = resolve_references(
+        owner, category_id=data.get("category_id"), account_id=data.get("account_id")
+    )
+    kind = data.get("kind", record.kind)
+    if "kind" in data or "category_id" in data:
+        ensure_category_allows(category or record.category, kind)
+
+    changes: dict[str, Any] = {}
+    if "kind" in data:
+        changes["kind"] = kind
+    if "amount" in data:
+        changes["amount"] = data["amount"].minor
+    for name in ("date", "note"):
+        if name in data:
+            changes[name] = data[name]
+    if category is not None:
+        changes["category"] = category
+    if account is not None:
+        changes["account"] = account
+
+    changed = False
+    for name, value in changes.items():
+        if getattr(record, name) != value:
+            setattr(record, name, value)
+            changed = True
+    if changed:
+        record.save()
+    return record

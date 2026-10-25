@@ -58,6 +58,14 @@ class ErrorCode(StrEnum):
     ACCOUNT_LIMIT_REACHED = "account_limit_reached"
     CATEGORY_LIMIT_REACHED = "category_limit_reached"
 
+    # Transactions (ADR 0003, 0004)
+    DOES_NOT_EXIST = "does_not_exist"
+    CATEGORY_NOT_ALLOWED = "category_not_allowed"
+    TRANSACTION_LIMIT_REACHED = "transaction_limit_reached"
+    DATE_OUT_OF_RANGE = "date_out_of_range"
+    INVALID_DATE_RANGE = "invalid_date_range"
+    TOO_MANY_VALUES = "too_many_values"
+
     # Safe writes (ADR 0016)
     IDEMPOTENCY_KEY_REQUIRED = "idempotency_key_required"
     IDEMPOTENCY_KEY_INVALID = "idempotency_key_invalid"

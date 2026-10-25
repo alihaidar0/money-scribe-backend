@@ -2394,6 +2394,125 @@ paths:
           headers:
             X-Request-ID:
               $ref: '#/components/headers/XRequestId'
+  /api/v1/reports/day-totals/:
+    get:
+      operationId: report_day_totals
+      description: 'One item per day that has transactions, newest day first, each
+        with its currencies inside: `totals` has one `{currency, total}` per currency,
+        ordered by currency code, where `total` is income minus expenses of that day
+        in that currency. A day always arrives complete: `limit` (50 by default, 100
+        at most) counts days, and `next` follows to the older ones. `date_from` and
+        `date_to` are optional and there is no limit on the span. It takes the filters
+        of the transaction list except `search`, which is not a parameter of this
+        operation. The list and the totals read in step: the same order, the same
+        filters. A day with no transaction has no item. A total past the largest amount
+        is `400` `invalid_amount`.'
+      summary: The total of each day
+      parameters:
+      - in: query
+        name: account_id
+        schema:
+          type: array
+          items:
+            type: string
+            format: uuid
+          maxItems: 20
+        description: Repeat to match any of up to 20 accounts. An id that matches
+          nothing is not an error.
+      - in: query
+        name: category_id
+        schema:
+          type: array
+          items:
+            type: string
+            format: uuid
+          maxItems: 20
+        description: Repeat to match any of up to 20 categories. An id that matches
+          nothing is not an error.
+      - name: cursor
+        required: false
+        in: query
+        description: An opaque position taken from `next` or `previous`; never built
+          by the client.
+        schema:
+          type: string
+      - in: query
+        name: date_from
+        schema:
+          type: string
+          format: date
+        description: The first day, inclusive (`YYYY-MM-DD`).
+      - in: query
+        name: date_to
+        schema:
+          type: string
+          format: date
+        description: The last day, inclusive (`YYYY-MM-DD`).
+      - in: query
+        name: kind
+        schema:
+          enum:
+          - expense
+          - income
+          type: string
+          minLength: 1
+        description: |-
+          * `expense` - Expense
+          * `income` - Income
+      - name: limit
+        required: false
+        in: query
+        description: 'How many results a page holds: 50 by default, at most 100.'
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+      tags:
+      - reports
+      security:
+      - bearerAuth: []
+      responses:
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error400Response'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Retry-After:
+              description: Whole seconds to wait before the request may be repeated;
+                at least 1.
+              schema:
+                type: integer
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedDayTotalList'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
   /api/v1/salary/fixed-items/{id}/:
     patch:
       operationId: salary_fixed_item_update
@@ -3397,6 +3516,489 @@ paths:
           headers:
             X-Request-ID:
               $ref: '#/components/headers/XRequestId'
+  /api/v1/transactions/:
+    get:
+      operationId: transaction_list
+      description: Newest day first, then the entry added last first (`-date`, `-created_at`,
+        `-id`). Cursor pagination (`limit` 50 by default, 100 at most; follow `next`).
+        The filters narrow the list; the same ones (except `search`) narrow the day
+        totals. `search` is a case-insensitive substring of the note, 2 to 100 characters.
+        An id that matches nothing, or no match at all, is `200` with an empty `results`.
+      summary: The person's transactions
+      parameters:
+      - in: query
+        name: account_id
+        schema:
+          type: array
+          items:
+            type: string
+            format: uuid
+          maxItems: 20
+        description: Repeat to match any of up to 20 accounts. An id that matches
+          nothing is not an error.
+      - in: query
+        name: category_id
+        schema:
+          type: array
+          items:
+            type: string
+            format: uuid
+          maxItems: 20
+        description: Repeat to match any of up to 20 categories. An id that matches
+          nothing is not an error.
+      - name: cursor
+        required: false
+        in: query
+        description: An opaque position taken from `next` or `previous`; never built
+          by the client.
+        schema:
+          type: string
+      - in: query
+        name: date_from
+        schema:
+          type: string
+          format: date
+        description: The first day, inclusive (`YYYY-MM-DD`).
+      - in: query
+        name: date_to
+        schema:
+          type: string
+          format: date
+        description: The last day, inclusive (`YYYY-MM-DD`).
+      - in: query
+        name: kind
+        schema:
+          enum:
+          - expense
+          - income
+          type: string
+          minLength: 1
+        description: |-
+          * `expense` - Expense
+          * `income` - Income
+      - name: limit
+        required: false
+        in: query
+        description: 'How many results a page holds: 50 by default, at most 100.'
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+      - in: query
+        name: search
+        schema:
+          type: string
+          minLength: 2
+          maxLength: 100
+        description: A case-insensitive substring of the note, 2 to 100 characters;
+          `%` and `_` are ordinary characters. A list asked with `search` counts in
+          the search rate group.
+      tags:
+      - transactions
+      security:
+      - bearerAuth: []
+      responses:
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error400Response'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Retry-After:
+              description: Whole seconds to wait before the request may be repeated;
+                at least 1.
+              schema:
+                type: integer
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedTransactionList'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+    post:
+      operationId: transaction_create
+      description: Needs an `Idempotency-Key`. `amount` is a decimal string with exactly
+        the digits of `currency` and greater than 0; the `kind` carries the sign.
+        The `date` is a calendar day from 2000-01-01 to 2099-12-31 (`400` `date_out_of_range`).
+        The category must be a built-in one or the person's own and must allow the
+        `kind` (`400` `category_not_allowed` on `category_id`); an unknown id, or
+        one that belongs to someone else, is `400` `does_not_exist` on its field,
+        with the same answer for both. A person has at most 100 000 transactions (`409`
+        `transaction_limit_reached`).
+      summary: Add a transaction
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: 'A random id, once per user action, as a quoted string of 16
+          to 64 letters, digits, hyphens or underscores (a UUID fits): `"8e03978e-40d5-43e8-bc93-6894a57f9324"`.
+          Repeat the same request with the same key after a lost answer and nothing
+          is created twice; the answer is replayed with `Idempotent-Replayed: true`.
+          The key is honoured for 24 hours. Without it: `400` `idempotency_key_required`
+          (`attr` `idempotency_key`).'
+        required: true
+      tags:
+      - transactions
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransactionCreateRequest'
+        required: true
+      security:
+      - bearerAuth: []
+      responses:
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error400Response'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Retry-After:
+              description: Whole seconds to wait before the request may be repeated;
+                at least 1.
+              schema:
+                type: integer
+        '201':
+          headers:
+            Idempotent-Replayed:
+              schema:
+                type: string
+              description: '`true` when this is the stored answer of an earlier request
+                with the same key.'
+            ETag:
+              schema:
+                type: string
+              description: 'The `version` of the record in the answer, as a quoted
+                string: `"3"`.'
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Transaction'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request conflicts with the current state; the `code` says
+            what conflicts.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The `Idempotency-Key` was already used for a different request.
+            The `code` is `idempotency_key_reused`.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+  /api/v1/transactions/{id}/:
+    get:
+      operationId: transaction_read
+      description: The transaction, or `404` when it is not the person's. Answers
+        the `ETag` of its `version`.
+      summary: Read a transaction
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - transactions
+      security:
+      - bearerAuth: []
+      responses:
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error400Response'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Retry-After:
+              description: Whole seconds to wait before the request may be repeated;
+                at least 1.
+              schema:
+                type: integer
+        '200':
+          headers:
+            ETag:
+              schema:
+                type: string
+              description: 'The `version` of the record in the answer, as a quoted
+                string: `"3"`.'
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Transaction'
+          description: ''
+    patch:
+      operationId: transaction_update
+      description: 'Changes any of `kind`, `amount`, `date`, `category_id`, `account_id`,
+        `note`; the rules are those of the create, and a change of the kind or the
+        category checks the category again. The `currency` cannot be changed: sending
+        it, even the stored one, is `400` `read_only`, like any other field that cannot
+        be written. Send `If-Match` with the `version`: a stale one (a category delete
+        that moved this transaction counts) is `412` and changes nothing.'
+      summary: Change a transaction
+      parameters:
+      - in: header
+        name: If-Match
+        schema:
+          type: string
+        description: 'The `version` of the record the edit was made from, as a quoted
+          string: `"3"` (`*` matches any record). If the stored version is another
+          one nothing changes and the answer is `412` `precondition_failed`. Without
+          the header the last write wins.'
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - transactions
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedTransactionUpdateRequest'
+      security:
+      - bearerAuth: []
+      responses:
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error400Response'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Retry-After:
+              description: Whole seconds to wait before the request may be repeated;
+                at least 1.
+              schema:
+                type: integer
+        '200':
+          headers:
+            ETag:
+              schema:
+                type: string
+              description: 'The `version` of the record in the answer, as a quoted
+                string: `"3"`.'
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Transaction'
+          description: ''
+        '412':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: 'The `If-Match` version is not the stored one, or `If-None-Match:
+            *` found the record. Nothing was changed: reload the record. The `code`
+            is `precondition_failed`.'
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+    delete:
+      operationId: transaction_delete
+      description: 'Deletes the transaction for good (`204`); `If-Match` is checked
+        as for a change. A repeated delete is `404`: treat it as done.'
+      summary: Delete a transaction
+      parameters:
+      - in: header
+        name: If-Match
+        schema:
+          type: string
+        description: 'The `version` of the record the edit was made from, as a quoted
+          string: `"3"` (`*` matches any record). If the stored version is another
+          one nothing changes and the answer is `412` `precondition_failed`. Without
+          the header the last write wins.'
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - transactions
+      security:
+      - bearerAuth: []
+      responses:
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error400Response'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Retry-After:
+              description: Whole seconds to wait before the request may be repeated;
+                at least 1.
+              schema:
+                type: integer
+        '204':
+          description: No response body
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '412':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: 'The `If-Match` version is not the stored one, or `If-None-Match:
+            *` found the record. Nothing was changed: reload the record. The `code`
+            is `precondition_failed`.'
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
 components:
   schemas:
     Account:
@@ -3648,6 +4250,50 @@ components:
         * `EGP` - EGP
         * `JPY` - JPY
         * `KWD` - KWD
+    CurrencyTotal:
+      type: object
+      properties:
+        currency:
+          allOf:
+          - $ref: '#/components/schemas/CurrencyEnum'
+          readOnly: true
+          description: |-
+            The ISO 4217 code of the currency.
+
+            * `RUB` - RUB
+            * `USD` - USD
+            * `EUR` - EUR
+            * `GBP` - GBP
+            * `TRY` - TRY
+            * `SAR` - SAR
+            * `AED` - AED
+            * `EGP` - EGP
+            * `JPY` - JPY
+            * `KWD` - KWD
+        total:
+          allOf:
+          - $ref: '#/components/schemas/SignedAmount'
+          readOnly: true
+          description: Income minus expenses of that day in that currency, with its
+            digits; `-` when it is below zero.
+      required:
+      - currency
+      - total
+    DayTotal:
+      type: object
+      properties:
+        date:
+          type: string
+          format: date
+          readOnly: true
+        totals:
+          type: array
+          items:
+            $ref: '#/components/schemas/CurrencyTotal'
+          readOnly: true
+      required:
+      - date
+      - totals
     Defaults:
       type: object
       description: The inputs that pre-fill the form of a month that is not saved
@@ -4030,17 +4676,19 @@ components:
             `email_unchanged`, `invalid_password`, `password_too_short`, `password_too_long`,
             `password_too_similar`, `password_compromised`, `password_too_common`,
             `password_unchanged`, `password_attempts_exceeded`, `reset_token_invalid`,
-            `name_taken`, `account_limit_reached`, `category_limit_reached`, `idempotency_key_required`,
-            `idempotency_key_invalid`, `idempotency_key_reused`, `idempotency_in_progress`,
-            `precondition_failed`, `fixed_item_limit_reached`, `month_has_fixed_items`,
-            `service_unavailable`, `invalid_characters`, `request_too_large`, `invalid_amount`,
-            `currency_mismatch`, `exceeds_remaining`, `account_has_transactions`,
-            `category_has_transactions`, `category_is_builtin`. Codes raised by the
-            framework for malformed or incomplete input: `required`, `blank`, `null`,
-            `invalid`, `max_length`, `min_length`, `parse_error`, `authentication_failed`,
-            `not_authenticated`, `permission_denied`, `not_found`, `method_not_allowed`,
-            `not_acceptable`, `unsupported_media_type`, `read_only`. A client treats
-            a code it does not know as a generic failure of the status.'
+            `name_taken`, `account_limit_reached`, `category_limit_reached`, `does_not_exist`,
+            `category_not_allowed`, `transaction_limit_reached`, `date_out_of_range`,
+            `invalid_date_range`, `too_many_values`, `idempotency_key_required`, `idempotency_key_invalid`,
+            `idempotency_key_reused`, `idempotency_in_progress`, `precondition_failed`,
+            `fixed_item_limit_reached`, `month_has_fixed_items`, `service_unavailable`,
+            `invalid_characters`, `request_too_large`, `invalid_amount`, `currency_mismatch`,
+            `exceeds_remaining`, `account_has_transactions`, `category_has_transactions`,
+            `category_is_builtin`. Codes raised by the framework for malformed or
+            incomplete input: `required`, `blank`, `null`, `invalid`, `max_length`,
+            `min_length`, `parse_error`, `authentication_failed`, `not_authenticated`,
+            `permission_denied`, `not_found`, `method_not_allowed`, `not_acceptable`,
+            `unsupported_media_type`, `read_only`. A client treats a code it does
+            not know as a generic failure of the status.'
         detail:
           type: string
           description: Human-readable text; not for display.
@@ -4287,6 +4935,28 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Category'
+    PaginatedDayTotalList:
+      type: object
+      required:
+      - next
+      - previous
+      - results
+      properties:
+        next:
+          type: string
+          format: uri
+          nullable: true
+          description: The URL of the next page, or `null` on the last one. Follow
+            it as it is.
+        previous:
+          type: string
+          format: uri
+          nullable: true
+          description: The URL of the previous page, or `null` on the first one.
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/DayTotal'
     PaginatedSalaryMonthList:
       type: object
       required:
@@ -4309,6 +4979,28 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/SalaryMonth'
+    PaginatedTransactionList:
+      type: object
+      required:
+      - next
+      - previous
+      - results
+      properties:
+        next:
+          type: string
+          format: uri
+          nullable: true
+          description: The URL of the next page, or `null` on the last one. Follow
+            it as it is.
+        previous:
+          type: string
+          format: uri
+          nullable: true
+          description: The URL of the previous page, or `null` on the first one.
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Transaction'
     PartEnum:
       enum:
       - first
@@ -4529,6 +5221,32 @@ components:
           description: 1 to 28. `null` goes back to "not set" (5).
         remind_on_pay_days:
           type: boolean
+    PatchedTransactionUpdateRequest:
+      type: object
+      description: 'A change to a transaction: the fields of the create except `currency`,
+        which is `400 read_only`.'
+      properties:
+        kind:
+          $ref: '#/components/schemas/KindEnum'
+        amount:
+          allOf:
+          - $ref: '#/components/schemas/Amount'
+          description: A decimal string with exactly the number of digits of the currency,
+            such as `12.50`.
+        date:
+          type: string
+          format: date
+          description: A calendar day, 2000-01-01 to 2099-12-31.
+        category_id:
+          type: string
+          format: uuid
+        account_id:
+          type: string
+          format: uuid
+        note:
+          type: string
+          description: 0 to 100 characters, trimmed.
+          maxLength: 100
     Payment:
       type: object
       properties:
@@ -5096,6 +5814,131 @@ components:
       - expires_in
       - token_type
       - user
+    Transaction:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        kind:
+          allOf:
+          - $ref: '#/components/schemas/KindEnum'
+          readOnly: true
+        amount:
+          allOf:
+          - $ref: '#/components/schemas/Amount'
+          readOnly: true
+          description: A decimal string with exactly the number of digits of the currency,
+            such as `12.50`.
+        currency:
+          allOf:
+          - $ref: '#/components/schemas/CurrencyEnum'
+          readOnly: true
+          description: |-
+            The ISO 4217 code of the currency.
+
+            * `RUB` - RUB
+            * `USD` - USD
+            * `EUR` - EUR
+            * `GBP` - GBP
+            * `TRY` - TRY
+            * `SAR` - SAR
+            * `AED` - AED
+            * `EGP` - EGP
+            * `JPY` - JPY
+            * `KWD` - KWD
+        date:
+          type: string
+          format: date
+          readOnly: true
+        category_id:
+          type: string
+          format: uuid
+          readOnly: true
+        account_id:
+          type: string
+          format: uuid
+          readOnly: true
+        note:
+          type: string
+          readOnly: true
+        version:
+          type: integer
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - account_id
+      - amount
+      - category_id
+      - created_at
+      - currency
+      - date
+      - id
+      - kind
+      - note
+      - updated_at
+      - version
+    TransactionCreateRequest:
+      type: object
+      description: A transaction to add. Anything else (`id`, `version`, ...) is `400
+        read_only`.
+      properties:
+        kind:
+          $ref: '#/components/schemas/KindEnum'
+        amount:
+          allOf:
+          - $ref: '#/components/schemas/Amount'
+          description: A decimal string with exactly the number of digits of the currency,
+            such as `12.50`.
+        currency:
+          allOf:
+          - $ref: '#/components/schemas/CurrencyEnum'
+          description: |-
+            Of the record, and fixed for good: it cannot be changed afterwards.
+
+            * `RUB` - RUB
+            * `USD` - USD
+            * `EUR` - EUR
+            * `GBP` - GBP
+            * `TRY` - TRY
+            * `SAR` - SAR
+            * `AED` - AED
+            * `EGP` - EGP
+            * `JPY` - JPY
+            * `KWD` - KWD
+        date:
+          type: string
+          format: date
+          description: A calendar day, 2000-01-01 to 2099-12-31.
+        category_id:
+          type: string
+          format: uuid
+          description: A built-in category or one of the person's own, and one that
+            allows the `kind`.
+        account_id:
+          type: string
+          format: uuid
+          description: One of the person's accounts.
+        note:
+          type: string
+          default: ''
+          description: 0 to 100 characters, trimmed.
+          maxLength: 100
+      required:
+      - account_id
+      - amount
+      - category_id
+      - currency
+      - date
+      - kind
     UserSummary:
       type: object
       properties:

@@ -75,3 +75,37 @@ def get(client: APIClient, url: str, token: str, **params: Any) -> Response:
 
 def names(response: Response) -> list[str]:
     return [item["name"] for item in response.json()["results"]]
+
+
+TRANSACTIONS = f"{API}/transactions/"
+DAY_TOTALS = f"{API}/reports/day-totals/"
+
+
+def transaction_url(transaction_id: Any) -> str:
+    return f"{TRANSACTIONS}{transaction_id}/"
+
+
+def built_in_id(key: str) -> str:
+    """The fixed id of a built-in category (the data migration)."""
+    index = BUILT_IN_KEYS.index(key) + 1
+    return f"0198f2a0-0000-7000-8000-00000000000{index}"
+
+
+def transaction_body(account: Any, /, **overrides: Any) -> dict[str, Any]:
+    """The request of a correct expense; a test changes one field through ``overrides``."""
+    body: dict[str, Any] = {
+        "kind": "expense",
+        "amount": "12.50",
+        "currency": "USD",
+        "date": "2026-10-24",
+        "category_id": built_in_id("groceries"),
+        "account_id": str(account),
+        "note": "Weekly shop",
+    }
+    return {**body, **overrides}
+
+
+def add_transaction(
+    client: APIClient, token: str, account: Any, /, **overrides: Any
+) -> Response:
+    return post(client, TRANSACTIONS, token, transaction_body(account, **overrides))

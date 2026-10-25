@@ -82,12 +82,14 @@ Every list endpoint is paginated by one class, `ApiCursorPagination` (`DEFAULT_P
 - A client follows `next`; it never builds a cursor and cannot jump to a page number.
 - Each list has one deterministic ordering that ends in the unique `id`, so a row is never repeated or skipped by paging.
   Transactions are ordered `-date`, `-created_at`, `-id`, so within a day the entry added last comes first.
-- Filters are explicit query parameters documented in the schema; transactions take `date_from`, `date_to`, `account`,
-  `category`, `kind` and `search` (the note).
+- Filters are explicit query parameters documented in the schema, validated as a set (a bad value is a `400` on its own
+  parameter); transactions take `date_from`, `date_to`, `category_id` and `account_id` (repeatable, at most 20 values),
+  `kind` and `search` (the note). A parameter the list does not know is ignored.
 - A total that spans pages, such as the total per day, comes from a report endpoint
-  (`GET /api/v1/reports/day-totals/`), never from adding up pages.
-- Read models (overview, reports), settings and single objects are not lists and are not paginated. A salary month
-  returns its fixed items inline.
+  (`GET /api/v1/reports/day-totals/`), never from adding up pages. It is paginated by day: `limit` counts days, each item
+  is one day with its currencies inside, so a day always arrives whole.
+- Read models (the overview and the other reports), settings and single objects are not lists and are not paginated. A
+  salary month returns its fixed items inline.
 
 ## Safe writes
 

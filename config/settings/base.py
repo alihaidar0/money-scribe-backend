@@ -196,6 +196,7 @@ DATABASES = {
 }
 
 INSTALLED_APPS += [
+    "django.contrib.postgres",  # the trigram index of the transaction note search
     "corsheaders",
     "rest_framework",
     "drf_spectacular",
@@ -207,6 +208,7 @@ INSTALLED_APPS += [
     "preferences",
     "salary",
     "ledger",
+    "reports",
     "outbox",
 ]
 
