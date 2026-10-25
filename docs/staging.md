@@ -12,7 +12,7 @@ How staging is built, set up once, deployed, checked and rolled back. The decisi
 | Redis | Render Key Value, free instance | The cache for the sign-in lock and the code limits; no persistence needed |
 | Image registry | GitHub Container Registry | Public package; Render needs no credential |
 | Deploys | GitHub Actions: the job "Deploy to staging" of `docker.yml`, and `deploy-staging.yml` | Calls the service's deploy hook, pinned to an image digest |
-| Celery worker and Beat | Not run | Deferred, see ADR 0011 |
+| Celery worker and Beat | Not run | Deferred, see ADR 0011; scheduled jobs come from a timed call, see ADR 0020 |
 
 ## One-time setup (the owner, by hand)
 

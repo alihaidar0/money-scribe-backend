@@ -389,7 +389,8 @@ listed at the end of this section. Each step is its own branch and pull request.
 Not on staging yet (ADR 0011 has the reasons):
 
 - The Celery worker and Beat. The two daily purges (old outbox emails, unverified accounts) do not run, and the leftovers
-  are invented data. Add a paid worker running `celery worker -B` when a job matters (step 8.4, stage 3); production has
+  are invented data. Add a paid worker running `celery worker -B` when a job matters (step 8.4, stage 3), or the scheduled call of
+  [ADR 0020](adr/0020-scheduled-calls-instead-of-a-free-worker.md) while hosting is free; production has
   its own worker and Beat (section 12).
 - Real email delivery, backups and the hardened admin panel: section 12.
 - The web build and its token cookie: they need the owner's own domain shared by the web app and the API (steps 8.5 and
@@ -444,7 +445,8 @@ when the owner confirms it, and a step that needs the app on staging waits for t
   a bulk call of rows the app has parsed (the server never parses an uploaded file), with skipped-row reporting and a
   lossless round trip
 - [ ] **10.10 notifications**: push device FIDs (Firebase installation IDs, one per session, removed when it ends),
-  pay-day reminders through Celery Beat, and the push provider wiring (the last open decision for this stage; `firebase-admin`
+  pay-day reminders through a scheduled call while hosting is free
+  ([ADR 0020](adr/0020-scheduled-calls-instead-of-a-free-worker.md)) and through Celery Beat once a worker exists, and the push provider wiring (the last open decision for this stage; `firebase-admin`
   7.5.0 or later, `Message(fid=...)`). The rules are in
   [`api-fields.md`](api-fields.md#push-notifications). Build notes: one service function ends sessions and deletes their
   FIDs in the same transaction, and every place that ends a session uses it (a test guards this); sending selects only
@@ -506,7 +508,8 @@ release candidate is stable.
   - email over an HTTPS API of a provider, not SMTP: a free Render web service cannot use the outbound ports 25, 465 and
     587, so the email backend of [ADR 0010](adr/0010-admin-panel-and-email-outbox.md) changes for production
   - no Celery worker (a worker is a paid instance), so the daily purges, the ended-session purge and, from stage 3, the
-    reminders and pushes do not run until a worker is paid for
+    reminders and pushes do not run until a worker is paid for, or the scheduled call of
+    [ADR 0020](adr/0020-scheduled-calls-instead-of-a-free-worker.md) is in place
   - the limits of free instances: it sleeps after 15 minutes without a request (a monitor keeps it awake and uses 720
     to 744 of the 750 hours), a slow 0.1 CPU, restarts at any time, no zero-downtime deploys
   - Neon free keeps only a **6-hour** history and one manual snapshot: no real backups (the manual `pg_dump` procedure

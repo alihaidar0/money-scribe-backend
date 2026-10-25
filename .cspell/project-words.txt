@@ -36,6 +36,7 @@ healthz
 imagetools
 keychain
 keyset
+Koyeb
 logformat
 Mailpit
 neondb
