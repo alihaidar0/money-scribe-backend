@@ -29,6 +29,7 @@ from config.api_errors import (
     IDEMPOTENCY_KEY_HEADER,
     IDEMPOTENT_REPLAYED_HEADER,
     IF_MATCH_HEADER,
+    IF_NONE_MATCH_HEADER,
     PRECONDITION_FAILED_RESPONSE,
     UNPROCESSABLE_RESPONSE,
 )
@@ -158,7 +159,7 @@ class NoteByTitle(APIView):  # type: ignore[misc]
         operation_id="note_put",
         description="Creates the note of this title, or replaces it.",
         request=NoteSerializer,
-        parameters=[IF_MATCH_HEADER, ETAG_HEADER],
+        parameters=[IF_MATCH_HEADER, IF_NONE_MATCH_HEADER, ETAG_HEADER],
         responses={
             200: NoteSerializer,
             201: NoteSerializer,
