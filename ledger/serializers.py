@@ -3,6 +3,7 @@ from typing import Any
 from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
 
+from common.days import day_in_range
 from common.serializers import (
     AmountField,
     CurrencyField,
@@ -14,7 +15,7 @@ from config.error_codes import ErrorCode
 
 from . import services
 from .defaults import CUSTOM_ICONS
-from .models import FIRST_DAY, LAST_DAY, AccountKind, CategoryKind, TransactionKind
+from .models import AccountKind, CategoryKind, TransactionKind
 
 
 def _name_taken() -> ValidationError:
@@ -125,15 +126,6 @@ class TransactionSerializer(serializers.Serializer):  # type: ignore[misc]
     updated_at = serializers.DateTimeField(read_only=True)
 
 
-def _day_in_range(value: Any) -> Any:
-    if not FIRST_DAY <= value <= LAST_DAY:
-        raise serializers.ValidationError(
-            f"A day from {FIRST_DAY} to {LAST_DAY}.",
-            code=ErrorCode.DATE_OUT_OF_RANGE.value,
-        )
-    return value
-
-
 class TransactionCreateSerializer(
     RefuseUnknownFieldsMixin,
     MoneySerializerMixin,
@@ -147,7 +139,7 @@ class TransactionCreateSerializer(
         help_text="Of the record, and fixed for good: it cannot be changed afterwards."
     )
     date = serializers.DateField(
-        validators=[_day_in_range],
+        validators=[day_in_range],
         help_text="A calendar day, 2000-01-01 to 2099-12-31.",
     )
     category_id = serializers.UUIDField(
@@ -179,7 +171,7 @@ class TransactionUpdateSerializer(
     kind = serializers.ChoiceField(choices=TransactionKind.choices)
     amount = AmountField(allow_zero=False)
     date = serializers.DateField(
-        validators=[_day_in_range],
+        validators=[day_in_range],
         help_text="A calendar day, 2000-01-01 to 2099-12-31.",
     )
     category_id = serializers.UUIDField()

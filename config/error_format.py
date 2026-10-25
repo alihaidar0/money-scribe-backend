@@ -4,7 +4,7 @@ from django.conf import settings
 from drf_standardized_errors.formatter import ExceptionFormatter
 
 from .error_codes import ErrorCode
-from .exceptions import CodeInvalid, FieldAuthenticationFailed
+from .exceptions import CodeInvalid, ExceedsRemaining, FieldAuthenticationFailed
 
 # The limit behind a password error, sent with it so the client can word "at least {n} characters"
 # from the server's own value and a change of policy needs no app release: code -> (member, setting).
@@ -17,7 +17,7 @@ LIMIT_MEMBERS = {
 class ApiExceptionFormatter(ExceptionFormatter):
     """The package's ``{type, errors[]}`` body, plus the optional members of a few errors.
 
-    ``attr`` on the 401 of a sign-in that names its field, ``attempts_left`` on ``code_invalid``, and ``min_length`` or ``max_length`` on the password length
+    ``attr`` on the 401 of a sign-in that names its field, ``attempts_left`` on ``code_invalid``, ``remaining`` on ``exceeds_remaining``, and ``min_length`` or ``max_length`` on the password length
     errors. It is a formatter, not a replacement handler, because the schema generator documents the
     error responses only for views that use the package's own handler (``config.api_errors`` has the
     schema).
@@ -36,4 +36,9 @@ class ApiExceptionFormatter(ExceptionFormatter):
                 and item["code"] == ErrorCode.CODE_INVALID.value
             ):
                 item["attempts_left"] = self.exc.attempts_left
+            elif (
+                isinstance(self.exc, ExceedsRemaining)
+                and item["code"] == ErrorCode.EXCEEDS_REMAINING.value
+            ):
+                item["remaining"] = self.exc.remaining
         return body

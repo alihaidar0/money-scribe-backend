@@ -1,0 +1,957 @@
+{
+  "about": "Invented cases for the Overview of a month (issue 'Reports and Overview', ADR 0007). Both the server and the app run this file. Each case sets up a person's data (`settings`, a saved `salary_month` with its `fixed_items`, `transactions`, and `debts` with their `repayments`) and asks for the Overview of `month` in `currency` (`null`: leave the parameter out, so the Settings default applies). `expected` is the answer without `month` and `currency`. All amounts are decimal strings of the currency's digits. balance = salary + recurring_income + income_transactions - fixed_costs - purchases + debt_repayments_received - debt_repayments_made. The first part is days 1 to 15, the second day 16 to the end of the month. The salary figures are those of salary/tests/vectors.json.",
+  "cases": [
+    {
+      "name": "ADR 0007 worked example, two payments, with transactions and repayments",
+      "currency": "RUB",
+      "inputs": {
+        "month": "2026-10",
+        "salary_month": {
+          "currency": "RUB",
+          "base_salary": "3000.00",
+          "food_per_day": "5.00",
+          "working_days_in_month": 22,
+          "working_hours_in_month": 176,
+          "extra_hours_hundredths": 750,
+          "tax_rate_basis_points": 1500,
+          "payment_mode": "two_payments",
+          "working_days_first_half": 11,
+          "fixed_items": [
+            {
+              "name": "Bonus",
+              "kind": "income",
+              "amount": "100.00",
+              "part": "first"
+            },
+            {
+              "name": "Rent",
+              "kind": "expense",
+              "amount": "300.00",
+              "part": "first"
+            },
+            {
+              "name": "Phone",
+              "kind": "expense",
+              "amount": "50.00",
+              "part": "second"
+            }
+          ]
+        },
+        "transactions": [
+          {
+            "kind": "income",
+            "amount": "50.00",
+            "currency": "RUB",
+            "date": "2026-10-03",
+            "category": "other"
+          },
+          {
+            "kind": "expense",
+            "amount": "120.00",
+            "currency": "RUB",
+            "date": "2026-10-04",
+            "category": "other"
+          },
+          {
+            "kind": "expense",
+            "amount": "80.00",
+            "currency": "RUB",
+            "date": "2026-10-15",
+            "category": "other"
+          },
+          {
+            "kind": "expense",
+            "amount": "80.00",
+            "currency": "RUB",
+            "date": "2026-10-20",
+            "category": "other"
+          }
+        ],
+        "debts": [
+          {
+            "direction": "lent",
+            "person": "Pat",
+            "currency": "RUB",
+            "amount": "100.00",
+            "start_date": "2026-09-01",
+            "due_date": null,
+            "repayments": [
+              {
+                "amount": "30.00",
+                "date": "2026-10-07"
+              }
+            ]
+          },
+          {
+            "direction": "borrowed",
+            "person": "Pat",
+            "currency": "RUB",
+            "amount": "40.00",
+            "start_date": "2026-09-01",
+            "due_date": null,
+            "repayments": [
+              {
+                "amount": "10.00",
+                "date": "2026-10-25"
+              }
+            ]
+          }
+        ]
+      },
+      "expected": {
+        "has_data": true,
+        "currencies": [
+          "RUB"
+        ],
+        "total": {
+          "salary": "2860.83",
+          "recurring_income": "100.00",
+          "fixed_costs": "350.00",
+          "income_transactions": "50.00",
+          "purchases": "280.00",
+          "debt_repayments_received": "30.00",
+          "debt_repayments_made": "10.00",
+          "balance": "2400.83"
+        },
+        "first_part": {
+          "salary": "1275.00",
+          "recurring_income": "100.00",
+          "fixed_costs": "300.00",
+          "income_transactions": "50.00",
+          "purchases": "200.00",
+          "debt_repayments_received": "30.00",
+          "debt_repayments_made": "0.00",
+          "balance": "955.00"
+        },
+        "second_part": {
+          "salary": "1585.83",
+          "recurring_income": "0.00",
+          "fixed_costs": "50.00",
+          "income_transactions": "0.00",
+          "purchases": "80.00",
+          "debt_repayments_received": "0.00",
+          "debt_repayments_made": "10.00",
+          "balance": "1445.83"
+        }
+      }
+    },
+    {
+      "name": "A, one payment: every fixed item is in the total whatever its part, and there are no parts",
+      "currency": "RUB",
+      "inputs": {
+        "month": "2026-10",
+        "salary_month": {
+          "currency": "RUB",
+          "base_salary": "100000.00",
+          "food_per_day": "500.00",
+          "working_days_in_month": 20,
+          "working_hours_in_month": 160,
+          "extra_hours_hundredths": 800,
+          "tax_rate_basis_points": 1300,
+          "payment_mode": "one_payment",
+          "working_days_first_half": null,
+          "fixed_items": [
+            {
+              "name": "Bonus",
+              "kind": "income",
+              "amount": "600.00",
+              "part": "second"
+            },
+            {
+              "name": "Rent",
+              "kind": "expense",
+              "amount": "1000.00",
+              "part": "first"
+            }
+          ]
+        },
+        "transactions": [
+          {
+            "kind": "expense",
+            "amount": "2000.00",
+            "currency": "RUB",
+            "date": "2026-10-20",
+            "category": "other"
+          }
+        ]
+      },
+      "expected": {
+        "has_data": true,
+        "currencies": [
+          "RUB"
+        ],
+        "total": {
+          "salary": "104400.00",
+          "recurring_income": "600.00",
+          "fixed_costs": "1000.00",
+          "income_transactions": "0.00",
+          "purchases": "2000.00",
+          "debt_repayments_received": "0.00",
+          "debt_repayments_made": "0.00",
+          "balance": "102000.00"
+        },
+        "first_part": null,
+        "second_part": null
+      }
+    },
+    {
+      "name": "no salary month saved: the salary and fixed lines are 0, the last day of the month counts",
+      "currency": "RUB",
+      "inputs": {
+        "month": "2026-10",
+        "transactions": [
+          {
+            "kind": "income",
+            "amount": "10.00",
+            "currency": "RUB",
+            "date": "2026-10-01",
+            "category": "other"
+          },
+          {
+            "kind": "expense",
+            "amount": "4.50",
+            "currency": "RUB",
+            "date": "2026-10-31",
+            "category": "other"
+          }
+        ]
+      },
+      "expected": {
+        "has_data": true,
+        "currencies": [
+          "RUB"
+        ],
+        "total": {
+          "salary": "0.00",
+          "recurring_income": "0.00",
+          "fixed_costs": "0.00",
+          "income_transactions": "10.00",
+          "purchases": "4.50",
+          "debt_repayments_received": "0.00",
+          "debt_repayments_made": "0.00",
+          "balance": "5.50"
+        },
+        "first_part": null,
+        "second_part": null
+      }
+    },
+    {
+      "name": "a salary month in another currency: its lines are 0 and its currency is listed",
+      "currency": "RUB",
+      "inputs": {
+        "month": "2026-10",
+        "salary_month": {
+          "currency": "USD",
+          "base_salary": "100000.00",
+          "food_per_day": "500.00",
+          "working_days_in_month": 20,
+          "working_hours_in_month": 160,
+          "extra_hours_hundredths": 800,
+          "tax_rate_basis_points": 1300,
+          "payment_mode": "one_payment",
+          "working_days_first_half": null,
+          "fixed_items": [
+            {
+              "name": "Rent",
+              "kind": "expense",
+              "amount": "1000.00",
+              "part": "first"
+            }
+          ]
+        },
+        "transactions": [
+          {
+            "kind": "expense",
+            "amount": "20.00",
+            "currency": "RUB",
+            "date": "2026-10-02",
+            "category": "other"
+          }
+        ]
+      },
+      "expected": {
+        "has_data": true,
+        "currencies": [
+          "RUB",
+          "USD"
+        ],
+        "total": {
+          "salary": "0.00",
+          "recurring_income": "0.00",
+          "fixed_costs": "0.00",
+          "income_transactions": "0.00",
+          "purchases": "20.00",
+          "debt_repayments_received": "0.00",
+          "debt_repayments_made": "0.00",
+          "balance": "-20.00"
+        },
+        "first_part": null,
+        "second_part": null
+      }
+    },
+    {
+      "name": "a month with only repayments",
+      "currency": "RUB",
+      "inputs": {
+        "month": "2026-10",
+        "debts": [
+          {
+            "direction": "lent",
+            "person": "Pat",
+            "currency": "RUB",
+            "amount": "500.00",
+            "start_date": "2026-09-01",
+            "due_date": null,
+            "repayments": [
+              {
+                "amount": "100.00",
+                "date": "2026-10-10"
+              }
+            ]
+          },
+          {
+            "direction": "borrowed",
+            "person": "Pat",
+            "currency": "RUB",
+            "amount": "300.00",
+            "start_date": "2026-09-01",
+            "due_date": null,
+            "repayments": [
+              {
+                "amount": "25.50",
+                "date": "2026-10-12"
+              }
+            ]
+          }
+        ]
+      },
+      "expected": {
+        "has_data": true,
+        "currencies": [
+          "RUB"
+        ],
+        "total": {
+          "salary": "0.00",
+          "recurring_income": "0.00",
+          "fixed_costs": "0.00",
+          "income_transactions": "0.00",
+          "purchases": "0.00",
+          "debt_repayments_received": "100.00",
+          "debt_repayments_made": "25.50",
+          "balance": "74.50"
+        },
+        "first_part": null,
+        "second_part": null
+      }
+    },
+    {
+      "name": "an empty month: the parts follow the Settings payment mode, and records of other months do not count",
+      "currency": "RUB",
+      "inputs": {
+        "month": "2026-10",
+        "settings": {
+          "payment_mode": "two_payments"
+        },
+        "transactions": [
+          {
+            "kind": "expense",
+            "amount": "5.00",
+            "currency": "RUB",
+            "date": "2026-09-30",
+            "category": "other"
+          },
+          {
+            "kind": "expense",
+            "amount": "6.00",
+            "currency": "RUB",
+            "date": "2026-11-01",
+            "category": "other"
+          }
+        ],
+        "debts": [
+          {
+            "direction": "lent",
+            "person": "Pat",
+            "currency": "RUB",
+            "amount": "100.00",
+            "start_date": "2026-09-01",
+            "due_date": null,
+            "repayments": [
+              {
+                "amount": "10.00",
+                "date": "2026-09-30"
+              },
+              {
+                "amount": "10.00",
+                "date": "2026-11-01"
+              }
+            ]
+          }
+        ]
+      },
+      "expected": {
+        "has_data": false,
+        "currencies": [],
+        "total": {
+          "salary": "0.00",
+          "recurring_income": "0.00",
+          "fixed_costs": "0.00",
+          "income_transactions": "0.00",
+          "purchases": "0.00",
+          "debt_repayments_received": "0.00",
+          "debt_repayments_made": "0.00",
+          "balance": "0.00"
+        },
+        "first_part": {
+          "salary": "0.00",
+          "recurring_income": "0.00",
+          "fixed_costs": "0.00",
+          "income_transactions": "0.00",
+          "purchases": "0.00",
+          "debt_repayments_received": "0.00",
+          "debt_repayments_made": "0.00",
+          "balance": "0.00"
+        },
+        "second_part": {
+          "salary": "0.00",
+          "recurring_income": "0.00",
+          "fixed_costs": "0.00",
+          "income_transactions": "0.00",
+          "purchases": "0.00",
+          "debt_repayments_received": "0.00",
+          "debt_repayments_made": "0.00",
+          "balance": "0.00"
+        }
+      }
+    },
+    {
+      "name": "the 15th, the 16th and the last day, for transactions and for repayments; a negative balance",
+      "currency": "RUB",
+      "inputs": {
+        "month": "2026-10",
+        "settings": {
+          "payment_mode": "two_payments"
+        },
+        "transactions": [
+          {
+            "kind": "income",
+            "amount": "8.00",
+            "currency": "RUB",
+            "date": "2026-10-01",
+            "category": "other"
+          },
+          {
+            "kind": "expense",
+            "amount": "1.00",
+            "currency": "RUB",
+            "date": "2026-10-15",
+            "category": "other"
+          },
+          {
+            "kind": "expense",
+            "amount": "2.00",
+            "currency": "RUB",
+            "date": "2026-10-16",
+            "category": "other"
+          },
+          {
+            "kind": "income",
+            "amount": "16.00",
+            "currency": "RUB",
+            "date": "2026-10-16",
+            "category": "other"
+          },
+          {
+            "kind": "expense",
+            "amount": "4.00",
+            "currency": "RUB",
+            "date": "2026-10-31",
+            "category": "other"
+          }
+        ],
+        "debts": [
+          {
+            "direction": "lent",
+            "person": "Pat",
+            "currency": "RUB",
+            "amount": "100.00",
+            "start_date": "2026-09-01",
+            "due_date": null,
+            "repayments": [
+              {
+                "amount": "32.00",
+                "date": "2026-10-15"
+              },
+              {
+                "amount": "64.00",
+                "date": "2026-10-16"
+              }
+            ]
+          },
+          {
+            "direction": "borrowed",
+            "person": "Pat",
+            "currency": "RUB",
+            "amount": "1000.00",
+            "start_date": "2026-09-01",
+            "due_date": null,
+            "repayments": [
+              {
+                "amount": "128.00",
+                "date": "2026-10-01"
+              },
+              {
+                "amount": "256.00",
+                "date": "2026-10-31"
+              }
+            ]
+          }
+        ]
+      },
+      "expected": {
+        "has_data": true,
+        "currencies": [
+          "RUB"
+        ],
+        "total": {
+          "salary": "0.00",
+          "recurring_income": "0.00",
+          "fixed_costs": "0.00",
+          "income_transactions": "24.00",
+          "purchases": "7.00",
+          "debt_repayments_received": "96.00",
+          "debt_repayments_made": "384.00",
+          "balance": "-271.00"
+        },
+        "first_part": {
+          "salary": "0.00",
+          "recurring_income": "0.00",
+          "fixed_costs": "0.00",
+          "income_transactions": "8.00",
+          "purchases": "1.00",
+          "debt_repayments_received": "32.00",
+          "debt_repayments_made": "128.00",
+          "balance": "-89.00"
+        },
+        "second_part": {
+          "salary": "0.00",
+          "recurring_income": "0.00",
+          "fixed_costs": "0.00",
+          "income_transactions": "16.00",
+          "purchases": "6.00",
+          "debt_repayments_received": "64.00",
+          "debt_repayments_made": "256.00",
+          "balance": "-182.00"
+        }
+      }
+    },
+    {
+      "name": "JPY has no digits after the point",
+      "currency": "JPY",
+      "inputs": {
+        "month": "2026-10",
+        "salary_month": {
+          "currency": "JPY",
+          "base_salary": "300000",
+          "food_per_day": "0",
+          "working_days_in_month": 20,
+          "working_hours_in_month": 160,
+          "extra_hours_hundredths": 0,
+          "tax_rate_basis_points": 0,
+          "payment_mode": "one_payment",
+          "working_days_first_half": null,
+          "fixed_items": [
+            {
+              "name": "Rent",
+              "kind": "expense",
+              "amount": "50000",
+              "part": "first"
+            }
+          ]
+        },
+        "transactions": [
+          {
+            "kind": "expense",
+            "amount": "1200",
+            "currency": "JPY",
+            "date": "2026-10-10",
+            "category": "other"
+          }
+        ]
+      },
+      "expected": {
+        "has_data": true,
+        "currencies": [
+          "JPY"
+        ],
+        "total": {
+          "salary": "300000",
+          "recurring_income": "0",
+          "fixed_costs": "50000",
+          "income_transactions": "0",
+          "purchases": "1200",
+          "debt_repayments_received": "0",
+          "debt_repayments_made": "0",
+          "balance": "248800"
+        },
+        "first_part": null,
+        "second_part": null
+      }
+    },
+    {
+      "name": "KWD has three digits after the point, two payments",
+      "currency": "KWD",
+      "inputs": {
+        "month": "2026-10",
+        "salary_month": {
+          "currency": "KWD",
+          "base_salary": "1000.000",
+          "food_per_day": "0.000",
+          "working_days_in_month": 20,
+          "working_hours_in_month": 160,
+          "extra_hours_hundredths": 0,
+          "tax_rate_basis_points": 0,
+          "payment_mode": "two_payments",
+          "working_days_first_half": 10,
+          "fixed_items": [
+            {
+              "name": "Phone",
+              "kind": "expense",
+              "amount": "12.500",
+              "part": "second"
+            }
+          ]
+        },
+        "transactions": [
+          {
+            "kind": "expense",
+            "amount": "3.250",
+            "currency": "KWD",
+            "date": "2026-10-02",
+            "category": "other"
+          },
+          {
+            "kind": "income",
+            "amount": "1.125",
+            "currency": "KWD",
+            "date": "2026-10-30",
+            "category": "other"
+          }
+        ]
+      },
+      "expected": {
+        "has_data": true,
+        "currencies": [
+          "KWD"
+        ],
+        "total": {
+          "salary": "1000.000",
+          "recurring_income": "0.000",
+          "fixed_costs": "12.500",
+          "income_transactions": "1.125",
+          "purchases": "3.250",
+          "debt_repayments_received": "0.000",
+          "debt_repayments_made": "0.000",
+          "balance": "985.375"
+        },
+        "first_part": {
+          "salary": "500.000",
+          "recurring_income": "0.000",
+          "fixed_costs": "0.000",
+          "income_transactions": "0.000",
+          "purchases": "3.250",
+          "debt_repayments_received": "0.000",
+          "debt_repayments_made": "0.000",
+          "balance": "496.750"
+        },
+        "second_part": {
+          "salary": "500.000",
+          "recurring_income": "0.000",
+          "fixed_costs": "12.500",
+          "income_transactions": "1.125",
+          "purchases": "0.000",
+          "debt_repayments_received": "0.000",
+          "debt_repayments_made": "0.000",
+          "balance": "488.625"
+        }
+      }
+    },
+    {
+      "name": "a transaction and a repayment in another currency are not in the blocks, but the currency is listed",
+      "currency": "RUB",
+      "inputs": {
+        "month": "2026-10",
+        "transactions": [
+          {
+            "kind": "expense",
+            "amount": "10.00",
+            "currency": "RUB",
+            "date": "2026-10-05",
+            "category": "other"
+          },
+          {
+            "kind": "expense",
+            "amount": "99.00",
+            "currency": "USD",
+            "date": "2026-10-06",
+            "category": "other"
+          }
+        ],
+        "debts": [
+          {
+            "direction": "lent",
+            "person": "Pat",
+            "currency": "USD",
+            "amount": "50.00",
+            "start_date": "2026-09-01",
+            "due_date": null,
+            "repayments": [
+              {
+                "amount": "20.00",
+                "date": "2026-10-07"
+              }
+            ]
+          }
+        ]
+      },
+      "expected": {
+        "has_data": true,
+        "currencies": [
+          "RUB",
+          "USD"
+        ],
+        "total": {
+          "salary": "0.00",
+          "recurring_income": "0.00",
+          "fixed_costs": "0.00",
+          "income_transactions": "0.00",
+          "purchases": "10.00",
+          "debt_repayments_received": "0.00",
+          "debt_repayments_made": "0.00",
+          "balance": "-10.00"
+        },
+        "first_part": null,
+        "second_part": null
+      }
+    },
+    {
+      "name": "a saved two-payment month with a one-payment Settings default has two parts",
+      "currency": "RUB",
+      "inputs": {
+        "month": "2026-10",
+        "settings": {
+          "payment_mode": "one_payment"
+        },
+        "salary_month": {
+          "currency": "RUB",
+          "base_salary": "3000.00",
+          "food_per_day": "5.00",
+          "working_days_in_month": 22,
+          "working_hours_in_month": 176,
+          "extra_hours_hundredths": 750,
+          "tax_rate_basis_points": 1500,
+          "payment_mode": "two_payments",
+          "working_days_first_half": 11,
+          "fixed_items": [
+            {
+              "name": "Phone",
+              "kind": "expense",
+              "amount": "50.00",
+              "part": "second"
+            }
+          ]
+        }
+      },
+      "expected": {
+        "has_data": true,
+        "currencies": [
+          "RUB"
+        ],
+        "total": {
+          "salary": "2860.83",
+          "recurring_income": "0.00",
+          "fixed_costs": "50.00",
+          "income_transactions": "0.00",
+          "purchases": "0.00",
+          "debt_repayments_received": "0.00",
+          "debt_repayments_made": "0.00",
+          "balance": "2810.83"
+        },
+        "first_part": {
+          "salary": "1275.00",
+          "recurring_income": "0.00",
+          "fixed_costs": "0.00",
+          "income_transactions": "0.00",
+          "purchases": "0.00",
+          "debt_repayments_received": "0.00",
+          "debt_repayments_made": "0.00",
+          "balance": "1275.00"
+        },
+        "second_part": {
+          "salary": "1585.83",
+          "recurring_income": "0.00",
+          "fixed_costs": "50.00",
+          "income_transactions": "0.00",
+          "purchases": "0.00",
+          "debt_repayments_received": "0.00",
+          "debt_repayments_made": "0.00",
+          "balance": "1535.83"
+        }
+      }
+    },
+    {
+      "name": "a saved one-payment month with a two-payment Settings default has no parts",
+      "currency": "RUB",
+      "inputs": {
+        "month": "2026-10",
+        "settings": {
+          "payment_mode": "two_payments"
+        },
+        "salary_month": {
+          "currency": "RUB",
+          "base_salary": "100000.00",
+          "food_per_day": "500.00",
+          "working_days_in_month": 20,
+          "working_hours_in_month": 160,
+          "extra_hours_hundredths": 800,
+          "tax_rate_basis_points": 1300,
+          "payment_mode": "one_payment",
+          "working_days_first_half": null,
+          "fixed_items": []
+        }
+      },
+      "expected": {
+        "has_data": true,
+        "currencies": [
+          "RUB"
+        ],
+        "total": {
+          "salary": "104400.00",
+          "recurring_income": "0.00",
+          "fixed_costs": "0.00",
+          "income_transactions": "0.00",
+          "purchases": "0.00",
+          "debt_repayments_received": "0.00",
+          "debt_repayments_made": "0.00",
+          "balance": "104400.00"
+        },
+        "first_part": null,
+        "second_part": null
+      }
+    },
+    {
+      "name": "fixed items only in the second part",
+      "currency": "RUB",
+      "inputs": {
+        "month": "2026-10",
+        "salary_month": {
+          "currency": "RUB",
+          "base_salary": "3000.00",
+          "food_per_day": "5.00",
+          "working_days_in_month": 22,
+          "working_hours_in_month": 176,
+          "extra_hours_hundredths": 750,
+          "tax_rate_basis_points": 1500,
+          "payment_mode": "two_payments",
+          "working_days_first_half": 11,
+          "fixed_items": [
+            {
+              "name": "Side job",
+              "kind": "income",
+              "amount": "200.00",
+              "part": "second"
+            },
+            {
+              "name": "Phone",
+              "kind": "expense",
+              "amount": "75.00",
+              "part": "second"
+            }
+          ]
+        }
+      },
+      "expected": {
+        "has_data": true,
+        "currencies": [
+          "RUB"
+        ],
+        "total": {
+          "salary": "2860.83",
+          "recurring_income": "200.00",
+          "fixed_costs": "75.00",
+          "income_transactions": "0.00",
+          "purchases": "0.00",
+          "debt_repayments_received": "0.00",
+          "debt_repayments_made": "0.00",
+          "balance": "2985.83"
+        },
+        "first_part": {
+          "salary": "1275.00",
+          "recurring_income": "0.00",
+          "fixed_costs": "0.00",
+          "income_transactions": "0.00",
+          "purchases": "0.00",
+          "debt_repayments_received": "0.00",
+          "debt_repayments_made": "0.00",
+          "balance": "1275.00"
+        },
+        "second_part": {
+          "salary": "1585.83",
+          "recurring_income": "200.00",
+          "fixed_costs": "75.00",
+          "income_transactions": "0.00",
+          "purchases": "0.00",
+          "debt_repayments_received": "0.00",
+          "debt_repayments_made": "0.00",
+          "balance": "1710.83"
+        }
+      }
+    },
+    {
+      "name": "the currency left out is the Settings default currency",
+      "currency": null,
+      "inputs": {
+        "month": "2026-10",
+        "settings": {
+          "default_currency": "USD"
+        },
+        "transactions": [
+          {
+            "kind": "expense",
+            "amount": "5.00",
+            "currency": "USD",
+            "date": "2026-10-05",
+            "category": "other"
+          },
+          {
+            "kind": "expense",
+            "amount": "7.00",
+            "currency": "RUB",
+            "date": "2026-10-06",
+            "category": "other"
+          }
+        ]
+      },
+      "expected": {
+        "has_data": true,
+        "currencies": [
+          "RUB",
+          "USD"
+        ],
+        "total": {
+          "salary": "0.00",
+          "recurring_income": "0.00",
+          "fixed_costs": "0.00",
+          "income_transactions": "0.00",
+          "purchases": "5.00",
+          "debt_repayments_received": "0.00",
+          "debt_repayments_made": "0.00",
+          "balance": "-5.00"
+        },
+        "first_part": null,
+        "second_part": null,
+        "currency": "USD"
+      }
+    }
+  ]
+}

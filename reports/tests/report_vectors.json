@@ -1,0 +1,963 @@
+{
+  "about": "Invented cases for the month report and the debts report (issue 'Reports and Overview'). Both the server and the app run this file. A `month` case sets up `settings`, `custom_categories`, `transactions` (a `category` is a built-in key such as `groceries`, or `custom:<name>`), `deleted_categories` (custom categories deleted after the transactions are saved, so their records move to `other`) and asks for the month report of `month` in `currency` (`null`: leave it out). `expected` is the answer without `month` and `currency`. A `custom:<name>` `category_id` stands for the id the server gave that category. A `debts` case sets up `debts` with `repayments`, and `today`, and asks for the debts report; `expected` lists the items without their `id`. All amounts are decimal strings of the currency's digits. The first part is days 1 to 15, the second day 16 to the end of the month. The built-in ids are the fixed ones of the data migration.",
+  "cases": [
+    {
+      "name": "a transaction on the 15th and on the 16th, a month paid twice",
+      "kind": "month",
+      "currency": "RUB",
+      "inputs": {
+        "month": "2026-10",
+        "settings": {
+          "payment_mode": "two_payments"
+        },
+        "transactions": [
+          {
+            "kind": "expense",
+            "amount": "10.00",
+            "currency": "RUB",
+            "date": "2026-10-15",
+            "category": "groceries"
+          },
+          {
+            "kind": "expense",
+            "amount": "20.00",
+            "currency": "RUB",
+            "date": "2026-10-16",
+            "category": "dining"
+          },
+          {
+            "kind": "expense",
+            "amount": "5.00",
+            "currency": "RUB",
+            "date": "2026-10-16",
+            "category": "groceries"
+          },
+          {
+            "kind": "income",
+            "amount": "100.00",
+            "currency": "RUB",
+            "date": "2026-10-15",
+            "category": "scholarship"
+          }
+        ]
+      },
+      "expected": {
+        "has_data": true,
+        "currencies": [
+          "RUB"
+        ],
+        "income_transactions": "100.00",
+        "purchases": "35.00",
+        "categories": [
+          {
+            "category_id": "0198f2a0-0000-7000-8000-000000000002",
+            "category_key": "dining",
+            "name": "Dining",
+            "icon": "dining",
+            "amount": "20.00"
+          },
+          {
+            "category_id": "0198f2a0-0000-7000-8000-000000000001",
+            "category_key": "groceries",
+            "name": "Groceries",
+            "icon": "groceries",
+            "amount": "15.00"
+          }
+        ],
+        "first_part": {
+          "income_transactions": "100.00",
+          "purchases": "10.00",
+          "categories": [
+            {
+              "category_id": "0198f2a0-0000-7000-8000-000000000001",
+              "category_key": "groceries",
+              "name": "Groceries",
+              "icon": "groceries",
+              "amount": "10.00"
+            }
+          ]
+        },
+        "second_part": {
+          "income_transactions": "0.00",
+          "purchases": "25.00",
+          "categories": [
+            {
+              "category_id": "0198f2a0-0000-7000-8000-000000000002",
+              "category_key": "dining",
+              "name": "Dining",
+              "icon": "dining",
+              "amount": "20.00"
+            },
+            {
+              "category_id": "0198f2a0-0000-7000-8000-000000000001",
+              "category_key": "groceries",
+              "name": "Groceries",
+              "icon": "groceries",
+              "amount": "5.00"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "a month paid once has no parts, and the categories cover the whole month",
+      "kind": "month",
+      "currency": "RUB",
+      "inputs": {
+        "month": "2026-10",
+        "transactions": [
+          {
+            "kind": "expense",
+            "amount": "3.00",
+            "currency": "RUB",
+            "date": "2026-10-01",
+            "category": "transport"
+          },
+          {
+            "kind": "expense",
+            "amount": "4.00",
+            "currency": "RUB",
+            "date": "2026-10-31",
+            "category": "transport"
+          }
+        ]
+      },
+      "expected": {
+        "has_data": true,
+        "currencies": [
+          "RUB"
+        ],
+        "income_transactions": "0.00",
+        "purchases": "7.00",
+        "categories": [
+          {
+            "category_id": "0198f2a0-0000-7000-8000-000000000003",
+            "category_key": "transport",
+            "name": "Transport",
+            "icon": "transport",
+            "amount": "7.00"
+          }
+        ],
+        "first_part": null,
+        "second_part": null
+      }
+    },
+    {
+      "name": "a saved month decides the parts, not the Settings default",
+      "kind": "month",
+      "currency": "RUB",
+      "inputs": {
+        "month": "2026-10",
+        "settings": {
+          "payment_mode": "one_payment"
+        },
+        "salary_month": {
+          "currency": "RUB",
+          "base_salary": "100000.00",
+          "food_per_day": "500.00",
+          "working_days_in_month": 20,
+          "working_hours_in_month": 160,
+          "extra_hours_hundredths": 800,
+          "tax_rate_basis_points": 1300,
+          "payment_mode": "two_payments",
+          "working_days_first_half": 10,
+          "fixed_items": []
+        },
+        "transactions": [
+          {
+            "kind": "expense",
+            "amount": "2.00",
+            "currency": "RUB",
+            "date": "2026-10-16",
+            "category": "dining"
+          }
+        ]
+      },
+      "expected": {
+        "has_data": true,
+        "currencies": [
+          "RUB"
+        ],
+        "income_transactions": "0.00",
+        "purchases": "2.00",
+        "categories": [
+          {
+            "category_id": "0198f2a0-0000-7000-8000-000000000002",
+            "category_key": "dining",
+            "name": "Dining",
+            "icon": "dining",
+            "amount": "2.00"
+          }
+        ],
+        "first_part": {
+          "income_transactions": "0.00",
+          "purchases": "0.00",
+          "categories": []
+        },
+        "second_part": {
+          "income_transactions": "0.00",
+          "purchases": "2.00",
+          "categories": [
+            {
+              "category_id": "0198f2a0-0000-7000-8000-000000000002",
+              "category_key": "dining",
+              "name": "Dining",
+              "icon": "dining",
+              "amount": "2.00"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "a deleted custom category: its records are in other",
+      "kind": "month",
+      "currency": "RUB",
+      "inputs": {
+        "month": "2026-10",
+        "custom_categories": [
+          {
+            "name": "Pets",
+            "icon": "gifts"
+          }
+        ],
+        "transactions": [
+          {
+            "kind": "expense",
+            "amount": "12.00",
+            "currency": "RUB",
+            "date": "2026-10-05",
+            "category": "custom:Pets"
+          },
+          {
+            "kind": "expense",
+            "amount": "3.00",
+            "currency": "RUB",
+            "date": "2026-10-06",
+            "category": "other"
+          }
+        ],
+        "deleted_categories": [
+          "Pets"
+        ]
+      },
+      "expected": {
+        "has_data": true,
+        "currencies": [
+          "RUB"
+        ],
+        "income_transactions": "0.00",
+        "purchases": "15.00",
+        "categories": [
+          {
+            "category_id": "0198f2a0-0000-7000-8000-000000000007",
+            "category_key": "other",
+            "name": "Other",
+            "icon": "other",
+            "amount": "15.00"
+          }
+        ],
+        "first_part": null,
+        "second_part": null
+      }
+    },
+    {
+      "name": "a custom category has no key and shows its own name",
+      "kind": "month",
+      "currency": "RUB",
+      "inputs": {
+        "month": "2026-10",
+        "custom_categories": [
+          {
+            "name": "Pets",
+            "icon": "gifts"
+          }
+        ],
+        "transactions": [
+          {
+            "kind": "expense",
+            "amount": "12.00",
+            "currency": "RUB",
+            "date": "2026-10-05",
+            "category": "custom:Pets"
+          },
+          {
+            "kind": "expense",
+            "amount": "20.00",
+            "currency": "RUB",
+            "date": "2026-10-06",
+            "category": "groceries"
+          }
+        ]
+      },
+      "expected": {
+        "has_data": true,
+        "currencies": [
+          "RUB"
+        ],
+        "income_transactions": "0.00",
+        "purchases": "32.00",
+        "categories": [
+          {
+            "category_id": "0198f2a0-0000-7000-8000-000000000001",
+            "category_key": "groceries",
+            "name": "Groceries",
+            "icon": "groceries",
+            "amount": "20.00"
+          },
+          {
+            "category_id": "custom:Pets",
+            "category_key": null,
+            "name": "Pets",
+            "icon": "gifts",
+            "amount": "12.00"
+          }
+        ],
+        "first_part": null,
+        "second_part": null
+      }
+    },
+    {
+      "name": "a month with two currencies shows the asked one and lists both",
+      "kind": "month",
+      "currency": "RUB",
+      "inputs": {
+        "month": "2026-10",
+        "transactions": [
+          {
+            "kind": "expense",
+            "amount": "10.00",
+            "currency": "RUB",
+            "date": "2026-10-05",
+            "category": "groceries"
+          },
+          {
+            "kind": "expense",
+            "amount": "99.00",
+            "currency": "USD",
+            "date": "2026-10-06",
+            "category": "dining"
+          },
+          {
+            "kind": "income",
+            "amount": "5.00",
+            "currency": "USD",
+            "date": "2026-10-07",
+            "category": "scholarship"
+          }
+        ]
+      },
+      "expected": {
+        "has_data": true,
+        "currencies": [
+          "RUB",
+          "USD"
+        ],
+        "income_transactions": "0.00",
+        "purchases": "10.00",
+        "categories": [
+          {
+            "category_id": "0198f2a0-0000-7000-8000-000000000001",
+            "category_key": "groceries",
+            "name": "Groceries",
+            "icon": "groceries",
+            "amount": "10.00"
+          }
+        ],
+        "first_part": null,
+        "second_part": null
+      }
+    },
+    {
+      "name": "equal amounts are ordered by category id",
+      "kind": "month",
+      "currency": "RUB",
+      "inputs": {
+        "month": "2026-10",
+        "transactions": [
+          {
+            "kind": "expense",
+            "amount": "10.00",
+            "currency": "RUB",
+            "date": "2026-10-05",
+            "category": "transport"
+          },
+          {
+            "kind": "expense",
+            "amount": "10.00",
+            "currency": "RUB",
+            "date": "2026-10-06",
+            "category": "groceries"
+          },
+          {
+            "kind": "expense",
+            "amount": "10.00",
+            "currency": "RUB",
+            "date": "2026-10-07",
+            "category": "dining"
+          }
+        ]
+      },
+      "expected": {
+        "has_data": true,
+        "currencies": [
+          "RUB"
+        ],
+        "income_transactions": "0.00",
+        "purchases": "30.00",
+        "categories": [
+          {
+            "category_id": "0198f2a0-0000-7000-8000-000000000001",
+            "category_key": "groceries",
+            "name": "Groceries",
+            "icon": "groceries",
+            "amount": "10.00"
+          },
+          {
+            "category_id": "0198f2a0-0000-7000-8000-000000000002",
+            "category_key": "dining",
+            "name": "Dining",
+            "icon": "dining",
+            "amount": "10.00"
+          },
+          {
+            "category_id": "0198f2a0-0000-7000-8000-000000000003",
+            "category_key": "transport",
+            "name": "Transport",
+            "icon": "transport",
+            "amount": "10.00"
+          }
+        ],
+        "first_part": null,
+        "second_part": null
+      }
+    },
+    {
+      "name": "a month with only income has no categories",
+      "kind": "month",
+      "currency": "RUB",
+      "inputs": {
+        "month": "2026-10",
+        "transactions": [
+          {
+            "kind": "income",
+            "amount": "40.00",
+            "currency": "RUB",
+            "date": "2026-10-05",
+            "category": "scholarship"
+          }
+        ]
+      },
+      "expected": {
+        "has_data": true,
+        "currencies": [
+          "RUB"
+        ],
+        "income_transactions": "40.00",
+        "purchases": "0.00",
+        "categories": [],
+        "first_part": null,
+        "second_part": null
+      }
+    },
+    {
+      "name": "a month with nothing, and records of the days around it",
+      "kind": "month",
+      "currency": "RUB",
+      "inputs": {
+        "month": "2026-10",
+        "transactions": [
+          {
+            "kind": "expense",
+            "amount": "5.00",
+            "currency": "RUB",
+            "date": "2026-09-30",
+            "category": "other"
+          },
+          {
+            "kind": "expense",
+            "amount": "6.00",
+            "currency": "RUB",
+            "date": "2026-11-01",
+            "category": "other"
+          }
+        ]
+      },
+      "expected": {
+        "has_data": false,
+        "currencies": [],
+        "income_transactions": "0.00",
+        "purchases": "0.00",
+        "categories": [],
+        "first_part": null,
+        "second_part": null
+      }
+    },
+    {
+      "name": "JPY and the currency left out (the Settings default)",
+      "kind": "month",
+      "currency": null,
+      "inputs": {
+        "month": "2026-10",
+        "settings": {
+          "default_currency": "JPY"
+        },
+        "transactions": [
+          {
+            "kind": "expense",
+            "amount": "1200",
+            "currency": "JPY",
+            "date": "2026-10-05",
+            "category": "dining"
+          }
+        ]
+      },
+      "expected": {
+        "has_data": true,
+        "currencies": [
+          "JPY"
+        ],
+        "income_transactions": "0",
+        "purchases": "1200",
+        "categories": [
+          {
+            "category_id": "0198f2a0-0000-7000-8000-000000000002",
+            "category_key": "dining",
+            "name": "Dining",
+            "icon": "dining",
+            "amount": "1200"
+          }
+        ],
+        "first_part": null,
+        "second_part": null,
+        "currency": "JPY"
+      }
+    },
+    {
+      "name": "debts in two currencies, on 2026-10-15",
+      "kind": "debts",
+      "inputs": {
+        "today": "2026-10-15",
+        "debts": [
+          {
+            "direction": "lent",
+            "person": "Alex",
+            "currency": "USD",
+            "amount": "200.00",
+            "start_date": "2026-10-01",
+            "due_date": "2026-11-15",
+            "repayments": [
+              {
+                "amount": "50.00",
+                "date": "2026-10-02"
+              }
+            ]
+          },
+          {
+            "direction": "borrowed",
+            "person": "Sam",
+            "currency": "USD",
+            "amount": "80.00",
+            "start_date": "2026-09-01",
+            "due_date": "2026-10-10",
+            "repayments": []
+          },
+          {
+            "direction": "lent",
+            "person": "Pat",
+            "currency": "USD",
+            "amount": "100.00",
+            "start_date": "2026-09-01",
+            "due_date": null,
+            "repayments": []
+          },
+          {
+            "direction": "lent",
+            "person": "Done",
+            "currency": "USD",
+            "amount": "10.00",
+            "start_date": "2026-09-01",
+            "due_date": "2026-09-20",
+            "repayments": [
+              {
+                "amount": "10.00",
+                "date": "2026-09-15"
+              }
+            ]
+          },
+          {
+            "direction": "borrowed",
+            "person": "Lee",
+            "currency": "USD",
+            "amount": "60.00",
+            "start_date": "2026-09-01",
+            "due_date": "2026-10-01",
+            "repayments": []
+          },
+          {
+            "direction": "borrowed",
+            "person": "Eve",
+            "currency": "EUR",
+            "amount": "30.00",
+            "start_date": "2026-09-01",
+            "due_date": "2026-10-20",
+            "repayments": []
+          }
+        ]
+      },
+      "expected": {
+        "has_data": true,
+        "by_currency": [
+          {
+            "currency": "EUR",
+            "owed_to_you": "0.00",
+            "you_owe": "30.00",
+            "overdue": [],
+            "open": [
+              {
+                "person": "Eve",
+                "direction": "borrowed",
+                "remaining": "30.00",
+                "status": "open",
+                "due_date": "2026-10-20"
+              }
+            ]
+          },
+          {
+            "currency": "USD",
+            "owed_to_you": "250.00",
+            "you_owe": "140.00",
+            "overdue": [
+              {
+                "person": "Lee",
+                "direction": "borrowed",
+                "remaining": "60.00",
+                "status": "overdue",
+                "due_date": "2026-10-01"
+              },
+              {
+                "person": "Sam",
+                "direction": "borrowed",
+                "remaining": "80.00",
+                "status": "overdue",
+                "due_date": "2026-10-10"
+              }
+            ],
+            "open": [
+              {
+                "person": "Alex",
+                "direction": "lent",
+                "remaining": "150.00",
+                "status": "open",
+                "due_date": "2026-11-15"
+              },
+              {
+                "person": "Pat",
+                "direction": "lent",
+                "remaining": "100.00",
+                "status": "open",
+                "due_date": null
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "the same debts when today is later",
+      "kind": "debts",
+      "inputs": {
+        "today": "2026-11-16",
+        "debts": [
+          {
+            "direction": "lent",
+            "person": "Alex",
+            "currency": "USD",
+            "amount": "200.00",
+            "start_date": "2026-10-01",
+            "due_date": "2026-11-15",
+            "repayments": [
+              {
+                "amount": "50.00",
+                "date": "2026-10-02"
+              }
+            ]
+          },
+          {
+            "direction": "borrowed",
+            "person": "Sam",
+            "currency": "USD",
+            "amount": "80.00",
+            "start_date": "2026-09-01",
+            "due_date": "2026-10-10",
+            "repayments": []
+          },
+          {
+            "direction": "lent",
+            "person": "Pat",
+            "currency": "USD",
+            "amount": "100.00",
+            "start_date": "2026-09-01",
+            "due_date": null,
+            "repayments": []
+          },
+          {
+            "direction": "lent",
+            "person": "Done",
+            "currency": "USD",
+            "amount": "10.00",
+            "start_date": "2026-09-01",
+            "due_date": "2026-09-20",
+            "repayments": [
+              {
+                "amount": "10.00",
+                "date": "2026-09-15"
+              }
+            ]
+          },
+          {
+            "direction": "borrowed",
+            "person": "Lee",
+            "currency": "USD",
+            "amount": "60.00",
+            "start_date": "2026-09-01",
+            "due_date": "2026-10-01",
+            "repayments": []
+          },
+          {
+            "direction": "borrowed",
+            "person": "Eve",
+            "currency": "EUR",
+            "amount": "30.00",
+            "start_date": "2026-09-01",
+            "due_date": "2026-10-20",
+            "repayments": []
+          }
+        ]
+      },
+      "expected": {
+        "has_data": true,
+        "by_currency": [
+          {
+            "currency": "EUR",
+            "owed_to_you": "0.00",
+            "you_owe": "30.00",
+            "overdue": [
+              {
+                "person": "Eve",
+                "direction": "borrowed",
+                "remaining": "30.00",
+                "status": "overdue",
+                "due_date": "2026-10-20"
+              }
+            ],
+            "open": []
+          },
+          {
+            "currency": "USD",
+            "owed_to_you": "250.00",
+            "you_owe": "140.00",
+            "overdue": [
+              {
+                "person": "Lee",
+                "direction": "borrowed",
+                "remaining": "60.00",
+                "status": "overdue",
+                "due_date": "2026-10-01"
+              },
+              {
+                "person": "Sam",
+                "direction": "borrowed",
+                "remaining": "80.00",
+                "status": "overdue",
+                "due_date": "2026-10-10"
+              },
+              {
+                "person": "Alex",
+                "direction": "lent",
+                "remaining": "150.00",
+                "status": "overdue",
+                "due_date": "2026-11-15"
+              }
+            ],
+            "open": [
+              {
+                "person": "Pat",
+                "direction": "lent",
+                "remaining": "100.00",
+                "status": "open",
+                "due_date": null
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "only settled debts: there is data, and nothing is listed",
+      "kind": "debts",
+      "inputs": {
+        "today": "2026-10-15",
+        "debts": [
+          {
+            "direction": "lent",
+            "person": "Done",
+            "currency": "USD",
+            "amount": "10.00",
+            "start_date": "2026-09-01",
+            "due_date": "2026-09-20",
+            "repayments": [
+              {
+                "amount": "10.00",
+                "date": "2026-09-15"
+              }
+            ]
+          }
+        ]
+      },
+      "expected": {
+        "has_data": true,
+        "by_currency": []
+      }
+    },
+    {
+      "name": "a debt that is due today is open, and one a day late is overdue",
+      "kind": "debts",
+      "inputs": {
+        "today": "2026-10-15",
+        "debts": [
+          {
+            "direction": "lent",
+            "person": "Today",
+            "currency": "USD",
+            "amount": "10.00",
+            "start_date": "2026-09-01",
+            "due_date": "2026-10-15",
+            "repayments": []
+          },
+          {
+            "direction": "lent",
+            "person": "Late",
+            "currency": "USD",
+            "amount": "20.00",
+            "start_date": "2026-09-01",
+            "due_date": "2026-10-14",
+            "repayments": []
+          }
+        ]
+      },
+      "expected": {
+        "has_data": true,
+        "by_currency": [
+          {
+            "currency": "USD",
+            "owed_to_you": "30.00",
+            "you_owe": "0.00",
+            "overdue": [
+              {
+                "person": "Late",
+                "direction": "lent",
+                "remaining": "20.00",
+                "status": "overdue",
+                "due_date": "2026-10-14"
+              }
+            ],
+            "open": [
+              {
+                "person": "Today",
+                "direction": "lent",
+                "remaining": "10.00",
+                "status": "open",
+                "due_date": "2026-10-15"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "KWD and JPY remaining amounts keep their digits",
+      "kind": "debts",
+      "inputs": {
+        "today": "2026-10-15",
+        "debts": [
+          {
+            "direction": "borrowed",
+            "person": "Sam",
+            "currency": "KWD",
+            "amount": "12.500",
+            "start_date": "2026-09-01",
+            "due_date": null,
+            "repayments": [
+              {
+                "amount": "2.250",
+                "date": "2026-09-10"
+              }
+            ]
+          },
+          {
+            "direction": "lent",
+            "person": "Ken",
+            "currency": "JPY",
+            "amount": "5000",
+            "start_date": "2026-09-01",
+            "due_date": null,
+            "repayments": [
+              {
+                "amount": "1200",
+                "date": "2026-09-10"
+              }
+            ]
+          }
+        ]
+      },
+      "expected": {
+        "has_data": true,
+        "by_currency": [
+          {
+            "currency": "JPY",
+            "owed_to_you": "3800",
+            "you_owe": "0",
+            "overdue": [],
+            "open": [
+              {
+                "person": "Ken",
+                "direction": "lent",
+                "remaining": "3800",
+                "status": "open",
+                "due_date": null
+              }
+            ]
+          },
+          {
+            "currency": "KWD",
+            "owed_to_you": "0.000",
+            "you_owe": "10.250",
+            "overdue": [],
+            "open": [
+              {
+                "person": "Sam",
+                "direction": "borrowed",
+                "remaining": "10.250",
+                "status": "open",
+                "due_date": null
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "no debts at all",
+      "kind": "debts",
+      "inputs": {
+        "today": "2026-10-15",
+        "debts": []
+      },
+      "expected": {
+        "has_data": false,
+        "by_currency": []
+      }
+    }
+  ]
+}

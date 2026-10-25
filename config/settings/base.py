@@ -208,6 +208,7 @@ INSTALLED_APPS += [
     "preferences",
     "salary",
     "ledger",
+    "debts",
     "reports",
     "outbox",
 ]
@@ -445,6 +446,9 @@ SPECTACULAR_SETTINGS = {
         "KindEnum": "salary.models.ItemKind.choices",
         "AccountKindEnum": "ledger.models.AccountKind.choices",
         "CategoryKindEnum": "ledger.models.CategoryKind.choices",
+        # A debt's `direction` and `status` are named after the debt, not left as two generic words.
+        "DebtDirectionEnum": "debts.models.Direction.choices",
+        "DebtStatusEnum": "debts.models.Status.choices",
     },
     # A nullable enum field is `nullable: true` plus one enum reference, not `oneOf: [Enum, NullEnum]`: Dart
     # client generators turn the union into a class that must implement an enum, which does not compile.

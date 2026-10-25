@@ -447,10 +447,13 @@ when the owner confirms it, and a step that needs the app on staging waits for t
   ordered `-date`, `-created_at`, `-id`, with the filters and `search` on the note), the paginated day totals (ADR 0003
   is amended there), and the two rules that need them: `409 account_has_transactions`, and the move of a deleted
   category's transactions to `other` (ADR 0017)
-- [ ] **10.7 debts**: debts with repayments, derived `repaid`, `remaining`, `is_settled`, `progress` and `status`, with the
-  `today` parameter
-- [ ] **10.8 reports**: month overview, category spend, month comparison, debts report and period report, with the `part`
-  filter (the day totals came with 10.6, in the new `reports` app)
+- [ ] **10.7 debts** (`feat/debts`, request issue #66): debts with their repayments as a sub-resource, the derived
+  `repaid`, `remaining` and `status` (no stored value), the `today` parameter of the reads, the filters `direction`,
+  `status` and `search`, every repayment call answering the whole debt, and the row lock on the debt that keeps two
+  devices from overpaying it
+- [ ] **10.8 reports** (`feat/reports`, request issue #67): the Overview of a month and of each part, the month report (spending
+  by category), and the debts report, with the shared test vectors; the salary and the fixed items of the Overview come from
+  the same code as the salary month's balances (the day totals came with 10.6, in the new `reports` app)
 - [ ] **10.9 CSV export and import** of transactions, debts and salary months: the server builds the export; the import is
   a bulk call of rows the app has parsed (the server never parses an uploaded file), with skipped-row reporting and a
   lossless round trip

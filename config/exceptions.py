@@ -67,6 +67,27 @@ class CodeInvalid(ValidationError):  # type: ignore[misc]
         )
 
 
+class ExceedsRemaining(ValidationError):  # type: ignore[misc]
+    """A repayment is larger than what the debt still allows (HTTP 400, field ``amount``).
+
+    ``remaining`` is that amount as a string in the debt's currency. The error formatter adds it to the
+    ``exceeds_remaining`` item of the error body (``config.error_format``), so the app can show what is left.
+    """
+
+    def __init__(self, remaining: str) -> None:
+        self.remaining = remaining
+        super().__init__(
+            {
+                "amount": [
+                    ErrorDetail(
+                        "The repayment is more than what remains.",
+                        code=ErrorCode.EXCEEDS_REMAINING.value,
+                    )
+                ]
+            }
+        )
+
+
 class ServiceUnavailable(APIException):  # type: ignore[misc]
     """A safety control cannot run, so the request is refused rather than let through (HTTP 503).
 

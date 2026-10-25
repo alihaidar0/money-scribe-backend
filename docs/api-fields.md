@@ -164,24 +164,45 @@ and an English `name` as a fallback for a key the app does not know yet:
 
 ## Debt and repayment
 
+`/api/v1/debts/` (list, create), `/api/v1/debts/{id}/` (read, change, delete) and, under a debt,
+`/api/v1/debts/{id}/repayments/` (create) and `/api/v1/debts/{id}/repayments/{repayment_id}/` (change, delete). A
+repayment has no read and no list of its own: every debt carries its repayments inline, by `date`, then `id`.
+
 | Field | Rule |
 | --- | --- |
-| `direction` | `lent` or `borrowed` |
-| `person` | text, 1 to 50 characters |
-| `amount` | amount, greater than 0 |
-| `currency` | ISO code |
-| `start_date` | calendar day |
-| `due_date` | calendar day, optional, not before `start_date` |
-| `note` | text, optional, up to 100 characters |
+| `direction` | `lent` or `borrowed`; fixed for good (`400 read_only` on a change, even with the stored value) |
+| `person` | text, 1 to 50 characters; the name of a third party, never written to a log |
+| `amount` | amount, greater than 0; not below what was repaid (`400 amount_below_repaid`) |
+| `currency` | ISO code, required on create and fixed for good, like the `direction` |
+| `start_date` | calendar day, 2000-01-01 to 2099-12-31 (`400 date_out_of_range`); not after a repayment (`400 start_after_repayment`) |
+| `due_date` | calendar day, optional, not before `start_date` (`400 due_before_start` on `due_date`); `null` clears it |
+| `note` | text, up to 100 characters, default empty; `""` clears it and `null` is `400` |
+| `repaid`, `remaining`, `status`, `repayments` | derived and read only (`400 read_only` if sent) |
 
-A **repayment** has an `amount` greater than 0 and not more than the remaining debt (`400 exceeds_remaining`) and a
-`date`. It uses the debt's currency and the answer carries it; a request that sends another one answers
-`400 currency_mismatch` on `currency`, as for a fixed item. When a repayment is edited, its own previous amount does not count: the remaining amount for the check is the
-debt minus the **other** repayments. Both are created, edited and deleted. The server returns the derived `repaid`,
-`remaining` (never below 0), `is_settled`, `progress` and `status` (`settled`, `overdue` or `open`), because the overview
-and the debts report use them too. "Overdue" needs the user's day, so a read takes an optional `today` calendar day; it
-defaults to the current day in the user's `time_zone` (see Settings), and it also drives any filter or order by `status`.
-The app sends explicit dates for "this month" and "this year" in reports and in the CSV export period.
+A person has at most 500 debts (`409 debt_limit_reached`) and a debt has at most 200 repayments
+(`409 repayment_limit_reached`).
+
+A **repayment** has an `amount` greater than 0 and not more than what remains (`400 exceeds_remaining`, whose error item
+also carries `remaining`) and a `date` that is not before the debt's `start_date` (`400 repayment_before_start`). It is in
+the debt's currency and carries none: a `currency` in the request is `400 read_only`. When a repayment is edited, its own
+previous amount does not count: the room for it is the debt minus the **other** repayments. A repayment may be dated in
+the future.
+
+The derived values come from the server, because the overview and the debts report use them too: `repaid` is the sum of the
+repayments, `remaining` is the amount minus `repaid` and never below 0, and `status` is `settled` when nothing remains,
+`overdue` when a `due_date` has passed and the debt is not settled, otherwise `open`. A settled debt that is raised above
+what was repaid is open again. "Passed" is counted in the person's day, from the Settings `time_zone`, not in UTC. The reads
+(the list and one debt) take an optional `today` (`YYYY-MM-DD`) that replaces the person's current day, for the `status` and
+for the `status` filter; the app leaves it out, and the write calls use the person's own day. The list filters are
+`direction`, `status` (repeatable) and `search` (a case-insensitive substring of the person, 2 to 50 characters, counted in
+the search rate group), newest first.
+
+**Every repayment call answers with the whole debt** (`201` for the create, `200` for the change and the delete), so the app
+has the new `repaid`, `remaining` and `status` at once. The `ETag` of every answer whose body is the debt is the debt's
+`version`, and a repayment write does not change it, so two devices adding different repayments never give each other a
+`412`. A repayment is changed or deleted with `If-Match` carrying **its own** `version` (`repayments[].version`). Every
+repayment write, and the change and the delete of a debt, takes a row lock on the debt and works out the remaining amount
+inside it, so two devices cannot overpay a debt together.
 
 ## Settings
 
@@ -329,12 +350,64 @@ password change and the account deletion.
 
 ## Reports and read models
 
-Overview and report endpoints are read models computed on the server. The month reports and the Overview take the parts as
-calendar halves (days 1 to 15 and day 16 to the end of the month; their shapes are in their request issues). Day totals are
-`GET /api/v1/reports/day-totals/` with the transaction filters except `search`, `date_from` and `date_to` optional and no
-limit on the span. A page is `limit` days (50 by default, 100 at most), newest day first like the list; each item is one day
-with its currencies inside, `{date, totals: [{currency, total}]}`, where `total` is a signed amount (income minus expense) of
-that day in that currency, so a day always arrives whole ([ADR 0003](adr/0003-cursor-pagination.md)).
+Overview and report endpoints are read models computed on the server from the saved records, in integer minor units and
+decimal strings, grouped by currency and never added across currencies. All of them count in the reports rate group,
+are never paginated and never cached, and take no write. Which screen uses which one: the Overview uses the Overview; month
+against month and part against part use the Overview too (two calls, one per month or part); the Categories view uses the
+month report plus the Overview's `fixed_costs` as one more slice; the Debts view uses the debts report.
+
+**Parts.** A month paid twice is cut into two parts by the calendar `date` of each transaction and repayment: days 1 to 15
+and day 16 to the end of the month. Whether the month has parts comes from the saved salary month (it keeps the mode it was
+saved with), and from the Settings payment mode for a month never saved. `first_part` and `second_part` are `null` for a month
+paid once.
+
+**Overview** (`GET /api/v1/overview/months/{month}/?currency=`). `{month}` is `YYYY-MM`, 2000-01 to 2099-12; any other key is
+not a route (a plain `404`). `currency` defaults to the Settings default currency (`RUB` until set); an unsupported one is
+`400 invalid_choice`. The answer has `month`, `currency`, `has_data`, `currencies`, `total`, `first_part` and `second_part`;
+each of the three blocks has `salary`, `recurring_income`, `fixed_costs`, `income_transactions`, `purchases`,
+`debt_repayments_received`, `debt_repayments_made` (all positive) and `balance`, signed:
+
+```text
+balance = salary + recurring_income + income_transactions - fixed_costs - purchases
+          + debt_repayments_received - debt_repayments_made
+```
+
+`salary` is the saved month's `total_after_tax` in `total` and each payment in its part; `recurring_income` and `fixed_costs` are
+the saved month's fixed items of that kind and part (with one payment every item is in `total`). They count only when the
+saved month's currency is `currency`; otherwise those lines are 0 and `currencies` lists the salary month's currency.
+`income_transactions` and `purchases` are the income and expense transactions dated in the period, and
+`debt_repayments_received` and `debt_repayments_made` are the repayments dated in it on debts lent and borrowed; creating a debt
+is not a movement. `salary + recurring_income - fixed_costs` equals the `balances` of the salary month for the same part and for
+the whole month: both are worked out by `salary.presentation.part_figures`, and a test enforces it. `has_data` is true when the
+month has a saved salary month, or any transaction or repayment dated in it, in any currency; `currencies` lists the currencies
+of those, ordered by code.
+
+**Month report** (`GET /api/v1/reports/months/{month}/?currency=`). It reads transactions only: `income_transactions` is the
+income transactions of the month (the salary and the recurring income are not in it) and `purchases` the expense transactions
+(the fixed costs are not in it); they equal the Overview's lines of the same name for the same month, part and currency.
+`categories` is the spending by category, expense transactions only, one item per category that has any, the biggest `amount`
+first (ties by `category_id`), each `{category_id, category_key, name, icon, amount}`; the amounts add up to `purchases`.
+`category_key` is `null` for a custom category and `name` is the custom name or the English fallback of a built-in. There are no
+income categories. The parts have the same three fields. `has_data` is true when the month has any transaction in any currency,
+and `currencies` lists them; a month with nothing is `200` with zero totals and no categories. The two calls of the Categories
+view are not one transaction, so a record saved between them can make the figures differ until the next read.
+
+**Debts report** (`GET /api/v1/reports/debts/?today=`). `has_data` is true when the person has any debt, settled or not.
+`by_currency` has one block per currency that has unsettled debts, ordered by code: `currency`, `owed_to_you` (the `remaining`
+of unsettled debts lent), `you_owe` (the same for debts borrowed), and `overdue` and `open`, each item `{id, person, direction,
+remaining, status, due_date}`. Settled debts are not listed. `overdue` is ordered by `due_date`, the oldest first; `open` by
+`due_date` with the debts that have none last; ties by `id`. The `status` is counted in the person's day (Settings `time_zone`),
+and `today` replaces it (`400 invalid`, or `400 date_out_of_range` outside 2000-01-01 to 2099-12-31).
+
+**Day totals** are `GET /api/v1/reports/day-totals/` with the transaction filters except `search`, `date_from` and `date_to`
+optional and no limit on the span. A page is `limit` days (50 by default, 100 at most), newest day first like the list; each item
+is one day with its currencies inside, `{date, totals: [{currency, total}]}`, where `total` is a signed amount (income minus
+expense) of that day in that currency, so a day always arrives whole ([ADR 0003](adr/0003-cursor-pagination.md)).
+
+**Test vectors.** `reports/tests/overview_vectors.json` and `reports/tests/report_vectors.json` hold invented cases with
+figures worked out by hand (the worked example of ADR 0007, one and two payments, no saved month, another currency, only
+repayments, an empty month, the 15th, the 16th and the last day, JPY and KWD, a negative balance, a deleted category, debts in
+two currencies). The server and the app run the same files.
 
 ## CSV
 
