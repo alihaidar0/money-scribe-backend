@@ -233,3 +233,87 @@ class DeviceKey(models.Model):
 
     def __str__(self) -> str:
         return f"{self.platform} device key of {self.user_id}"
+
+
+class SignInMethod(models.TextChoices):
+    PASSWORD = "password", "Password"
+    EMAIL_CODE = "email_code", "Email code"
+    DEVICE_KEY = "device_key", "Device key"
+
+
+class SecurityEventType(models.TextChoices):
+    SIGNED_IN = "signed_in", "Signed in"
+    SIGNED_OUT = "signed_out", "Signed out"
+    SESSION_REVOKED = "session_revoked", "Session revoked"
+    SESSION_LIMIT_REACHED = "session_limit_reached", "Session limit reached"
+    PASSWORD_CHANGED = "password_changed", "Password changed"
+    PASSWORD_RESET = "password_reset", "Password reset"
+    EMAIL_CHANGED = "email_changed", "Email changed"
+    DEVICE_KEY_ADDED = "device_key_added", "Device key added"
+    DEVICE_KEY_REMOVED = "device_key_removed", "Device key removed"
+    TOKEN_REUSE_DETECTED = "token_reuse_detected", "Token reuse detected"
+    DATA_EXPORTED = "data_exported", "Data exported"
+    DATA_IMPORTED = "data_imported", "Data imported"
+
+
+DATA_EVENT_TYPES = (SecurityEventType.DATA_EXPORTED, SecurityEventType.DATA_IMPORTED)
+
+
+class SecurityEvent(models.Model):
+    """One account security action, for the person's "Security activity" screen (ADR 0022).
+
+    Append-only: written by ``users.events`` in the same transaction as the action, never edited or merged, kept
+    ``SECURITY_EVENT_RETENTION_DAYS`` days and deleted with the account. It holds no IP address, no user agent, no
+    amount, no note and no name of a person or a category. ``session_id`` is a plain id, not a foreign key: the
+    session may be gone. The device fields are copied at that moment and are ``null`` when there is none.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid7, editable=False)
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="security_events",
+    )
+    type = models.CharField(max_length=24, choices=SecurityEventType)
+    occurred_at = models.DateTimeField(default=timezone.now)
+    session_id = models.UUIDField(null=True, blank=True)
+    device_name = models.CharField(max_length=100, null=True, blank=True)  # noqa: DJ001  # null means "no device"
+    platform = models.CharField(max_length=7, choices=Platform, null=True, blank=True)  # noqa: DJ001
+    app_version = models.CharField(max_length=50, null=True, blank=True)  # noqa: DJ001
+    sign_in_method = models.CharField(  # noqa: DJ001
+        max_length=10, choices=SignInMethod, null=True, blank=True
+    )
+    kinds = models.JSONField(null=True, blank=True)
+    count = models.PositiveIntegerField(null=True, blank=True)
+
+    class Meta:
+        indexes: ClassVar[list[models.Index]] = [
+            models.Index(
+                fields=["user", "-occurred_at", "-id"], name="users_event_by_user"
+            ),
+            models.Index(fields=["occurred_at"], name="users_event_occurred"),
+        ]
+        constraints: ClassVar[list[models.BaseConstraint]] = [
+            # The sign-in method belongs to a sign-in, and a sign-in always has one.
+            models.CheckConstraint(
+                condition=(
+                    models.Q(type="signed_in", sign_in_method__isnull=False)
+                    | (
+                        ~models.Q(type="signed_in")
+                        & models.Q(sign_in_method__isnull=True)
+                    )
+                ),
+                name="users_event_method_with_sign_in",
+            ),
+            # The kinds and the row count belong to an export or an import.
+            models.CheckConstraint(
+                condition=(
+                    models.Q(type__in=["data_exported", "data_imported"])
+                    | models.Q(kinds__isnull=True, count__isnull=True)
+                ),
+                name="users_event_data_fields_with_data",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.type} of {self.user_id}"

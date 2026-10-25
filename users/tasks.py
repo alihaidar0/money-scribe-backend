@@ -4,7 +4,7 @@ from celery import shared_task
 from django.conf import settings
 from django.utils import timezone
 
-from .models import DeviceKey, EmailCode, PasswordResetToken, User
+from .models import DeviceKey, EmailCode, PasswordResetToken, SecurityEvent, User
 
 
 @shared_task
@@ -49,4 +49,16 @@ def purge_expired_device_keys() -> int:
     (ADR 0018, data minimisation).
     """
     deleted, _ = DeviceKey.objects.filter(expires_at__lte=timezone.now()).delete()
+    return deleted
+
+
+@shared_task
+def purge_old_security_events() -> int:
+    """Delete security events older than ``SECURITY_EVENT_RETENTION_DAYS`` (90); returns how many.
+
+    The reads never return an older event, whatever this job does, so what a person sees does not depend on
+    it (ADR 0022). It only stops the trail from being kept after its purpose is over (data minimisation).
+    """
+    cutoff = timezone.now() - timedelta(days=settings.SECURITY_EVENT_RETENTION_DAYS)
+    deleted, _ = SecurityEvent.objects.filter(occurred_at__lt=cutoff).delete()
     return deleted

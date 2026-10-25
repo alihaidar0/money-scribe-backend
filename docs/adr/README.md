@@ -24,6 +24,9 @@ A decision that changes gets a new record that supersedes the old one; the old f
 | [0017](0017-deleting-a-category-moves-its-transactions.md) | Deleting a category moves its transactions to Other; an account with transactions still refuses | accepted |
 | [0018](0018-sign-in-with-a-device-key.md) | Sign-in with a device key pair and a signed challenge (fingerprint), moving to passkeys when a domain exists | accepted |
 | [0019](0019-first-release-after-the-last-endpoint.md) | The first release is published after the last endpoint (release pull requests may merge earlier); staging is deployed at agreed points | accepted |
+| [0020](0020-scheduled-calls-instead-of-a-free-worker.md) | Scheduled calls from GitHub Actions (Cloudflare Workers as the alternative) replace a worker while hosting is free | accepted |
+| [0021](0021-api-hardening-baseline.md) | API hardening baseline: request id, `no-store`, text rules, per-user rate limits, a size cap | accepted |
+| [0022](0022-security-events.md) | Security events: an append-only record of account security actions, kept 90 days | accepted |
 
 The fields and limits of each resource are in [`../api-fields.md`](../api-fields.md).
 

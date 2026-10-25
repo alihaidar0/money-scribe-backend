@@ -4,6 +4,440 @@ info:
   version: 0.1.0
   description: The HTTP API of this project, generated from its code.
 paths:
+  /api/v1/accounts/:
+    get:
+      operationId: account_list
+      description: 'The accounts in the order they were made (the default "Card" before
+        "Cash"). Cursor pagination (`limit`, `cursor`; follow `next`): ask `limit=100`
+        to get the whole list in one call. A person who deleted every account gets
+        `200` with an empty `results`.'
+      summary: The person's accounts
+      parameters:
+      - name: cursor
+        required: false
+        in: query
+        description: An opaque position taken from `next` or `previous`; never built
+          by the client.
+        schema:
+          type: string
+      - name: limit
+        required: false
+        in: query
+        description: 'How many results a page holds: 50 by default, at most 100.'
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+      tags:
+      - accounts
+      security:
+      - bearerAuth: []
+      responses:
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error400Response'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Retry-After:
+              description: Whole seconds to wait before the request may be repeated;
+                at least 1.
+              schema:
+                type: integer
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedAccountList'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+    post:
+      operationId: account_create
+      description: Needs an `Idempotency-Key`. A person has at most 20 accounts (`409`
+        `account_limit_reached`). The name is unique per person in any case (`400`
+        `name_taken`, `attr` `name`). Every account gets "Card" and "Cash" when its
+        email is verified, in the language of the account; they are ordinary accounts.
+      summary: Add an account
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: 'A random id, once per user action, as a quoted string of 16
+          to 64 letters, digits, hyphens or underscores (a UUID fits): `"8e03978e-40d5-43e8-bc93-6894a57f9324"`.
+          Repeat the same request with the same key after a lost answer and nothing
+          is created twice; the answer is replayed with `Idempotent-Replayed: true`.
+          The key is honoured for 24 hours. Without it: `400` `idempotency_key_required`
+          (`attr` `idempotency_key`).'
+        required: true
+      tags:
+      - accounts
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccountInputRequest'
+        required: true
+      security:
+      - bearerAuth: []
+      responses:
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error400Response'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Retry-After:
+              description: Whole seconds to wait before the request may be repeated;
+                at least 1.
+              schema:
+                type: integer
+        '201':
+          headers:
+            Idempotent-Replayed:
+              schema:
+                type: string
+              description: '`true` when this is the stored answer of an earlier request
+                with the same key.'
+            ETag:
+              schema:
+                type: string
+              description: 'The `version` of the record in the answer, as a quoted
+                string: `"3"`.'
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Account'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request conflicts with the current state; the `code` says
+            what conflicts.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The `Idempotency-Key` was already used for a different request.
+            The `code` is `idempotency_key_reused`.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+  /api/v1/accounts/{id}/:
+    get:
+      operationId: account_read
+      description: The account, or `404` when it is not the person's. Answers the
+        `ETag` of its `version`.
+      summary: Read an account
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - accounts
+      security:
+      - bearerAuth: []
+      responses:
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error400Response'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Retry-After:
+              description: Whole seconds to wait before the request may be repeated;
+                at least 1.
+              schema:
+                type: integer
+        '200':
+          headers:
+            ETag:
+              schema:
+                type: string
+              description: 'The `version` of the record in the answer, as a quoted
+                string: `"3"`.'
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Account'
+          description: ''
+    patch:
+      operationId: account_update
+      description: 'Changes `name` and `kind`. Send `If-Match` with the `version`:
+        a stale one is `412` and changes nothing. A name that is taken is `400` `name_taken`.
+        Any other field is `400` `read_only`.'
+      summary: Change an account
+      parameters:
+      - in: header
+        name: If-Match
+        schema:
+          type: string
+        description: 'The `version` of the record the edit was made from, as a quoted
+          string: `"3"` (`*` matches any record). If the stored version is another
+          one nothing changes and the answer is `412` `precondition_failed`. Without
+          the header the last write wins.'
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - accounts
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedAccountInputRequest'
+      security:
+      - bearerAuth: []
+      responses:
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error400Response'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Retry-After:
+              description: Whole seconds to wait before the request may be repeated;
+                at least 1.
+              schema:
+                type: integer
+        '200':
+          headers:
+            ETag:
+              schema:
+                type: string
+              description: 'The `version` of the record in the answer, as a quoted
+                string: `"3"`.'
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Account'
+          description: ''
+        '412':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: 'The `If-Match` version is not the stored one, or `If-None-Match:
+            *` found the record. Nothing was changed: reload the record. The `code`
+            is `precondition_failed`.'
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+    delete:
+      operationId: account_delete
+      description: 'Deletes the account (`204`); `If-Match` is checked as for a change.
+        An account that has transactions is refused and nothing changes: `409` `account_has_transactions`.
+        A repeated delete is `404`: treat it as done.'
+      summary: Delete an account
+      parameters:
+      - in: header
+        name: If-Match
+        schema:
+          type: string
+        description: 'The `version` of the record the edit was made from, as a quoted
+          string: `"3"` (`*` matches any record). If the stored version is another
+          one nothing changes and the answer is `412` `precondition_failed`. Without
+          the header the last write wins.'
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - accounts
+      security:
+      - bearerAuth: []
+      responses:
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error400Response'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Retry-After:
+              description: Whole seconds to wait before the request may be repeated;
+                at least 1.
+              schema:
+                type: integer
+        '204':
+          description: No response body
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request conflicts with the current state; the `code` says
+            what conflicts.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '412':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: 'The `If-Match` version is not the stored one, or `If-None-Match:
+            *` found the record. Nothing was changed: reload the record. The `code`
+            is `precondition_failed`.'
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
   /api/v1/auth/account/delete/:
     post:
       operationId: auth_account_delete
@@ -33,12 +467,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error400Response'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '401':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '429':
           headers:
             Retry-After:
@@ -46,6 +486,8 @@ paths:
                 type: integer
               description: Whole seconds to wait before the request may be repeated;
                 at least 1.
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
           content:
             application/json:
               schema:
@@ -53,6 +495,9 @@ paths:
           description: ''
         '204':
           description: No response body
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '503':
           headers:
             Retry-After:
@@ -60,6 +505,8 @@ paths:
                 type: integer
               description: Whole seconds to wait before the request may be repeated;
                 at least 1.
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
           content:
             application/json:
               schema:
@@ -88,18 +535,41 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error400Response'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '401':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Retry-After:
+              description: Whole seconds to wait before the request may be repeated;
+                at least 1.
+              schema:
+                type: integer
         '200':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/DeviceKeyList'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
   /api/v1/auth/device-keys/{device_id}/:
     delete:
       operationId: auth_device_key_remove
@@ -126,20 +596,46 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error400Response'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '401':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '404':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Retry-After:
+              description: Whole seconds to wait before the request may be repeated;
+                at least 1.
+              schema:
+                type: integer
         '204':
           description: No response body
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
   /api/v1/auth/device-keys/challenge/:
     post:
       operationId: auth_device_key_challenge
@@ -166,6 +662,9 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error400Response'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '429':
           headers:
             Retry-After:
@@ -173,6 +672,8 @@ paths:
                 type: integer
               description: Whole seconds to wait before the request may be repeated;
                 at least 1.
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
           content:
             application/json:
               schema:
@@ -184,6 +685,9 @@ paths:
               schema:
                 $ref: '#/components/schemas/DeviceKeyChallengeResponse'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '503':
           headers:
             Retry-After:
@@ -191,6 +695,8 @@ paths:
                 type: integer
               description: Whole seconds to wait before the request may be repeated;
                 at least 1.
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
           content:
             application/json:
               schema:
@@ -235,12 +741,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error400Response'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '401':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '429':
           headers:
             Retry-After:
@@ -248,6 +760,8 @@ paths:
                 type: integer
               description: Whole seconds to wait before the request may be repeated;
                 at least 1.
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
           content:
             application/json:
               schema:
@@ -259,12 +773,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/DeviceKey'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '201':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/DeviceKey'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '409':
           content:
             application/json:
@@ -272,6 +792,9 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
           description: The request conflicts with the current state; the `code` says
             what conflicts.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '503':
           headers:
             Retry-After:
@@ -279,6 +802,8 @@ paths:
                 type: integer
               description: Whole seconds to wait before the request may be repeated;
                 at least 1.
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
           content:
             application/json:
               schema:
@@ -302,14 +827,23 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error400Response'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '401':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '204':
           description: No response body
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
   /api/v1/auth/device-keys/sign-in/:
     post:
       operationId: auth_device_key_sign_in
@@ -340,6 +874,9 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error400Response'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '429':
           headers:
             Retry-After:
@@ -347,6 +884,8 @@ paths:
                 type: integer
               description: Whole seconds to wait before the request may be repeated;
                 at least 1.
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
           content:
             application/json:
               schema:
@@ -358,6 +897,9 @@ paths:
               schema:
                 $ref: '#/components/schemas/SignedInResponse'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '401':
           content:
             application/json:
@@ -365,6 +907,9 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
           description: Not authenticated, or the credentials, token or session are
             not valid; the `code` says which.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '503':
           headers:
             Retry-After:
@@ -372,6 +917,8 @@ paths:
                 type: integer
               description: Whole seconds to wait before the request may be repeated;
                 at least 1.
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
           content:
             application/json:
               schema:
@@ -412,12 +959,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error400Response'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '401':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '429':
           headers:
             Retry-After:
@@ -425,6 +978,8 @@ paths:
                 type: integer
               description: Whole seconds to wait before the request may be repeated;
                 at least 1.
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
           content:
             application/json:
               schema:
@@ -436,6 +991,9 @@ paths:
               schema:
                 $ref: '#/components/schemas/EmailChangeResponse'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '409':
           content:
             application/json:
@@ -443,6 +1001,9 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
           description: The request conflicts with the current state; the `code` says
             what conflicts.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '503':
           headers:
             Retry-After:
@@ -450,6 +1011,8 @@ paths:
                 type: integer
               description: Whole seconds to wait before the request may be repeated;
                 at least 1.
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
           content:
             application/json:
               schema:
@@ -473,14 +1036,23 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error400Response'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '401':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '204':
           description: No response body
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
   /api/v1/auth/email-change/confirm/:
     post:
       operationId: auth_email_change_confirm
@@ -511,12 +1083,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error400Response'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '401':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '429':
           headers:
             Retry-After:
@@ -524,6 +1102,8 @@ paths:
                 type: integer
               description: Whole seconds to wait before the request may be repeated;
                 at least 1.
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
           content:
             application/json:
               schema:
@@ -535,6 +1115,9 @@ paths:
               schema:
                 $ref: '#/components/schemas/Profile'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '409':
           content:
             application/json:
@@ -542,6 +1125,9 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
           description: The request conflicts with the current state; the `code` says
             what conflicts.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '503':
           headers:
             Retry-After:
@@ -549,6 +1135,8 @@ paths:
                 type: integer
               description: Whole seconds to wait before the request may be repeated;
                 at least 1.
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
           content:
             application/json:
               schema:
@@ -585,6 +1173,9 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error400Response'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '429':
           headers:
             Retry-After:
@@ -592,6 +1183,8 @@ paths:
                 type: integer
               description: Whole seconds to wait before the request may be repeated;
                 at least 1.
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
           content:
             application/json:
               schema:
@@ -599,6 +1192,9 @@ paths:
           description: ''
         '204':
           description: No response body
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '503':
           headers:
             Retry-After:
@@ -606,6 +1202,8 @@ paths:
                 type: integer
               description: Whole seconds to wait before the request may be repeated;
                 at least 1.
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
           content:
             application/json:
               schema:
@@ -639,6 +1237,9 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error400Response'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '429':
           headers:
             Retry-After:
@@ -646,6 +1247,8 @@ paths:
                 type: integer
               description: Whole seconds to wait before the request may be repeated;
                 at least 1.
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
           content:
             application/json:
               schema:
@@ -657,6 +1260,9 @@ paths:
               schema:
                 $ref: '#/components/schemas/CodeSent'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '503':
           headers:
             Retry-After:
@@ -664,6 +1270,8 @@ paths:
                 type: integer
               description: Whole seconds to wait before the request may be repeated;
                 at least 1.
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
           content:
             application/json:
               schema:
@@ -697,6 +1305,9 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error400Response'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '429':
           headers:
             Retry-After:
@@ -704,6 +1315,8 @@ paths:
                 type: integer
               description: Whole seconds to wait before the request may be repeated;
                 at least 1.
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
           content:
             application/json:
               schema:
@@ -715,6 +1328,9 @@ paths:
               schema:
                 $ref: '#/components/schemas/ResetTokenResponse'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '503':
           headers:
             Retry-After:
@@ -722,6 +1338,8 @@ paths:
                 type: integer
               description: Whole seconds to wait before the request may be repeated;
                 at least 1.
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
           content:
             application/json:
               schema:
@@ -762,12 +1380,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error400Response'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '401':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '429':
           headers:
             Retry-After:
@@ -775,6 +1399,8 @@ paths:
                 type: integer
               description: Whole seconds to wait before the request may be repeated;
                 at least 1.
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
           content:
             application/json:
               schema:
@@ -786,6 +1412,9 @@ paths:
               schema:
                 $ref: '#/components/schemas/RefreshResponse'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '503':
           headers:
             Retry-After:
@@ -793,6 +1422,8 @@ paths:
                 type: integer
               description: Whole seconds to wait before the request may be repeated;
                 at least 1.
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
           content:
             application/json:
               schema:
@@ -818,18 +1449,41 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error400Response'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '401':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Retry-After:
+              description: Whole seconds to wait before the request may be repeated;
+                at least 1.
+              schema:
+                type: integer
         '200':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Profile'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
     patch:
       operationId: auth_profile_update
       description: 'Changes the display name and answers the updated profile. Only
@@ -854,18 +1508,41 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error400Response'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '401':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Retry-After:
+              description: Whole seconds to wait before the request may be repeated;
+                at least 1.
+              schema:
+                type: integer
         '200':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Profile'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
   /api/v1/auth/refresh/:
     post:
       operationId: auth_refresh
@@ -892,12 +1569,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error400Response'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '200':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/RefreshResponse'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '401':
           content:
             application/json:
@@ -905,6 +1588,9 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
           description: Not authenticated, or the credentials, token or session are
             not valid; the `code` says which.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
   /api/v1/auth/register/:
     post:
       operationId: auth_register
@@ -934,6 +1620,9 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error400Response'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '429':
           headers:
             Retry-After:
@@ -941,6 +1630,8 @@ paths:
                 type: integer
               description: Whole seconds to wait before the request may be repeated;
                 at least 1.
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
           content:
             application/json:
               schema:
@@ -952,6 +1643,9 @@ paths:
               schema:
                 $ref: '#/components/schemas/RegisterResponse'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '503':
           headers:
             Retry-After:
@@ -959,6 +1653,8 @@ paths:
                 type: integer
               description: Whole seconds to wait before the request may be repeated;
                 at least 1.
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
           content:
             application/json:
               schema:
@@ -990,6 +1686,9 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error400Response'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '429':
           headers:
             Retry-After:
@@ -997,6 +1696,8 @@ paths:
                 type: integer
               description: Whole seconds to wait before the request may be repeated;
                 at least 1.
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
           content:
             application/json:
               schema:
@@ -1008,6 +1709,9 @@ paths:
               schema:
                 $ref: '#/components/schemas/CodeSent'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '503':
           headers:
             Retry-After:
@@ -1015,6 +1719,8 @@ paths:
                 type: integer
               description: Whole seconds to wait before the request may be repeated;
                 at least 1.
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
           content:
             application/json:
               schema:
@@ -1057,6 +1763,9 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error400Response'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '429':
           headers:
             Retry-After:
@@ -1064,6 +1773,8 @@ paths:
                 type: integer
               description: Whole seconds to wait before the request may be repeated;
                 at least 1.
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
           content:
             application/json:
               schema:
@@ -1075,6 +1786,9 @@ paths:
               schema:
                 $ref: '#/components/schemas/SignedInResponse'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '401':
           content:
             application/json:
@@ -1082,6 +1796,9 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
           description: Not authenticated, or the credentials, token or session are
             not valid; the `code` says which.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '403':
           content:
             application/json:
@@ -1089,6 +1806,9 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
           description: The credentials are right but the request is not allowed; the
             `code` says why.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '503':
           headers:
             Retry-After:
@@ -1096,6 +1816,8 @@ paths:
                 type: integer
               description: Whole seconds to wait before the request may be repeated;
                 at least 1.
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
           content:
             application/json:
               schema:
@@ -1135,14 +1857,23 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error400Response'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '401':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '204':
           description: No response body
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
   /api/v1/auth/verify-email/:
     post:
       operationId: auth_verify_email
@@ -1167,6 +1898,9 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error400Response'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '429':
           headers:
             Retry-After:
@@ -1174,6 +1908,8 @@ paths:
                 type: integer
               description: Whole seconds to wait before the request may be repeated;
                 at least 1.
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
           content:
             application/json:
               schema:
@@ -1185,6 +1921,9 @@ paths:
               schema:
                 $ref: '#/components/schemas/SignedInResponse'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '503':
           headers:
             Retry-After:
@@ -1192,6 +1931,8 @@ paths:
                 type: integer
               description: Whole seconds to wait before the request may be repeated;
                 at least 1.
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
           content:
             application/json:
               schema:
@@ -1199,6 +1940,460 @@ paths:
           description: A safety control (the rate-limit store) cannot run, so the
             request is refused before it changes anything; try again after `Retry-After`.
             The `code` is `service_unavailable`.
+  /api/v1/categories/:
+    get:
+      operationId: category_list
+      description: 'The seven built-in categories first, in a fixed order, then the
+        person''s own in the order they were made. Cursor pagination (`limit`, `cursor`;
+        follow `next`): ask `limit=100` to get the whole list in one call.'
+      summary: The categories a person can use
+      parameters:
+      - name: cursor
+        required: false
+        in: query
+        description: An opaque position taken from `next` or `previous`; never built
+          by the client.
+        schema:
+          type: string
+      - name: limit
+        required: false
+        in: query
+        description: 'How many results a page holds: 50 by default, at most 100.'
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+      tags:
+      - categories
+      security:
+      - bearerAuth: []
+      responses:
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error400Response'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Retry-After:
+              description: Whole seconds to wait before the request may be repeated;
+                at least 1.
+              schema:
+                type: integer
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedCategoryList'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+    post:
+      operationId: category_create
+      description: Needs an `Idempotency-Key`. A custom category is always of the
+        kind `both` and has no `key`; a `kind` in the request is `400` `read_only`.
+        The `icon` is one of the eight the picker offers (`400` `invalid_choice`).
+        The name is unique among the person's custom categories in any case and is
+        not a built-in key or English name (`400` `name_taken`). A person has at most
+        50 custom categories (`409` `category_limit_reached`); the built-in ones do
+        not count.
+      summary: Add a custom category
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: 'A random id, once per user action, as a quoted string of 16
+          to 64 letters, digits, hyphens or underscores (a UUID fits): `"8e03978e-40d5-43e8-bc93-6894a57f9324"`.
+          Repeat the same request with the same key after a lost answer and nothing
+          is created twice; the answer is replayed with `Idempotent-Replayed: true`.
+          The key is honoured for 24 hours. Without it: `400` `idempotency_key_required`
+          (`attr` `idempotency_key`).'
+        required: true
+      tags:
+      - categories
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CategoryInputRequest'
+        required: true
+      security:
+      - bearerAuth: []
+      responses:
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error400Response'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Retry-After:
+              description: Whole seconds to wait before the request may be repeated;
+                at least 1.
+              schema:
+                type: integer
+        '201':
+          headers:
+            Idempotent-Replayed:
+              schema:
+                type: string
+              description: '`true` when this is the stored answer of an earlier request
+                with the same key.'
+            ETag:
+              schema:
+                type: string
+              description: 'The `version` of the record in the answer, as a quoted
+                string: `"3"`.'
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Category'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request conflicts with the current state; the `code` says
+            what conflicts.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The `Idempotency-Key` was already used for a different request.
+            The `code` is `idempotency_key_reused`.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+  /api/v1/categories/{id}/:
+    get:
+      operationId: category_read
+      description: A built-in category or one of the person's own, or `404`. Answers
+        the `ETag` of its `version`.
+      summary: Read a category
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - categories
+      security:
+      - bearerAuth: []
+      responses:
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error400Response'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Retry-After:
+              description: Whole seconds to wait before the request may be repeated;
+                at least 1.
+              schema:
+                type: integer
+        '200':
+          headers:
+            ETag:
+              schema:
+                type: string
+              description: 'The `version` of the record in the answer, as a quoted
+                string: `"3"`.'
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Category'
+          description: ''
+    patch:
+      operationId: category_update
+      description: 'Changes `name` and `icon` of a custom category; `If-Match` is
+        checked as for an account. A built-in category cannot be changed: `403` `category_is_builtin`.
+        Any other field, `kind` included, is `400` `read_only`.'
+      summary: Change a custom category
+      parameters:
+      - in: header
+        name: If-Match
+        schema:
+          type: string
+        description: 'The `version` of the record the edit was made from, as a quoted
+          string: `"3"` (`*` matches any record). If the stored version is another
+          one nothing changes and the answer is `412` `precondition_failed`. Without
+          the header the last write wins.'
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - categories
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedCategoryInputRequest'
+      security:
+      - bearerAuth: []
+      responses:
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error400Response'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Retry-After:
+              description: Whole seconds to wait before the request may be repeated;
+                at least 1.
+              schema:
+                type: integer
+        '200':
+          headers:
+            ETag:
+              schema:
+                type: string
+              description: 'The `version` of the record in the answer, as a quoted
+                string: `"3"`.'
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Category'
+          description: ''
+        '412':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: 'The `If-Match` version is not the stored one, or `If-None-Match:
+            *` found the record. Nothing was changed: reload the record. The `code`
+            is `precondition_failed`.'
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+    delete:
+      operationId: category_delete
+      description: 'Deletes a custom category (`204`); its transactions move to the
+        built-in `other` in the same database transaction (ADR 0017). `If-Match` is
+        checked as for an account. A built-in category cannot be deleted: `403` `category_is_builtin`.
+        A repeated delete is `404`: treat it as done.'
+      summary: Delete a custom category
+      parameters:
+      - in: header
+        name: If-Match
+        schema:
+          type: string
+        description: 'The `version` of the record the edit was made from, as a quoted
+          string: `"3"` (`*` matches any record). If the stored version is another
+          one nothing changes and the answer is `412` `precondition_failed`. Without
+          the header the last write wins.'
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - categories
+      security:
+      - bearerAuth: []
+      responses:
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error400Response'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Retry-After:
+              description: Whole seconds to wait before the request may be repeated;
+                at least 1.
+              schema:
+                type: integer
+        '204':
+          description: No response body
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '412':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: 'The `If-Match` version is not the stored one, or `If-None-Match:
+            *` found the record. Nothing was changed: reload the record. The `code`
+            is `precondition_failed`.'
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
   /api/v1/salary/fixed-items/{id}/:
     patch:
       operationId: salary_fixed_item_update
@@ -1239,18 +2434,41 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error400Response'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '401':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '404':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Retry-After:
+              description: Whole seconds to wait before the request may be repeated;
+                at least 1.
+              schema:
+                type: integer
         '200':
           headers:
             ETag:
@@ -1258,6 +2476,8 @@ paths:
                 type: string
               description: 'The `version` of the record in the answer, as a quoted
                 string: `"3"`.'
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
           content:
             application/json:
               schema:
@@ -1271,6 +2491,9 @@ paths:
           description: 'The `If-Match` version is not the stored one, or `If-None-Match:
             *` found the record. Nothing was changed: reload the record. The `code`
             is `precondition_failed`.'
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
     delete:
       operationId: salary_fixed_item_delete
       description: 'Deletes the item (`204`); `If-Match` is checked as for a change.
@@ -1302,20 +2525,46 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error400Response'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '401':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '404':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Retry-After:
+              description: Whole seconds to wait before the request may be repeated;
+                at least 1.
+              schema:
+                type: integer
         '204':
           description: No response body
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '412':
           content:
             application/json:
@@ -1324,6 +2573,9 @@ paths:
           description: 'The `If-Match` version is not the stored one, or `If-None-Match:
             *` found the record. Nothing was changed: reload the record. The `code`
             is `precondition_failed`.'
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
   /api/v1/salary/months/:
     get:
       operationId: salary_month_list
@@ -1359,18 +2611,41 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error400Response'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '401':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Retry-After:
+              description: Whole seconds to wait before the request may be repeated;
+                at least 1.
+              schema:
+                type: integer
         '200':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/PaginatedSalaryMonthList'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
   /api/v1/salary/months/{month}/:
     get:
       operationId: salary_month_read
@@ -1396,18 +2671,41 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error400Response'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '401':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '404':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Retry-After:
+              description: Whole seconds to wait before the request may be repeated;
+                at least 1.
+              schema:
+                type: integer
         '200':
           headers:
             ETag:
@@ -1415,6 +2713,8 @@ paths:
                 type: string
               description: 'The `version` of the record in the answer, as a quoted
                 string: `"3"`.'
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
           content:
             application/json:
               schema:
@@ -1474,18 +2774,41 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error400Response'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '401':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '404':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Retry-After:
+              description: Whole seconds to wait before the request may be repeated;
+                at least 1.
+              schema:
+                type: integer
         '200':
           headers:
             ETag:
@@ -1493,6 +2816,8 @@ paths:
                 type: string
               description: 'The `version` of the record in the answer, as a quoted
                 string: `"3"`.'
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
           content:
             application/json:
               schema:
@@ -1505,6 +2830,8 @@ paths:
                 type: string
               description: 'The `version` of the record in the answer, as a quoted
                 string: `"3"`.'
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
           content:
             application/json:
               schema:
@@ -1517,6 +2844,9 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
           description: The request conflicts with the current state; the `code` says
             what conflicts.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '412':
           content:
             application/json:
@@ -1525,6 +2855,9 @@ paths:
           description: 'The `If-Match` version is not the stored one, or `If-None-Match:
             *` found the record. Nothing was changed: reload the record. The `code`
             is `precondition_failed`.'
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
     delete:
       operationId: salary_month_delete
       description: Deletes the month and its fixed items (`204`). `404` when it is
@@ -1557,20 +2890,46 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error400Response'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '401':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '404':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Retry-After:
+              description: Whole seconds to wait before the request may be repeated;
+                at least 1.
+              schema:
+                type: integer
         '204':
           description: No response body
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '412':
           content:
             application/json:
@@ -1579,6 +2938,9 @@ paths:
           description: 'The `If-Match` version is not the stored one, or `If-None-Match:
             *` found the record. Nothing was changed: reload the record. The `code`
             is `precondition_failed`.'
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
   /api/v1/salary/months/{month}/defaults/:
     get:
       operationId: salary_month_defaults
@@ -1610,24 +2972,50 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error400Response'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '401':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '404':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Retry-After:
+              description: Whole seconds to wait before the request may be repeated;
+                at least 1.
+              schema:
+                type: integer
         '200':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Defaults'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
   /api/v1/salary/months/{month}/fixed-items/:
     post:
       operationId: salary_fixed_item_create
@@ -1673,18 +3061,41 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error400Response'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '401':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '404':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Retry-After:
+              description: Whole seconds to wait before the request may be repeated;
+                at least 1.
+              schema:
+                type: integer
         '201':
           headers:
             Idempotent-Replayed:
@@ -1697,6 +3108,8 @@ paths:
                 type: string
               description: 'The `version` of the record in the answer, as a quoted
                 string: `"3"`.'
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
           content:
             application/json:
               schema:
@@ -1709,6 +3122,9 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
           description: The request conflicts with the current state; the `code` says
             what conflicts.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '422':
           content:
             application/json:
@@ -1716,6 +3132,9 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
           description: The `Idempotency-Key` was already used for a different request.
             The `code` is `idempotency_key_reused`.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
   /api/v1/salary/months/{month}/fixed-items/copy/:
     post:
       operationId: salary_fixed_items_copy
@@ -1763,18 +3182,41 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error400Response'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '401':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '404':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Retry-After:
+              description: Whole seconds to wait before the request may be repeated;
+                at least 1.
+              schema:
+                type: integer
         '200':
           headers:
             Idempotent-Replayed:
@@ -1782,6 +3224,8 @@ paths:
                 type: string
               description: '`true` when this is the stored answer of an earlier request
                 with the same key.'
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
           content:
             application/json:
               schema:
@@ -1794,6 +3238,9 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
           description: The request conflicts with the current state; the `code` says
             what conflicts.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '422':
           content:
             application/json:
@@ -1801,6 +3248,9 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
           description: The `Idempotency-Key` was already used for a different request.
             The `code` is `idempotency_key_reused`.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
   /api/v1/settings/:
     get:
       operationId: settings_read
@@ -1820,12 +3270,32 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error400Response'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '401':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Retry-After:
+              description: Whole seconds to wait before the request may be repeated;
+                at least 1.
+              schema:
+                type: integer
         '200':
           headers:
             ETag:
@@ -1833,6 +3303,8 @@ paths:
                 type: string
               description: 'The `version` of the record in the answer, as a quoted
                 string: `"3"`.'
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
           content:
             application/json:
               schema:
@@ -1874,12 +3346,32 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error400Response'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '401':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Retry-After:
+              description: Whole seconds to wait before the request may be repeated;
+                at least 1.
+              schema:
+                type: integer
         '200':
           headers:
             ETag:
@@ -1887,6 +3379,8 @@ paths:
                 type: string
               description: 'The `version` of the record in the answer, as a quoted
                 string: `"3"`.'
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
           content:
             application/json:
               schema:
@@ -1900,8 +3394,69 @@ paths:
           description: 'The `If-Match` version is not the stored one, or `If-None-Match:
             *` found the record. Nothing was changed: reload the record. The `code`
             is `precondition_failed`.'
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
 components:
   schemas:
+    Account:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        name:
+          type: string
+          readOnly: true
+        kind:
+          allOf:
+          - $ref: '#/components/schemas/AccountKindEnum'
+          readOnly: true
+        version:
+          type: integer
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - id
+      - kind
+      - name
+      - updated_at
+      - version
+    AccountInputRequest:
+      type: object
+      description: An account to add or to change. Anything else (`id`, `version`,
+        ...) is `400 read_only`.
+      properties:
+        name:
+          type: string
+          minLength: 1
+          description: '1 to 30 characters, trimmed. Unique per person, in any case:
+            `400 name_taken`.'
+          maxLength: 30
+        kind:
+          $ref: '#/components/schemas/AccountKindEnum'
+      required:
+      - kind
+      - name
+    AccountKindEnum:
+      enum:
+      - card
+      - cash
+      - other
+      type: string
+      description: |-
+        * `card` - Card
+        * `cash` - Cash
+        * `other` - Other
     AlgorithmEnum:
       enum:
       - ES256
@@ -1933,6 +3488,96 @@ components:
       - first
       - month
       - second
+    Category:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        name:
+          type: string
+          readOnly: true
+          description: A custom category's own name; for a built-in one the English
+            fallback of its `key`.
+        icon:
+          type: string
+          readOnly: true
+          description: A plain slug. Fall back to `other` for one the app does not
+            know.
+        kind:
+          allOf:
+          - $ref: '#/components/schemas/CategoryKindEnum'
+          readOnly: true
+        is_custom:
+          type: boolean
+          readOnly: true
+        key:
+          type: string
+          readOnly: true
+          nullable: true
+          description: The stable key of a built-in category (show its name from the
+            app's own strings); `null` for a custom one.
+        version:
+          type: integer
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - icon
+      - id
+      - is_custom
+      - key
+      - kind
+      - name
+      - updated_at
+      - version
+    CategoryInputRequest:
+      type: object
+      description: A custom category to add or to change. Its kind is always `both`;
+        a `kind` here is `400 read_only`.
+      properties:
+        name:
+          type: string
+          minLength: 1
+          description: '1 to 30 characters, trimmed. Unique among the person''s custom
+            categories, in any case, and not a built-in key or English name: `400
+            name_taken`.'
+          maxLength: 30
+        icon:
+          allOf:
+          - $ref: '#/components/schemas/IconEnum'
+          description: |-
+            One of the icons the picker offers for a custom category.
+
+            * `gifts` - gifts
+            * `health` - health
+            * `entertainment` - entertainment
+            * `shopping` - shopping
+            * `education` - education
+            * `travel` - travel
+            * `subscriptions` - subscriptions
+            * `other` - other
+      required:
+      - icon
+      - name
+    CategoryKindEnum:
+      enum:
+      - expense
+      - income
+      - both
+      type: string
+      description: |-
+        * `expense` - Expense
+        * `income` - Income
+        * `both` - Both
     ChangePasswordRequest:
       type: object
       properties:
@@ -2385,16 +4030,17 @@ components:
             `email_unchanged`, `invalid_password`, `password_too_short`, `password_too_long`,
             `password_too_similar`, `password_compromised`, `password_too_common`,
             `password_unchanged`, `password_attempts_exceeded`, `reset_token_invalid`,
-            `idempotency_key_required`, `idempotency_key_invalid`, `idempotency_key_reused`,
-            `idempotency_in_progress`, `precondition_failed`, `fixed_item_limit_reached`,
-            `month_has_fixed_items`, `service_unavailable`, `invalid_amount`, `currency_mismatch`,
-            `exceeds_remaining`, `account_has_transactions`, `category_has_transactions`,
-            `category_is_builtin`. Codes raised by the framework for malformed or
-            incomplete input: `required`, `blank`, `null`, `invalid`, `max_length`,
-            `min_length`, `parse_error`, `authentication_failed`, `not_authenticated`,
-            `permission_denied`, `not_found`, `method_not_allowed`, `not_acceptable`,
-            `unsupported_media_type`, `read_only`. A client treats a code it does
-            not know as a generic failure of the status.'
+            `name_taken`, `account_limit_reached`, `category_limit_reached`, `idempotency_key_required`,
+            `idempotency_key_invalid`, `idempotency_key_reused`, `idempotency_in_progress`,
+            `precondition_failed`, `fixed_item_limit_reached`, `month_has_fixed_items`,
+            `service_unavailable`, `invalid_characters`, `request_too_large`, `invalid_amount`,
+            `currency_mismatch`, `exceeds_remaining`, `account_has_transactions`,
+            `category_has_transactions`, `category_is_builtin`. Codes raised by the
+            framework for malformed or incomplete input: `required`, `blank`, `null`,
+            `invalid`, `max_length`, `min_length`, `parse_error`, `authentication_failed`,
+            `not_authenticated`, `permission_denied`, `not_found`, `method_not_allowed`,
+            `not_acceptable`, `unsupported_media_type`, `read_only`. A client treats
+            a code it does not know as a generic failure of the status.'
         detail:
           type: string
           description: Human-readable text; not for display.
@@ -2561,6 +4207,26 @@ components:
       required:
       - first
       - second
+    IconEnum:
+      enum:
+      - gifts
+      - health
+      - entertainment
+      - shopping
+      - education
+      - travel
+      - subscriptions
+      - other
+      type: string
+      description: |-
+        * `gifts` - gifts
+        * `health` - health
+        * `entertainment` - entertainment
+        * `shopping` - shopping
+        * `education` - education
+        * `travel` - travel
+        * `subscriptions` - subscriptions
+        * `other` - other
     KindEnum:
       enum:
       - income
@@ -2577,6 +4243,50 @@ components:
       description: |-
         * `en` - English
         * `ar` - Arabic
+    PaginatedAccountList:
+      type: object
+      required:
+      - next
+      - previous
+      - results
+      properties:
+        next:
+          type: string
+          format: uri
+          nullable: true
+          description: The URL of the next page, or `null` on the last one. Follow
+            it as it is.
+        previous:
+          type: string
+          format: uri
+          nullable: true
+          description: The URL of the previous page, or `null` on the first one.
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Account'
+    PaginatedCategoryList:
+      type: object
+      required:
+      - next
+      - previous
+      - results
+      properties:
+        next:
+          type: string
+          format: uri
+          nullable: true
+          description: The URL of the next page, or `null` on the last one. Follow
+            it as it is.
+        previous:
+          type: string
+          format: uri
+          nullable: true
+          description: The URL of the previous page, or `null` on the first one.
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Category'
     PaginatedSalaryMonthList:
       type: object
       required:
@@ -2669,6 +4379,45 @@ components:
       required:
       - code
       - email
+    PatchedAccountInputRequest:
+      type: object
+      description: An account to add or to change. Anything else (`id`, `version`,
+        ...) is `400 read_only`.
+      properties:
+        name:
+          type: string
+          minLength: 1
+          description: '1 to 30 characters, trimmed. Unique per person, in any case:
+            `400 name_taken`.'
+          maxLength: 30
+        kind:
+          $ref: '#/components/schemas/AccountKindEnum'
+    PatchedCategoryInputRequest:
+      type: object
+      description: A custom category to add or to change. Its kind is always `both`;
+        a `kind` here is `400 read_only`.
+      properties:
+        name:
+          type: string
+          minLength: 1
+          description: '1 to 30 characters, trimmed. Unique among the person''s custom
+            categories, in any case, and not a built-in key or English name: `400
+            name_taken`.'
+          maxLength: 30
+        icon:
+          allOf:
+          - $ref: '#/components/schemas/IconEnum'
+          description: |-
+            One of the icons the picker offers for a custom category.
+
+            * `gifts` - gifts
+            * `health` - health
+            * `entertainment` - entertainment
+            * `shopping` - shopping
+            * `education` - education
+            * `travel` - travel
+            * `subscriptions` - subscriptions
+            * `other` - other
     PatchedFixedItemInputRequest:
       type: object
       description: 'A fixed item to add or to change. It has no currency of its own:
@@ -3421,3 +5170,12 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
+  headers:
+    XRequestId:
+      description: 'The id of this request, on every response, errors included. A
+        client may send its own `X-Request-ID` (8 to 64 letters, digits and hyphens);
+        anything else is replaced. It holds no personal data: show it on a failure
+        screen so the request can be found in the server log.'
+      schema:
+        type: string
+        pattern: ^[A-Za-z0-9-]{8,64}$

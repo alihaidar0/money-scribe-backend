@@ -36,6 +36,7 @@ healthz
 imagetools
 keychain
 keyset
+Koyeb
 logformat
 Mailpit
 neondb
@@ -107,3 +108,7 @@ USERPROFILE
 pmcs
 pmmk
 pmsu
+
+# Arabic text in the docs (the default account names)
+بطاقة
+نقدًا

@@ -36,7 +36,7 @@ from config.exceptions import (
     throttled,
 )
 
-from . import challenge, emails, limits, tokens
+from . import challenge, emails, events, limits, signals, tokens
 from .models import (
     DeviceKey,
     EmailCode,
@@ -44,7 +44,9 @@ from .models import (
     EndReason,
     Language,
     PasswordResetToken,
+    SecurityEventType,
     Session,
+    SignInMethod,
     User,
 )
 from .network import rate_limit_key, truncate_ip
@@ -351,7 +353,9 @@ def verify_email(
     def accept(user: User, record: EmailCode) -> SignedIn:
         user.email_verified_at = now
         remember_client(user, language, time_zone)
-        return start_session(user, device, client, now)
+        # The first accounts of a new person are made by the apps that depend on this one (ADR 0005).
+        signals.email_verified.send(sender=User, user=user)
+        return start_session(user, device, client, now, method=SignInMethod.EMAIL_CODE)
 
     return _redeem_code(
         user=user,
@@ -375,8 +379,14 @@ def remember_client(user: User, language: str | None, time_zone: str | None) -> 
 
 
 def start_session(
-    user: User, device: DeviceInfo, client: ClientInfo, now: datetime
+    user: User,
+    device: DeviceInfo,
+    client: ClientInfo,
+    now: datetime,
+    *,
+    method: SignInMethod,
 ) -> SignedIn:
+    """Start a session and record the ``signed_in`` event with how the person signed in (ADR 0022)."""
     session = Session(
         user=user,
         device_id=device.device_id,
@@ -397,6 +407,9 @@ def start_session(
     user.last_login = now
     user.save(
         update_fields=["last_login", "email_verified_at", "language", "time_zone"]
+    )
+    events.record_session_event(
+        user, SecurityEventType.SIGNED_IN, session, sign_in_method=method, now=now
     )
     return SignedIn(
         user=user,
@@ -483,16 +496,27 @@ def sign_in(
     limits.clear_sign_in_failures(email, client_ip)
     remember_client(user, language, time_zone)
     with transaction.atomic():
-        return start_session(user, device, client, now)
+        return start_session(user, device, client, now, method=SignInMethod.PASSWORD)
 
 
 def end_session(
     session: Session, reason: EndReason, now: datetime | None = None
-) -> None:
-    """End a session (once; a second call changes nothing)."""
-    Session.objects.filter(pk=session.pk, ended_at__isnull=True).update(
+) -> bool:
+    """End a session (once; a second call changes nothing). Returns whether this call ended it."""
+    ended = Session.objects.filter(pk=session.pk, ended_at__isnull=True).update(
         ended_at=now or timezone.now(), end_reason=reason
     )
+    return ended > 0
+
+
+def sign_out(session: Session) -> None:
+    """The person signs out: end the session and record ``signed_out`` (only when this call ended it)."""
+    with transaction.atomic():
+        now = timezone.now()
+        if end_session(session, EndReason.SIGNED_OUT, now):
+            events.record_session_event(
+                session.user, SecurityEventType.SIGNED_OUT, session, now=now
+            )
 
 
 def _usable_or_code(session: Session, now: datetime) -> ErrorCode | None:
@@ -586,7 +610,10 @@ def _rotate(
         return None, _advance_refresh_token(session, now)
     if generation == session.generation - 1 and now - session.rotated_at <= window:
         return None, tokens.issue_refresh_token(session)
-    end_session(session, EndReason.TOKEN_REUSE, now)
+    if end_session(session, EndReason.TOKEN_REUSE, now):
+        events.record_session_event(
+            session.user, SecurityEventType.TOKEN_REUSE_DETECTED, session, now=now
+        )
     return ErrorCode.SESSION_TOKEN_REUSE, ""
 
 
@@ -645,9 +672,17 @@ def sign_out_with_refresh_token(refresh_token: str) -> None:
         claims = tokens.decode_refresh_token(refresh_token, now, allow_expired=True)
     except tokens.TokenError:
         raise auth_failure(ErrorCode.TOKEN_INVALID, "The token is not valid.") from None
-    Session.objects.filter(
-        pk=claims.session_id, user_id=claims.user_id, ended_at__isnull=True
-    ).update(ended_at=now, end_reason=EndReason.SIGNED_OUT)
+    with transaction.atomic():
+        session = (
+            Session.objects.select_for_update()
+            .select_related("user")
+            .filter(pk=claims.session_id, user_id=claims.user_id, ended_at__isnull=True)
+            .first()
+        )
+        if session is not None and end_session(session, EndReason.SIGNED_OUT, now):
+            events.record_session_event(
+                session.user, SecurityEventType.SIGNED_OUT, session, now=now
+            )
 
 
 # --- password reset, password change, account deletion (ADR 0014) -------------------------------
@@ -761,18 +796,27 @@ def reset_password(*, reset_token: str, password: str) -> None:
         user.save(update_fields=["password"])
         _end_sessions(user, now)
         _forget_password_secrets(user)
-        forget_device_keys(user)
+        forget_device_keys(user, now=now)
+        events.record_account_event(user, SecurityEventType.PASSWORD_RESET, now=now)
     emails.send_password_changed_notice(email=user.email, language=user.language)
 
 
-def forget_device_keys(user: User) -> None:
-    """Delete every device key of the user (ADR 0018).
+def forget_device_keys(
+    user: User, *, acting: Session | None = None, now: datetime | None = None
+) -> None:
+    """Delete every device key of the user (ADR 0018), recording ``device_key_removed`` for each (ADR 0022).
 
     A password change or reset and an email change are the person's answer to "my account may be
     compromised", so a phone that could sign in without the password loses that power with them.
     Ending a session never does this: signing out must leave the key, which is the point of it.
+    ``acting`` is the session that did the change, if there is one (a reset has none).
     """
-    DeviceKey.objects.filter(user=user).delete()
+    keys = list(DeviceKey.objects.filter(user=user))
+    for key in keys:
+        events.record_key_event(
+            user, SecurityEventType.DEVICE_KEY_REMOVED, key, acting=acting, now=now
+        )
+    DeviceKey.objects.filter(pk__in=[key.pk for key in keys]).delete()
 
 
 def _end_sessions(user: User, now: datetime, keep: Session | None = None) -> None:
@@ -837,7 +881,10 @@ def change_password(
         locked.save(update_fields=["password"])
         _end_sessions(locked, now, keep=current)
         _forget_password_secrets(locked)
-        forget_device_keys(locked)
+        forget_device_keys(locked, acting=current, now=now)
+        events.record_session_event(
+            locked, SecurityEventType.PASSWORD_CHANGED, current, now=now
+        )
         refresh_token = _advance_refresh_token(current, now)
         current.save()
     emails.send_password_changed_notice(email=user.email, language=user.language)
@@ -934,7 +981,10 @@ def confirm_email_change(*, user: User, session: Session, code: str) -> User:
             ended_at=now, end_reason=EndReason.EMAIL_CHANGED
         )
         _forget_password_secrets(user)
-        forget_device_keys(user)
+        forget_device_keys(user, acting=session, now=now)
+        events.record_session_event(
+            user, SecurityEventType.EMAIL_CHANGED, session, now=now
+        )
         return user
 
     # A dead code is replaced by asking again, which the new address's send budget paces.

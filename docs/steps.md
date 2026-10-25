@@ -389,7 +389,8 @@ listed at the end of this section. Each step is its own branch and pull request.
 Not on staging yet (ADR 0011 has the reasons):
 
 - The Celery worker and Beat. The two daily purges (old outbox emails, unverified accounts) do not run, and the leftovers
-  are invented data. Add a paid worker running `celery worker -B` when a job matters (step 8.4, stage 3); production has
+  are invented data. Add a paid worker running `celery worker -B` when a job matters (step 8.4, stage 3), or the scheduled call of
+  [ADR 0020](adr/0020-scheduled-calls-instead-of-a-free-worker.md) while hosting is free; production has
   its own worker and Beat (section 12).
 - Real email delivery, backups and the hardened admin panel: section 12.
 - The web build and its token cookie: they need the owner's own domain shared by the web app and the API (steps 8.5 and
@@ -432,10 +433,20 @@ when the owner confirms it, and a step that needs the app on staging waits for t
 - [ ] **10.5 preferences**: default currency, default payment mode, pay days and `remind_on_pay_days`; `time_zone` and
   `language` are stored since 8.2 and become changeable here through the same settings `PATCH` (the profile update
   accepts only `name`), so a language change in the app reaches the notifications without a new sign-in
-- [ ] **10.6 ledger**: accounts (delete refused with `409` when transactions exist; reorder); categories (the built-in
-  rows with their keys, read-only; custom ones, reorder; deleting a custom one moves its transactions to `other`, ADR
-  0017); transactions (the category must allow the kind; ordered `-date`, `-created_at`, `-id` with the filters,
-  including `search` on the note, through `django-filter`)
+- [ ] **10.5a `feat/api-hardening`** (before the ledger, decided 2026-10-25 with the Flutter developer): the request id
+  (`X-Request-ID`), `Cache-Control: no-store` on every `/api/v1/` response, the shared text rules (`invalid_characters`),
+  per-user rate limits by route group, and the request size cap ([ADR 0021](adr/0021-api-hardening-baseline.md)); the
+  security event record, written by one service in the same transaction as each action
+  ([ADR 0022](adr/0022-security-events.md)). No new endpoint; the read of the events comes with the sessions step (8.4).
+  The shapes agreed on 2026-10-25 for 10.6 to 10.9 and 8.4 are in their request issues, and the lines of those steps are
+  brought in line in the pull request of each
+- [ ] **10.6 ledger**, in two branches. `feat/ledger-accounts-categories` (request issue #64): accounts (the first two,
+  "Card" and "Cash", are made when the email is verified, through the `users.signals.email_verified` signal; limit 20;
+  no reorder) and categories (the seven built-in rows with fixed ids and keys, read-only; custom ones, limit 50, icons of
+  the picker only; no reorder). `feat/ledger-transactions` (#65): transactions (the category must allow the kind;
+  ordered `-date`, `-created_at`, `-id`, with the filters and `search` on the note), the paginated day totals (ADR 0003
+  is amended there), and the two rules that need them: `409 account_has_transactions`, and the move of a deleted
+  category's transactions to `other` (ADR 0017)
 - [ ] **10.7 debts**: debts with repayments, derived `repaid`, `remaining`, `is_settled`, `progress` and `status`, with the
   `today` parameter
 - [ ] **10.8 reports**: month overview, day totals, category spend, month comparison, debts report and period report, with
@@ -444,7 +455,8 @@ when the owner confirms it, and a step that needs the app on staging waits for t
   a bulk call of rows the app has parsed (the server never parses an uploaded file), with skipped-row reporting and a
   lossless round trip
 - [ ] **10.10 notifications**: push device FIDs (Firebase installation IDs, one per session, removed when it ends),
-  pay-day reminders through Celery Beat, and the push provider wiring (the last open decision for this stage; `firebase-admin`
+  pay-day reminders through a scheduled call while hosting is free
+  ([ADR 0020](adr/0020-scheduled-calls-instead-of-a-free-worker.md)) and through Celery Beat once a worker exists, and the push provider wiring (the last open decision for this stage; `firebase-admin`
   7.5.0 or later, `Message(fid=...)`). The rules are in
   [`api-fields.md`](api-fields.md#push-notifications). Build notes: one service function ends sessions and deletes their
   FIDs in the same transaction, and every place that ends a session uses it (a test guards this); sending selects only
@@ -463,7 +475,9 @@ when the owner confirms it, and a step that needs the app on staging waits for t
   already ([ADR 0006](adr/0006-authentication-tokens.md): sign-in, registration, code resend and verification, per
   account and per client address, counters in Redis, `429` with `Retry-After`). Before production, give every other
   operation default limits too: per signed-in user, and per client address for requests without a token; stricter ones
-  for the costly operations (reports, CSV export and import, from stage 3). The numbers and the reasons go into an ADR;
+  for the costly operations (reports, CSV export and import, from stage 3). The numbers and the reasons go into an ADR
+  (the per-user limits of the signed-in routes are in [ADR 0021](adr/0021-api-hardening-baseline.md); the limits by
+  client address for requests without a token and the proxy count stay open here);
   each limit is documented as a `429` in the schema and tested; `NUM_PROXIES` is the proxy count measured on staging and
   re-checked for the production topology, because a wrong count either shares one address between all clients or lets a
   client choose its own
@@ -506,7 +520,8 @@ release candidate is stable.
   - email over an HTTPS API of a provider, not SMTP: a free Render web service cannot use the outbound ports 25, 465 and
     587, so the email backend of [ADR 0010](adr/0010-admin-panel-and-email-outbox.md) changes for production
   - no Celery worker (a worker is a paid instance), so the daily purges, the ended-session purge and, from stage 3, the
-    reminders and pushes do not run until a worker is paid for
+    reminders and pushes do not run until a worker is paid for, or the scheduled call of
+    [ADR 0020](adr/0020-scheduled-calls-instead-of-a-free-worker.md) is in place
   - the limits of free instances: it sleeps after 15 minutes without a request (a monitor keeps it awake and uses 720
     to 744 of the 750 hours), a slow 0.1 CPU, restarts at any time, no zero-downtime deploys
   - Neon free keeps only a **6-hour** history and one manual snapshot: no real backups (the manual `pg_dump` procedure

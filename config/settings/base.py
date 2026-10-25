@@ -175,13 +175,14 @@ CORS_ALLOWED_ORIGINS = [
 ]
 # A browser hides every response header except a few unless it is exposed; the web app reads the
 # countdown of a 429 from this one.
-CORS_EXPOSE_HEADERS = ["Retry-After", "ETag", "Idempotent-Replayed"]
+CORS_EXPOSE_HEADERS = ["Retry-After", "ETag", "Idempotent-Replayed", "X-Request-ID"]
 # The headers of the safe writes (ADR 0016), on top of the defaults, so the web build can send them.
 CORS_ALLOW_HEADERS = [
     *default_headers,
     "idempotency-key",
     "if-match",
     "if-none-match",
+    "x-request-id",
 ]
 
 DATABASES = {
@@ -205,6 +206,7 @@ INSTALLED_APPS += [
     "idempotency",
     "preferences",
     "salary",
+    "ledger",
     "outbox",
 ]
 
@@ -321,6 +323,9 @@ DEVICE_KEY_REVOCATION_TIMEOUT_SECONDS = 3
 IDEMPOTENCY_KEY_LIFETIME_SECONDS = 86400
 IDEMPOTENCY_LOCK_WAIT_SECONDS = 3
 
+# The security events (ADR 0022) are kept this many days.
+SECURITY_EVENT_RETENTION_DAYS = 90
+
 # An account that never verifies its email is deleted, with its codes, after this many days.
 UNVERIFIED_ACCOUNT_RETENTION_DAYS = 7
 
@@ -358,7 +363,17 @@ REST_FRAMEWORK: dict[str, object] = {
     # Per client address, on top of the per-account limits of users.limits. Behind a reverse proxy set
     # NUM_PROXIES to the number of proxies, or every client shares the proxy's address.
     "NUM_PROXIES": int(os.environ.get("NUM_PROXIES", "0")),
+    # Per signed-in user and route group (ADR 0021, config/throttling.py); a view in another group names it.
+    "DEFAULT_THROTTLE_CLASSES": ["config.throttling.DefaultUserThrottle"],
     "DEFAULT_THROTTLE_RATES": {
+        "reads": "300/min",
+        "writes": "60/min",
+        "reports": "60/min",
+        "search": "30/min",
+        "export": "5/hour",
+        "import": "120/hour",
+        "session_actions": "30/hour",
+        # The authentication calls have their own limits by client address.
         "sign_in": "20/min",
         "register": "20/hour",
         "resend_code": "20/hour",
@@ -423,6 +438,11 @@ SPECTACULAR_SETTINGS = {
         # The same set of choices appears under several field names (currency, default_currency, payment_mode).
         "CurrencyEnum": "common.serializers.CURRENCY_CHOICES",
         "PaymentModeEnum": "common.enums.PaymentMode.choices",
+        # Three resources have a `kind` of their own. The fixed item's keeps the name it always had (`KindEnum`), so
+        # naming the other two does not rename a component a client already uses.
+        "KindEnum": "salary.models.ItemKind.choices",
+        "AccountKindEnum": "ledger.models.AccountKind.choices",
+        "CategoryKindEnum": "ledger.models.CategoryKind.choices",
     },
     # A nullable enum field is `nullable: true` plus one enum reference, not `oneOf: [Enum, NullEnum]`: Dart
     # client generators turn the union into a class that must implement an enum, which does not compile.
@@ -432,8 +452,15 @@ SPECTACULAR_SETTINGS = {
         "drf_standardized_errors.openapi_hooks.postprocess_schema_enums",
         # Names the money types of ADR 0008 (Amount, SignedAmount) as shared components.
         "common.openapi.name_money_types",
+        # Documents X-Request-ID on every response and Retry-After on every 429 and 503 (ADR 0021).
+        "config.openapi_hooks.document_common_headers",
     ],
 }
+
+# The largest request body of an API call, in bytes, and the paths that have their own limit (ADR 0021): the
+# CSV import sends up to 500 rows. A body over the limit is 400 request_too_large (config/middleware.py).
+REQUEST_BODY_MAX_BYTES = 256 * 1024
+REQUEST_BODY_LIMITS = {"/api/v1/imports/": 1024 * 1024}
 
 STATIC_ROOT = BASE_DIR / "staticfiles"
 MEDIA_ROOT = BASE_DIR / "media"
@@ -450,6 +477,14 @@ MIDDLEWARE.insert(
     MIDDLEWARE.index("django.middleware.security.SecurityMiddleware"),
     "corsheaders.middleware.CorsMiddleware",
 )
+# The request id wraps everything, a CORS preflight included; no-store and the size check sit just inside CORS, so even
+# their refusals carry the CORS headers a browser needs to read them (ADR 0021).
+_CORS_AT = MIDDLEWARE.index("corsheaders.middleware.CorsMiddleware")
+MIDDLEWARE[_CORS_AT + 1 : _CORS_AT + 1] = [
+    "config.middleware.NoStoreMiddleware",
+    "config.middleware.RequestSizeMiddleware",
+]
+MIDDLEWARE.insert(_CORS_AT, "config.middleware.RequestIdMiddleware")
 # /healthz answers before host validation and HTTPS redirects (config/health.py).
 MIDDLEWARE.insert(0, "config.health.HealthCheckMiddleware")
 # Django 6 Content Security Policy — the policy itself is set per environment
@@ -489,6 +524,10 @@ CELERY_BEAT_SCHEDULE = {
         "task": "users.tasks.purge_unverified_accounts",
         "schedule": crontab(minute=37, hour=3),
     },
+    "users-purge-security-events": {
+        "task": "users.tasks.purge_old_security_events",
+        "schedule": crontab(minute=57, hour=3),
+    },
     "users-purge-expired-secrets": {
         "task": "users.tasks.purge_expired_secrets",
         "schedule": crontab(minute=47, hour=3),
@@ -507,11 +546,22 @@ CELERY_BEAT_SCHEDULE = {
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
+    # Every line of a request carries its X-Request-ID, so a failure the app shows is found without personal data.
+    "filters": {
+        "request_id": {"()": "config.logging_filters.RequestIdFilter"},
+    },
     "formatters": {
-        "plain": {"format": "{asctime} {levelname} {name}: {message}", "style": "{"},
+        "plain": {
+            "format": "{asctime} {levelname} {name} [{request_id}]: {message}",
+            "style": "{",
+        },
     },
     "handlers": {
-        "console": {"class": "logging.StreamHandler", "formatter": "plain"},
+        "console": {
+            "class": "logging.StreamHandler",
+            "formatter": "plain",
+            "filters": ["request_id"],
+        },
     },
     "root": {"handlers": ["console"], "level": os.environ.get("LOG_LEVEL", "INFO")},
     "loggers": {
