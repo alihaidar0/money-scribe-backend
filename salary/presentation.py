@@ -11,6 +11,7 @@ the change back, so no stored month ever fails to be read.
 """
 
 from collections.abc import Iterable
+from dataclasses import dataclass
 from types import SimpleNamespace
 from typing import Any
 
@@ -52,17 +53,39 @@ def _totals(currency: Currency, items: Iterable[FixedItem]) -> dict[str, Money]:
     }
 
 
-def build_month(month: SalaryMonth, items: Iterable[FixedItem]) -> dict[str, Any]:
-    """The month as the contract shows it, with ``Money`` where the serializers write an amount."""
-    currency = month.money_currency
-    items = ordered(items)
-    two = month.payment_mode == PaymentMode.TWO_PAYMENTS
-    first_payment = month.money(month.first_payment)
-    second_payment = (
-        month.money(month.second_payment) if month.second_payment is not None else None
-    )
+@dataclass(frozen=True, slots=True)
+class PartFigures:
+    """What one part of a month brings in and takes out: its salary payment and its fixed items."""
 
-    if two:
+    salary: Money
+    income: Money
+    expense: Money
+
+    @property
+    def balance(self) -> Money:
+        """The salary plus the fixed income minus the fixed expenses."""
+        return self.salary + self.income - self.expense
+
+
+@dataclass(frozen=True, slots=True)
+class MonthFigures:
+    """The figures of a saved month by part: the whole month, the first part and, with two payments, the second.
+
+    With one payment there is a single part, ``first``, that counts every item whatever its stored ``part``. This is the
+    one place the balances of a month are worked out: the month's own answer and the Overview both read it.
+    """
+
+    total: PartFigures
+    first: PartFigures
+    second: PartFigures | None
+    first_totals: dict[str, Money]
+    second_totals: dict[str, Money] | None
+
+
+def part_figures(month: SalaryMonth, items: Iterable[FixedItem]) -> MonthFigures:
+    currency = month.money_currency
+    items = list(items)
+    if month.payment_mode == PaymentMode.TWO_PAYMENTS:
         first_items = [i for i in items if i.part == Part.FIRST]
         second_items: list[FixedItem] | None = [
             i for i in items if i.part == Part.SECOND
@@ -72,18 +95,48 @@ def build_month(month: SalaryMonth, items: Iterable[FixedItem]) -> dict[str, Any
     first_totals = _totals(currency, first_items)
     second_totals = None if second_items is None else _totals(currency, second_items)
     all_totals = _totals(currency, items)
-
-    balances: dict[str, Money | None] = {
-        "first": first_payment + first_totals["income"] - first_totals["expense"],
-        "second": (
-            None
-            if second_payment is None or second_totals is None
-            else second_payment + second_totals["income"] - second_totals["expense"]
+    second_payment = (
+        month.money(month.second_payment) if month.second_payment is not None else None
+    )
+    second = (
+        None
+        if second_payment is None or second_totals is None
+        else PartFigures(
+            second_payment, second_totals["income"], second_totals["expense"]
+        )
+    )
+    return MonthFigures(
+        total=PartFigures(
+            month.money(month.total_after_tax),
+            all_totals["income"],
+            all_totals["expense"],
         ),
-        "month": month.money(month.total_after_tax)
-        + all_totals["income"]
-        - all_totals["expense"],
+        first=PartFigures(
+            month.money(month.first_payment),
+            first_totals["income"],
+            first_totals["expense"],
+        ),
+        second=second,
+        first_totals=first_totals,
+        second_totals=second_totals,
+    )
+
+
+def build_month(month: SalaryMonth, items: Iterable[FixedItem]) -> dict[str, Any]:
+    """The month as the contract shows it, with ``Money`` where the serializers write an amount."""
+    items = ordered(items)
+    figures = part_figures(month, items)
+    first_totals = figures.first_totals
+    second_totals = figures.second_totals
+    balances: dict[str, Money | None] = {
+        "first": figures.first.balance,
+        "second": None if figures.second is None else figures.second.balance,
+        "month": figures.total.balance,
     }
+    first_payment = month.money(month.first_payment)
+    second_payment = (
+        month.money(month.second_payment) if month.second_payment is not None else None
+    )
     payments = [{"part": Part.FIRST.value, "amount": first_payment}]
     if second_payment is not None:
         payments.append({"part": Part.SECOND.value, "amount": second_payment})

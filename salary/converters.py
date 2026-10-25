@@ -2,6 +2,9 @@ import datetime
 import re
 from typing import Final
 
+from django.urls import register_converter
+from django.urls.converters import REGISTERED_CONVERTERS
+
 _MONTH: Final = re.compile(r"(20[0-9]{2})-(0[1-9]|1[0-2])")
 
 
@@ -22,3 +25,9 @@ class MonthConverter:
 
     def to_url(self, value: datetime.date) -> str:
         return f"{value:%Y-%m}"
+
+
+def register_month_converter() -> None:
+    """Make ``<month:month>`` available in a URL module; safe to call from every module that uses it."""
+    if "month" not in REGISTERED_CONVERTERS:
+        register_converter(MonthConverter, "month")
