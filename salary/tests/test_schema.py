@@ -87,6 +87,27 @@ def test_saving_a_month_declares_201_200_409_412_and_the_etag(
     assert "ETag" in operation["responses"]["201"]["headers"]
 
 
+def test_saving_a_month_takes_an_optional_if_none_match_header(
+    schema: dict[str, Any],
+) -> None:
+    parameter = params(op(schema, MONTH, "put"))["If-None-Match"]
+
+    assert parameter["in"] == "header"
+    assert parameter["schema"] == {"type": "string"}
+    assert parameter.get("required", False) is False
+
+
+def test_only_the_creating_put_takes_if_none_match(schema: dict[str, Any]) -> None:
+    with_header = {
+        (path, method)
+        for path, methods in schema["paths"].items()
+        for method, body in methods.items()
+        if "If-None-Match" in params(body)
+    }
+
+    assert with_header == {(MONTH, "put")}
+
+
 def test_a_change_and_a_delete_of_an_item_take_if_match_and_declare_412(
     schema: dict[str, Any],
 ) -> None:
