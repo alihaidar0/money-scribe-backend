@@ -1,6 +1,5 @@
 """Accounts and categories (ADR 0005, 0017; ``docs/api-fields.md``)."""
 
-import datetime
 import uuid
 from typing import ClassVar
 
@@ -10,6 +9,7 @@ from django.db import models
 from django.db.models import Q
 from django.db.models.functions import Lower, Upper
 
+from common.days import FIRST_DAY, LAST_DAY
 from common.models import VersionedModel
 from common.money import MAX_MINOR_UNITS, Currency, Money
 
@@ -18,9 +18,6 @@ MAX_ACCOUNTS = 20
 MAX_CUSTOM_CATEGORIES = 50
 # At most this many transactions per user.
 MAX_TRANSACTIONS = 100_000
-# A transaction's date is a calendar day from this one to the last day of 2099 (the same range as a salary month).
-FIRST_DAY = datetime.date(2000, 1, 1)
-LAST_DAY = datetime.date(2099, 12, 31)
 # A category's internal sort position: the built-in ones are 1 to 7 in a fixed order, a custom one is always last.
 CUSTOM_POSITION = 100
 
