@@ -33,12 +33,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error400Response'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '401':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '429':
           headers:
             Retry-After:
@@ -46,6 +52,8 @@ paths:
                 type: integer
               description: Whole seconds to wait before the request may be repeated;
                 at least 1.
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
           content:
             application/json:
               schema:
@@ -53,6 +61,9 @@ paths:
           description: ''
         '204':
           description: No response body
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '503':
           headers:
             Retry-After:
@@ -60,6 +71,8 @@ paths:
                 type: integer
               description: Whole seconds to wait before the request may be repeated;
                 at least 1.
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
           content:
             application/json:
               schema:
@@ -88,18 +101,41 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error400Response'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '401':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Retry-After:
+              description: Whole seconds to wait before the request may be repeated;
+                at least 1.
+              schema:
+                type: integer
         '200':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/DeviceKeyList'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
   /api/v1/auth/device-keys/{device_id}/:
     delete:
       operationId: auth_device_key_remove
@@ -126,20 +162,46 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error400Response'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '401':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '404':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Retry-After:
+              description: Whole seconds to wait before the request may be repeated;
+                at least 1.
+              schema:
+                type: integer
         '204':
           description: No response body
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
   /api/v1/auth/device-keys/challenge/:
     post:
       operationId: auth_device_key_challenge
@@ -166,6 +228,9 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error400Response'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '429':
           headers:
             Retry-After:
@@ -173,6 +238,8 @@ paths:
                 type: integer
               description: Whole seconds to wait before the request may be repeated;
                 at least 1.
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
           content:
             application/json:
               schema:
@@ -184,6 +251,9 @@ paths:
               schema:
                 $ref: '#/components/schemas/DeviceKeyChallengeResponse'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '503':
           headers:
             Retry-After:
@@ -191,6 +261,8 @@ paths:
                 type: integer
               description: Whole seconds to wait before the request may be repeated;
                 at least 1.
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
           content:
             application/json:
               schema:
@@ -235,12 +307,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error400Response'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '401':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '429':
           headers:
             Retry-After:
@@ -248,6 +326,8 @@ paths:
                 type: integer
               description: Whole seconds to wait before the request may be repeated;
                 at least 1.
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
           content:
             application/json:
               schema:
@@ -259,12 +339,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/DeviceKey'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '201':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/DeviceKey'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '409':
           content:
             application/json:
@@ -272,6 +358,9 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
           description: The request conflicts with the current state; the `code` says
             what conflicts.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '503':
           headers:
             Retry-After:
@@ -279,6 +368,8 @@ paths:
                 type: integer
               description: Whole seconds to wait before the request may be repeated;
                 at least 1.
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
           content:
             application/json:
               schema:
@@ -302,14 +393,23 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error400Response'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '401':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '204':
           description: No response body
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
   /api/v1/auth/device-keys/sign-in/:
     post:
       operationId: auth_device_key_sign_in
@@ -340,6 +440,9 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error400Response'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '429':
           headers:
             Retry-After:
@@ -347,6 +450,8 @@ paths:
                 type: integer
               description: Whole seconds to wait before the request may be repeated;
                 at least 1.
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
           content:
             application/json:
               schema:
@@ -358,6 +463,9 @@ paths:
               schema:
                 $ref: '#/components/schemas/SignedInResponse'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '401':
           content:
             application/json:
@@ -365,6 +473,9 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
           description: Not authenticated, or the credentials, token or session are
             not valid; the `code` says which.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '503':
           headers:
             Retry-After:
@@ -372,6 +483,8 @@ paths:
                 type: integer
               description: Whole seconds to wait before the request may be repeated;
                 at least 1.
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
           content:
             application/json:
               schema:
@@ -412,12 +525,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error400Response'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '401':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '429':
           headers:
             Retry-After:
@@ -425,6 +544,8 @@ paths:
                 type: integer
               description: Whole seconds to wait before the request may be repeated;
                 at least 1.
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
           content:
             application/json:
               schema:
@@ -436,6 +557,9 @@ paths:
               schema:
                 $ref: '#/components/schemas/EmailChangeResponse'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '409':
           content:
             application/json:
@@ -443,6 +567,9 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
           description: The request conflicts with the current state; the `code` says
             what conflicts.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '503':
           headers:
             Retry-After:
@@ -450,6 +577,8 @@ paths:
                 type: integer
               description: Whole seconds to wait before the request may be repeated;
                 at least 1.
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
           content:
             application/json:
               schema:
@@ -473,14 +602,23 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error400Response'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '401':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '204':
           description: No response body
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
   /api/v1/auth/email-change/confirm/:
     post:
       operationId: auth_email_change_confirm
@@ -511,12 +649,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error400Response'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '401':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '429':
           headers:
             Retry-After:
@@ -524,6 +668,8 @@ paths:
                 type: integer
               description: Whole seconds to wait before the request may be repeated;
                 at least 1.
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
           content:
             application/json:
               schema:
@@ -535,6 +681,9 @@ paths:
               schema:
                 $ref: '#/components/schemas/Profile'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '409':
           content:
             application/json:
@@ -542,6 +691,9 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
           description: The request conflicts with the current state; the `code` says
             what conflicts.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '503':
           headers:
             Retry-After:
@@ -549,6 +701,8 @@ paths:
                 type: integer
               description: Whole seconds to wait before the request may be repeated;
                 at least 1.
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
           content:
             application/json:
               schema:
@@ -585,6 +739,9 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error400Response'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '429':
           headers:
             Retry-After:
@@ -592,6 +749,8 @@ paths:
                 type: integer
               description: Whole seconds to wait before the request may be repeated;
                 at least 1.
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
           content:
             application/json:
               schema:
@@ -599,6 +758,9 @@ paths:
           description: ''
         '204':
           description: No response body
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '503':
           headers:
             Retry-After:
@@ -606,6 +768,8 @@ paths:
                 type: integer
               description: Whole seconds to wait before the request may be repeated;
                 at least 1.
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
           content:
             application/json:
               schema:
@@ -639,6 +803,9 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error400Response'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '429':
           headers:
             Retry-After:
@@ -646,6 +813,8 @@ paths:
                 type: integer
               description: Whole seconds to wait before the request may be repeated;
                 at least 1.
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
           content:
             application/json:
               schema:
@@ -657,6 +826,9 @@ paths:
               schema:
                 $ref: '#/components/schemas/CodeSent'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '503':
           headers:
             Retry-After:
@@ -664,6 +836,8 @@ paths:
                 type: integer
               description: Whole seconds to wait before the request may be repeated;
                 at least 1.
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
           content:
             application/json:
               schema:
@@ -697,6 +871,9 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error400Response'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '429':
           headers:
             Retry-After:
@@ -704,6 +881,8 @@ paths:
                 type: integer
               description: Whole seconds to wait before the request may be repeated;
                 at least 1.
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
           content:
             application/json:
               schema:
@@ -715,6 +894,9 @@ paths:
               schema:
                 $ref: '#/components/schemas/ResetTokenResponse'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '503':
           headers:
             Retry-After:
@@ -722,6 +904,8 @@ paths:
                 type: integer
               description: Whole seconds to wait before the request may be repeated;
                 at least 1.
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
           content:
             application/json:
               schema:
@@ -762,12 +946,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error400Response'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '401':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '429':
           headers:
             Retry-After:
@@ -775,6 +965,8 @@ paths:
                 type: integer
               description: Whole seconds to wait before the request may be repeated;
                 at least 1.
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
           content:
             application/json:
               schema:
@@ -786,6 +978,9 @@ paths:
               schema:
                 $ref: '#/components/schemas/RefreshResponse'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '503':
           headers:
             Retry-After:
@@ -793,6 +988,8 @@ paths:
                 type: integer
               description: Whole seconds to wait before the request may be repeated;
                 at least 1.
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
           content:
             application/json:
               schema:
@@ -818,18 +1015,41 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error400Response'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '401':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Retry-After:
+              description: Whole seconds to wait before the request may be repeated;
+                at least 1.
+              schema:
+                type: integer
         '200':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Profile'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
     patch:
       operationId: auth_profile_update
       description: 'Changes the display name and answers the updated profile. Only
@@ -854,18 +1074,41 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error400Response'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '401':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Retry-After:
+              description: Whole seconds to wait before the request may be repeated;
+                at least 1.
+              schema:
+                type: integer
         '200':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Profile'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
   /api/v1/auth/refresh/:
     post:
       operationId: auth_refresh
@@ -892,12 +1135,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error400Response'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '200':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/RefreshResponse'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '401':
           content:
             application/json:
@@ -905,6 +1154,9 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
           description: Not authenticated, or the credentials, token or session are
             not valid; the `code` says which.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
   /api/v1/auth/register/:
     post:
       operationId: auth_register
@@ -934,6 +1186,9 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error400Response'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '429':
           headers:
             Retry-After:
@@ -941,6 +1196,8 @@ paths:
                 type: integer
               description: Whole seconds to wait before the request may be repeated;
                 at least 1.
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
           content:
             application/json:
               schema:
@@ -952,6 +1209,9 @@ paths:
               schema:
                 $ref: '#/components/schemas/RegisterResponse'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '503':
           headers:
             Retry-After:
@@ -959,6 +1219,8 @@ paths:
                 type: integer
               description: Whole seconds to wait before the request may be repeated;
                 at least 1.
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
           content:
             application/json:
               schema:
@@ -990,6 +1252,9 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error400Response'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '429':
           headers:
             Retry-After:
@@ -997,6 +1262,8 @@ paths:
                 type: integer
               description: Whole seconds to wait before the request may be repeated;
                 at least 1.
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
           content:
             application/json:
               schema:
@@ -1008,6 +1275,9 @@ paths:
               schema:
                 $ref: '#/components/schemas/CodeSent'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '503':
           headers:
             Retry-After:
@@ -1015,6 +1285,8 @@ paths:
                 type: integer
               description: Whole seconds to wait before the request may be repeated;
                 at least 1.
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
           content:
             application/json:
               schema:
@@ -1057,6 +1329,9 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error400Response'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '429':
           headers:
             Retry-After:
@@ -1064,6 +1339,8 @@ paths:
                 type: integer
               description: Whole seconds to wait before the request may be repeated;
                 at least 1.
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
           content:
             application/json:
               schema:
@@ -1075,6 +1352,9 @@ paths:
               schema:
                 $ref: '#/components/schemas/SignedInResponse'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '401':
           content:
             application/json:
@@ -1082,6 +1362,9 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
           description: Not authenticated, or the credentials, token or session are
             not valid; the `code` says which.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '403':
           content:
             application/json:
@@ -1089,6 +1372,9 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
           description: The credentials are right but the request is not allowed; the
             `code` says why.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '503':
           headers:
             Retry-After:
@@ -1096,6 +1382,8 @@ paths:
                 type: integer
               description: Whole seconds to wait before the request may be repeated;
                 at least 1.
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
           content:
             application/json:
               schema:
@@ -1135,14 +1423,23 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error400Response'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '401':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '204':
           description: No response body
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
   /api/v1/auth/verify-email/:
     post:
       operationId: auth_verify_email
@@ -1167,6 +1464,9 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error400Response'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '429':
           headers:
             Retry-After:
@@ -1174,6 +1474,8 @@ paths:
                 type: integer
               description: Whole seconds to wait before the request may be repeated;
                 at least 1.
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
           content:
             application/json:
               schema:
@@ -1185,6 +1487,9 @@ paths:
               schema:
                 $ref: '#/components/schemas/SignedInResponse'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '503':
           headers:
             Retry-After:
@@ -1192,6 +1497,8 @@ paths:
                 type: integer
               description: Whole seconds to wait before the request may be repeated;
                 at least 1.
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
           content:
             application/json:
               schema:
@@ -1239,18 +1546,41 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error400Response'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '401':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '404':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Retry-After:
+              description: Whole seconds to wait before the request may be repeated;
+                at least 1.
+              schema:
+                type: integer
         '200':
           headers:
             ETag:
@@ -1258,6 +1588,8 @@ paths:
                 type: string
               description: 'The `version` of the record in the answer, as a quoted
                 string: `"3"`.'
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
           content:
             application/json:
               schema:
@@ -1271,6 +1603,9 @@ paths:
           description: 'The `If-Match` version is not the stored one, or `If-None-Match:
             *` found the record. Nothing was changed: reload the record. The `code`
             is `precondition_failed`.'
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
     delete:
       operationId: salary_fixed_item_delete
       description: 'Deletes the item (`204`); `If-Match` is checked as for a change.
@@ -1302,20 +1637,46 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error400Response'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '401':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '404':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Retry-After:
+              description: Whole seconds to wait before the request may be repeated;
+                at least 1.
+              schema:
+                type: integer
         '204':
           description: No response body
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '412':
           content:
             application/json:
@@ -1324,6 +1685,9 @@ paths:
           description: 'The `If-Match` version is not the stored one, or `If-None-Match:
             *` found the record. Nothing was changed: reload the record. The `code`
             is `precondition_failed`.'
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
   /api/v1/salary/months/:
     get:
       operationId: salary_month_list
@@ -1359,18 +1723,41 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error400Response'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '401':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Retry-After:
+              description: Whole seconds to wait before the request may be repeated;
+                at least 1.
+              schema:
+                type: integer
         '200':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/PaginatedSalaryMonthList'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
   /api/v1/salary/months/{month}/:
     get:
       operationId: salary_month_read
@@ -1396,18 +1783,41 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error400Response'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '401':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '404':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Retry-After:
+              description: Whole seconds to wait before the request may be repeated;
+                at least 1.
+              schema:
+                type: integer
         '200':
           headers:
             ETag:
@@ -1415,6 +1825,8 @@ paths:
                 type: string
               description: 'The `version` of the record in the answer, as a quoted
                 string: `"3"`.'
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
           content:
             application/json:
               schema:
@@ -1474,18 +1886,41 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error400Response'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '401':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '404':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Retry-After:
+              description: Whole seconds to wait before the request may be repeated;
+                at least 1.
+              schema:
+                type: integer
         '200':
           headers:
             ETag:
@@ -1493,6 +1928,8 @@ paths:
                 type: string
               description: 'The `version` of the record in the answer, as a quoted
                 string: `"3"`.'
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
           content:
             application/json:
               schema:
@@ -1505,6 +1942,8 @@ paths:
                 type: string
               description: 'The `version` of the record in the answer, as a quoted
                 string: `"3"`.'
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
           content:
             application/json:
               schema:
@@ -1517,6 +1956,9 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
           description: The request conflicts with the current state; the `code` says
             what conflicts.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '412':
           content:
             application/json:
@@ -1525,6 +1967,9 @@ paths:
           description: 'The `If-Match` version is not the stored one, or `If-None-Match:
             *` found the record. Nothing was changed: reload the record. The `code`
             is `precondition_failed`.'
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
     delete:
       operationId: salary_month_delete
       description: Deletes the month and its fixed items (`204`). `404` when it is
@@ -1557,20 +2002,46 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error400Response'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '401':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '404':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Retry-After:
+              description: Whole seconds to wait before the request may be repeated;
+                at least 1.
+              schema:
+                type: integer
         '204':
           description: No response body
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '412':
           content:
             application/json:
@@ -1579,6 +2050,9 @@ paths:
           description: 'The `If-Match` version is not the stored one, or `If-None-Match:
             *` found the record. Nothing was changed: reload the record. The `code`
             is `precondition_failed`.'
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
   /api/v1/salary/months/{month}/defaults/:
     get:
       operationId: salary_month_defaults
@@ -1610,24 +2084,50 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error400Response'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '401':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '404':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Retry-After:
+              description: Whole seconds to wait before the request may be repeated;
+                at least 1.
+              schema:
+                type: integer
         '200':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Defaults'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
   /api/v1/salary/months/{month}/fixed-items/:
     post:
       operationId: salary_fixed_item_create
@@ -1673,18 +2173,41 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error400Response'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '401':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '404':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Retry-After:
+              description: Whole seconds to wait before the request may be repeated;
+                at least 1.
+              schema:
+                type: integer
         '201':
           headers:
             Idempotent-Replayed:
@@ -1697,6 +2220,8 @@ paths:
                 type: string
               description: 'The `version` of the record in the answer, as a quoted
                 string: `"3"`.'
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
           content:
             application/json:
               schema:
@@ -1709,6 +2234,9 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
           description: The request conflicts with the current state; the `code` says
             what conflicts.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '422':
           content:
             application/json:
@@ -1716,6 +2244,9 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
           description: The `Idempotency-Key` was already used for a different request.
             The `code` is `idempotency_key_reused`.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
   /api/v1/salary/months/{month}/fixed-items/copy/:
     post:
       operationId: salary_fixed_items_copy
@@ -1763,18 +2294,41 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error400Response'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '401':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '404':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Retry-After:
+              description: Whole seconds to wait before the request may be repeated;
+                at least 1.
+              schema:
+                type: integer
         '200':
           headers:
             Idempotent-Replayed:
@@ -1782,6 +2336,8 @@ paths:
                 type: string
               description: '`true` when this is the stored answer of an earlier request
                 with the same key.'
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
           content:
             application/json:
               schema:
@@ -1794,6 +2350,9 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
           description: The request conflicts with the current state; the `code` says
             what conflicts.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '422':
           content:
             application/json:
@@ -1801,6 +2360,9 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
           description: The `Idempotency-Key` was already used for a different request.
             The `code` is `idempotency_key_reused`.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
   /api/v1/settings/:
     get:
       operationId: settings_read
@@ -1820,12 +2382,32 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error400Response'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '401':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Retry-After:
+              description: Whole seconds to wait before the request may be repeated;
+                at least 1.
+              schema:
+                type: integer
         '200':
           headers:
             ETag:
@@ -1833,6 +2415,8 @@ paths:
                 type: string
               description: 'The `version` of the record in the answer, as a quoted
                 string: `"3"`.'
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
           content:
             application/json:
               schema:
@@ -1874,12 +2458,32 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error400Response'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
         '401':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Retry-After:
+              description: Whole seconds to wait before the request may be repeated;
+                at least 1.
+              schema:
+                type: integer
         '200':
           headers:
             ETag:
@@ -1887,6 +2491,8 @@ paths:
                 type: string
               description: 'The `version` of the record in the answer, as a quoted
                 string: `"3"`.'
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
           content:
             application/json:
               schema:
@@ -1900,6 +2506,9 @@ paths:
           description: 'The `If-Match` version is not the stored one, or `If-None-Match:
             *` found the record. Nothing was changed: reload the record. The `code`
             is `precondition_failed`.'
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
 components:
   schemas:
     AlgorithmEnum:
@@ -2387,14 +2996,14 @@ components:
             `password_unchanged`, `password_attempts_exceeded`, `reset_token_invalid`,
             `idempotency_key_required`, `idempotency_key_invalid`, `idempotency_key_reused`,
             `idempotency_in_progress`, `precondition_failed`, `fixed_item_limit_reached`,
-            `month_has_fixed_items`, `service_unavailable`, `invalid_amount`, `currency_mismatch`,
-            `exceeds_remaining`, `account_has_transactions`, `category_has_transactions`,
-            `category_is_builtin`. Codes raised by the framework for malformed or
-            incomplete input: `required`, `blank`, `null`, `invalid`, `max_length`,
-            `min_length`, `parse_error`, `authentication_failed`, `not_authenticated`,
-            `permission_denied`, `not_found`, `method_not_allowed`, `not_acceptable`,
-            `unsupported_media_type`, `read_only`. A client treats a code it does
-            not know as a generic failure of the status.'
+            `month_has_fixed_items`, `service_unavailable`, `invalid_characters`,
+            `request_too_large`, `invalid_amount`, `currency_mismatch`, `exceeds_remaining`,
+            `account_has_transactions`, `category_has_transactions`, `category_is_builtin`.
+            Codes raised by the framework for malformed or incomplete input: `required`,
+            `blank`, `null`, `invalid`, `max_length`, `min_length`, `parse_error`,
+            `authentication_failed`, `not_authenticated`, `permission_denied`, `not_found`,
+            `method_not_allowed`, `not_acceptable`, `unsupported_media_type`, `read_only`.
+            A client treats a code it does not know as a generic failure of the status.'
         detail:
           type: string
           description: Human-readable text; not for display.
@@ -3421,3 +4030,12 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
+  headers:
+    XRequestId:
+      description: 'The id of this request, on every response, errors included. A
+        client may send its own `X-Request-ID` (8 to 64 letters, digits and hyphens);
+        anything else is replaced. It holds no personal data: show it on a failure
+        screen so the request can be found in the server log.'
+      schema:
+        type: string
+        pattern: ^[A-Za-z0-9-]{8,64}$

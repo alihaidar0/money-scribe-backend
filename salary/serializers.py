@@ -12,6 +12,7 @@ from common.serializers import (
     CurrencyField,
     MoneySerializerMixin,
     SignedAmountField,
+    TextField,
     WholeNumberField,
     currency_mismatch,
 )
@@ -86,9 +87,7 @@ class SalaryMonthInputSerializer(MoneySerializerMixin, serializers.Serializer): 
 class FixedItemInputSerializer(MoneySerializerMixin, serializers.Serializer):  # type: ignore[misc]
     """A fixed item to add or to change. It has no currency of its own: the month's."""
 
-    name = serializers.CharField(
-        max_length=50, help_text="1 to 50 characters, trimmed."
-    )
+    name = TextField(max_length=50, help_text="1 to 50 characters, trimmed.")
     amount = AmountField(allow_zero=False)
     kind = serializers.ChoiceField(choices=ItemKind.choices)
     part = serializers.ChoiceField(

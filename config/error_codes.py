@@ -67,6 +67,10 @@ class ErrorCode(StrEnum):
     # The server cannot do its job safely right now
     SERVICE_UNAVAILABLE = "service_unavailable"
 
+    # Input hygiene (ADR 0021)
+    INVALID_CHARACTERS = "invalid_characters"
+    REQUEST_TOO_LARGE = "request_too_large"
+
     # Money and data rules
     INVALID_AMOUNT = "invalid_amount"
     CURRENCY_MISMATCH = "currency_mismatch"

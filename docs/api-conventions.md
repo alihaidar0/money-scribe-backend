@@ -97,6 +97,50 @@ user action and reused only to repeat that action: the same key and request retu
 a read-only integer `version`, also sent as the `ETag`; an edit or delete should send `If-Match: "<version>"`, and a stale one
 is `412 precondition_failed` with nothing changed. Without `If-Match`, the last write wins.
 
+## Every response
+
+([ADR 0021](adr/0021-api-hardening-baseline.md).)
+
+- **`X-Request-ID`** is on every response under `/api/v1/`, errors included, and in every log line of the request. A client
+  may send its own (8 to 64 letters, digits and hyphens); anything else is replaced, never refused. It holds no personal
+  data: an app shows it on a failure screen, and the request is found by it. The header is documented on every response of
+  the schema.
+- **`Cache-Control: no-store`** is on every response under `/api/v1/` (success, errors, `429`, `503`), and
+  `X-Content-Type-Options: nosniff` on every response. A browser reads `X-Request-ID` and `Retry-After` because the API
+  exposes them.
+- **A request body is at most 256 KB**; a larger one is `400 request_too_large` (`attr` `null`). The CSV import has its own
+  larger limit (1 MB). The check is on `Content-Length`, before anything reads the body.
+
+## Text
+
+Every field a person types (a name, a note) is trimmed, normalized to Unicode NFC, and its length is counted in code points
+after that. A control character (newline and tab included), a line or paragraph separator, an unpaired surrogate or a
+bidirectional override, embedding or isolate character (U+202A to U+202E, U+2066 to U+2069) is `400 invalid_characters` on
+the field. The direction marks (U+200E, U+200F, U+061C) and the joiners (U+200C, U+200D) are allowed, because Arabic text
+needs them. The server never edits a value beyond trimming and NFC. A password (NFKC, no trimming), an email, a code, an
+enum and the device label are not text in this sense.
+
+## Rate limits
+
+Every signed-in call belongs to exactly one group and is counted only there, per user, so all the devices of one person
+share it. A call over its limit is `429` with the code `throttled` and `Retry-After` (whole seconds, at least 1).
+
+| Group | Limit | Calls |
+| --- | --- | --- |
+| `reads` | 300 per minute | any `GET`, `HEAD` or `OPTIONS` |
+| `writes` | 60 per minute | any `POST`, `PUT`, `PATCH` or `DELETE` |
+| `reports` | 60 per minute | the reports, the Overview and the day totals |
+| `search` | 30 per minute | a list asked with `search` (instead of `reads`) |
+| `export` | 5 per hour | the CSV export |
+| `import` | 120 calls per hour | the CSV import, dry runs included |
+| `session_actions` | 30 per hour | ending a session, ending all other sessions |
+
+The authentication calls keep their own limits by client address and account ([ADR 0006](adr/0006-authentication-tokens.md)),
+and a call without a signed-in user is not counted here. If the limit store is down, reads and writes keep working, ending
+one session keeps working, and the export, the import and "end all other sessions" answer `503 service_unavailable`
+with `Retry-After`. A view names its group with `throttle_classes` or `throttle_group` (`config/throttling.py`); the
+rates are in the settings.
+
 ## Timestamps
 
 UTC, ISO 8601, with an explicit offset: `2026-01-31T14:05:09Z`. Keep `USE_TZ = True`; a client

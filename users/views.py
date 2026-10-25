@@ -21,7 +21,7 @@ from config.authentication import PublicAuthentication
 from config.error_codes import ErrorCode
 
 from . import device_keys, services
-from .models import EndReason, Language, Session, User
+from .models import Language, Session, User
 from .network import client_ip
 from .serializers import (
     ChangePasswordSerializer,
@@ -79,6 +79,10 @@ class PublicAuthView(APIView):  # type: ignore[misc]
 
     authentication_classes: ClassVar[list[Any]] = [PublicAuthentication]
     permission_classes: ClassVar[list[Any]] = [AllowAny]
+    # No signed-in user to count: a public call has its own limits by client address, or none (a refresh, a
+    # sign-out), and the per-user groups of ADR 0021 do not apply. An empty list also keeps the schema from
+    # promising a 429 that cannot happen.
+    throttle_classes: ClassVar[list[Any]] = []
 
 
 def _device(data: dict[str, Any]) -> services.DeviceInfo:
@@ -337,7 +341,7 @@ class SignOutView(PublicAuthView):
                 if not refresh_token:
                     raise
             else:
-                services.end_session(session, EndReason.SIGNED_OUT)
+                services.sign_out(session)
                 return Response(status=status.HTTP_204_NO_CONTENT)
         if refresh_token:
             services.sign_out_with_refresh_token(refresh_token)
@@ -828,7 +832,9 @@ class DeviceKeyCurrentView(APIView):  # type: ignore[misc]
     )
     def delete(self, request: Request) -> Response:
         session: Session = request.auth
-        device_keys.remove_key(user=request.user, device_id=session.device_id)
+        device_keys.remove_key(
+            user=request.user, device_id=session.device_id, session=session
+        )
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
@@ -845,5 +851,6 @@ class DeviceKeyDetailView(APIView):  # type: ignore[misc]
         responses={204: None},
     )
     def delete(self, request: Request, device_id: uuid.UUID) -> Response:
-        device_keys.remove_key(user=request.user, device_id=device_id)
+        session: Session = request.auth
+        device_keys.remove_key(user=request.user, device_id=device_id, session=session)
         return Response(status=status.HTTP_204_NO_CONTENT)

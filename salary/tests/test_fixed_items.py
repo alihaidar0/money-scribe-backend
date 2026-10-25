@@ -535,3 +535,38 @@ def test_the_items_of_a_month_are_shown_in_the_order_they_were_added(
     names = [i["name"] for i in read_month(client, account[1]).json()["fixed_items"]]
 
     assert names == ["b", "a", "c"]
+
+
+# --- the text rules (ADR 0021) ----------------------------------------------------------------
+
+
+@pytest.mark.parametrize("name", ["Rent\nsecond line", "Rent\u202eevil", "Rent\x00"])
+def test_a_name_with_a_forbidden_character_is_refused_on_create_and_edit(
+    client: APIClient, account: tuple[User, str], month: str, name: str
+) -> None:
+    refused = add_item(
+        client,
+        account[1],
+        body={"name": name, "amount": "3000.00", "kind": "expense"},
+    )
+    created = add_item(client, account[1]).json()
+    edited = patch(client, account[1], created["id"], {"name": name})
+
+    for response in (refused, edited):
+        assert response.status_code == 400
+        error = first_error(response)
+        assert (error["code"], error["attr"]) == ("invalid_characters", "name")
+    assert FixedItem.objects.get(pk=created["id"]).name == "Rent"
+
+
+def test_an_arabic_name_with_marks_is_accepted_and_normalized(
+    client: APIClient, account: tuple[User, str], month: str
+) -> None:
+    response = add_item(
+        client,
+        account[1],
+        body={"name": "  إيجار\u200f شهري  ", "amount": "3000.00", "kind": "expense"},
+    )
+
+    assert response.status_code == 201
+    assert response.json()["name"] == "إيجار\u200f شهري"

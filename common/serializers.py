@@ -29,6 +29,7 @@ from .money import (
     InvalidAmount,
     Money,
 )
+from .text import has_forbidden_character, normalize_text
 
 
 def _invalid(message: str) -> ValidationError:
@@ -139,6 +140,27 @@ class MoneySerializerMixin(serializers.Serializer):  # type: ignore[misc]
         if errors:
             raise ValidationError(errors)
         return attrs
+
+
+class TextField(serializers.CharField):  # type: ignore[misc]
+    """A user-entered text value (a name, a note) under the rules of ADR 0021.
+
+    Only a string is accepted (a number is not turned into text). The value is trimmed and normalized to NFC, the
+    length limit counts code points after that, and a control character, a line separator or a bidirectional
+    override, embedding or isolate character is ``400 invalid_characters`` on the field.
+    """
+
+    default_error_messages: ClassVar[dict[str, str]] = {
+        ErrorCode.INVALID_CHARACTERS.value: "This field contains characters that are not allowed."
+    }
+
+    def to_internal_value(self, data: Any) -> str:
+        if not isinstance(data, str):
+            self.fail("invalid")
+        value = normalize_text(super().to_internal_value(data))
+        if has_forbidden_character(value):
+            self.fail(ErrorCode.INVALID_CHARACTERS.value)
+        return value
 
 
 class WholeNumberField(serializers.IntegerField):  # type: ignore[misc]
