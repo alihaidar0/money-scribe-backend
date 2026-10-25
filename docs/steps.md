@@ -451,8 +451,9 @@ when the owner confirms it, and a step that needs the app on staging waits for t
   `repaid`, `remaining` and `status` (no stored value), the `today` parameter of the reads, the filters `direction`,
   `status` and `search`, every repayment call answering the whole debt, and the row lock on the debt that keeps two
   devices from overpaying it
-- [ ] **10.8 reports**: month overview, category spend, month comparison, debts report and period report, with the `part`
-  filter (the day totals came with 10.6, in the new `reports` app)
+- [ ] **10.8 reports** (`feat/reports`, request issue #67): the Overview of a month and of each part, the month report (spending
+  by category), and the debts report, with the shared test vectors; the salary and the fixed items of the Overview come from
+  the same code as the salary month's balances (the day totals came with 10.6, in the new `reports` app)
 - [ ] **10.9 CSV export and import** of transactions, debts and salary months: the server builds the export; the import is
   a bulk call of rows the app has parsed (the server never parses an uploaded file), with skipped-row reporting and a
   lossless round trip

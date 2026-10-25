@@ -3202,6 +3202,114 @@ paths:
           headers:
             X-Request-ID:
               $ref: '#/components/headers/XRequestId'
+  /api/v1/overview/months/{month}/:
+    get:
+      operationId: overview_month
+      description: 'What came in, what went out and what is left in one `currency`,
+        for the whole month (`total`) and, for a month paid twice, for each part (`first_part`:
+        days 1 to 15, `second_part`: day 16 to the end; both `null` for a month paid
+        once). `balance` is `salary` + `recurring_income` + `income_transactions`
+        - `fixed_costs` - `purchases` + `debt_repayments_received` - `debt_repayments_made`.
+        The salary and the fixed items are those of the saved month and count only
+        when its currency is `currency`; otherwise those lines are 0 and `currencies`
+        lists the salary month''s currency. Transactions and repayments count by their
+        calendar `date`; creating a debt is not a movement, a repayment is. `has_data`
+        is true when the month has a saved salary month or any transaction or repayment,
+        in any currency. A month with nothing is `200` with every line `0.00`. Never
+        paginated or cached. An unsupported `currency` is `400` `invalid_choice`.'
+      summary: The Overview of a month
+      parameters:
+      - in: query
+        name: currency
+        schema:
+          enum:
+          - RUB
+          - USD
+          - EUR
+          - GBP
+          - TRY
+          - SAR
+          - AED
+          - EGP
+          - JPY
+          - KWD
+          type: string
+          minLength: 1
+        description: |-
+          The currency of every amount in the answer. Left out, it is the Settings default currency (`RUB` until set). Data in other currencies is not in the figures; `currencies` lists them.
+
+          * `RUB` - RUB
+          * `USD` - USD
+          * `EUR` - EUR
+          * `GBP` - GBP
+          * `TRY` - TRY
+          * `SAR` - SAR
+          * `AED` - AED
+          * `EGP` - EGP
+          * `JPY` - JPY
+          * `KWD` - KWD
+      - in: path
+        name: month
+        schema:
+          type: string
+        description: The month, `YYYY-MM`, from 2000-01 to 2099-12. Any other key
+          is not a route (a plain `404`).
+        required: true
+      tags:
+      - overview
+      security:
+      - bearerAuth: []
+      responses:
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error400Response'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Retry-After:
+              description: Whole seconds to wait before the request may be repeated;
+                at least 1.
+              schema:
+                type: integer
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Overview'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
   /api/v1/reports/day-totals/:
     get:
       operationId: report_day_totals
@@ -3317,6 +3425,178 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PaginatedDayTotalList'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+  /api/v1/reports/debts/:
+    get:
+      operationId: report_debts
+      description: '`by_currency` has one block per currency that has unsettled debts,
+        ordered by currency code: what the person is owed (`owed_to_you`, the `remaining`
+        of unsettled debts lent), what they owe (`you_owe`) and the unsettled debts
+        themselves, `overdue` (by `due_date`, the oldest first) and `open` (by `due_date`,
+        those with none last). Settled debts are not listed. `has_data` is true when
+        the person has any debt, settled or not. The `status` is counted in the person''s
+        own day; `today` replaces it. Never paginated (a person has at most 500 debts).'
+      summary: The debts report
+      parameters:
+      - in: query
+        name: today
+        schema:
+          type: string
+          format: date
+        description: A calendar day (`YYYY-MM-DD`) that replaces the person's current
+          day when the `status` is worked out. The app leaves it out.
+      tags:
+      - reports
+      security:
+      - bearerAuth: []
+      responses:
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error400Response'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Retry-After:
+              description: Whole seconds to wait before the request may be repeated;
+                at least 1.
+              schema:
+                type: integer
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DebtsReport'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+  /api/v1/reports/months/{month}/:
+    get:
+      operationId: report_month
+      description: 'Transactions only, in one `currency`: `income_transactions` is
+        the income transactions dated in the month (the salary and the recurring income
+        are not included; the Overview has them) and `purchases` is the expense transactions
+        (the fixed costs are not included). `categories` is the spending by category,
+        the biggest first, and adds up to `purchases`. A month paid twice also has
+        `first_part` (days 1 to 15) and `second_part` (day 16 to the end), cut by
+        each transaction''s own `date`; a month paid once has `null` for both. Whether
+        the month has parts follows the saved salary month, or the Settings payment
+        mode for a month never saved. A month with nothing is `200` with zero totals,
+        no categories and `has_data` false. Never paginated or cached. An unsupported
+        `currency` is `400` `invalid_choice`.'
+      summary: 'The month report: spending by category'
+      parameters:
+      - in: query
+        name: currency
+        schema:
+          enum:
+          - RUB
+          - USD
+          - EUR
+          - GBP
+          - TRY
+          - SAR
+          - AED
+          - EGP
+          - JPY
+          - KWD
+          type: string
+          minLength: 1
+        description: |-
+          The currency of every amount in the answer. Left out, it is the Settings default currency (`RUB` until set). Data in other currencies is not in the figures; `currencies` lists them.
+
+          * `RUB` - RUB
+          * `USD` - USD
+          * `EUR` - EUR
+          * `GBP` - GBP
+          * `TRY` - TRY
+          * `SAR` - SAR
+          * `AED` - AED
+          * `EGP` - EGP
+          * `JPY` - JPY
+          * `KWD` - KWD
+      - in: path
+        name: month
+        schema:
+          type: string
+        description: The month, `YYYY-MM`, from 2000-01 to 2099-12. Any other key
+          is not a route (a plain `404`).
+        required: true
+      tags:
+      - reports
+      security:
+      - bearerAuth: []
+      responses:
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error400Response'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Retry-After:
+              description: Whole seconds to wait before the request may be repeated;
+                at least 1.
+              schema:
+                type: integer
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MonthReport'
           description: ''
           headers:
             X-Request-ID:
@@ -4988,6 +5268,38 @@ components:
         * `expense` - Expense
         * `income` - Income
         * `both` - Both
+    CategorySpend:
+      type: object
+      properties:
+        category_id:
+          type: string
+          format: uuid
+          readOnly: true
+        category_key:
+          type: string
+          readOnly: true
+          nullable: true
+          description: The stable key of a built-in category; `null` for a custom
+            one.
+        name:
+          type: string
+          readOnly: true
+          description: A custom category's own name; for a built-in one the English
+            fallback of its `key`.
+        icon:
+          type: string
+          readOnly: true
+        amount:
+          allOf:
+          - $ref: '#/components/schemas/Amount'
+          readOnly: true
+          description: Expense transactions of the category in the period.
+      required:
+      - amount
+      - category_id
+      - category_key
+      - icon
+      - name
     ChangePasswordRequest:
       type: object
       properties:
@@ -5034,6 +5346,54 @@ components:
           description: 'The month to copy the items from, `YYYY-MM`. Default: the
             most recent saved month before this one.'
           pattern: ^20[0-9]{2}-(0[1-9]|1[0-2])$
+    CurrencyDebts:
+      type: object
+      properties:
+        currency:
+          allOf:
+          - $ref: '#/components/schemas/CurrencyEnum'
+          readOnly: true
+          description: |-
+            The ISO 4217 code of the currency.
+
+            * `RUB` - RUB
+            * `USD` - USD
+            * `EUR` - EUR
+            * `GBP` - GBP
+            * `TRY` - TRY
+            * `SAR` - SAR
+            * `AED` - AED
+            * `EGP` - EGP
+            * `JPY` - JPY
+            * `KWD` - KWD
+        owed_to_you:
+          allOf:
+          - $ref: '#/components/schemas/Amount'
+          readOnly: true
+          description: The `remaining` of the unsettled debts the person lent.
+        you_owe:
+          allOf:
+          - $ref: '#/components/schemas/Amount'
+          readOnly: true
+          description: The `remaining` of the unsettled debts the person borrowed.
+        overdue:
+          type: array
+          items:
+            $ref: '#/components/schemas/DebtLine'
+          readOnly: true
+          description: By `due_date`, the oldest first; ties by `id`.
+        open:
+          type: array
+          items:
+            $ref: '#/components/schemas/DebtLine'
+          readOnly: true
+          description: By `due_date`, the debts with none last; ties by `id`.
+      required:
+      - currency
+      - open
+      - overdue
+      - owed_to_you
+      - you_owe
     CurrencyEnum:
       enum:
       - RUB
@@ -5278,6 +5638,42 @@ components:
       description: |-
         * `lent` - Lent
         * `borrowed` - Borrowed
+    DebtLine:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        person:
+          type: string
+          readOnly: true
+        direction:
+          allOf:
+          - $ref: '#/components/schemas/DebtDirectionEnum'
+          readOnly: true
+        remaining:
+          allOf:
+          - $ref: '#/components/schemas/Amount'
+          readOnly: true
+          description: A decimal string with exactly the number of digits of the currency,
+            such as `12.50`.
+        status:
+          allOf:
+          - $ref: '#/components/schemas/DebtStatusEnum'
+          readOnly: true
+        due_date:
+          type: string
+          format: date
+          readOnly: true
+          nullable: true
+      required:
+      - direction
+      - due_date
+      - id
+      - person
+      - remaining
+      - status
     DebtStatusEnum:
       enum:
       - open
@@ -5288,6 +5684,24 @@ components:
         * `open` - Open
         * `overdue` - Overdue
         * `settled` - Settled
+    DebtsReport:
+      type: object
+      properties:
+        has_data:
+          type: boolean
+          readOnly: true
+          description: 'True when the person has any debt, settled or not: it tells
+            "no debts at all" from "all settled".'
+        by_currency:
+          type: array
+          items:
+            $ref: '#/components/schemas/CurrencyDebts'
+          readOnly: true
+          description: One block per currency that has unsettled debts, ordered by
+            currency code.
+      required:
+      - by_currency
+      - has_data
     Defaults:
       type: object
       description: The inputs that pre-fill the form of a month that is not saved
@@ -5893,6 +6307,232 @@ components:
       description: |-
         * `en` - English
         * `ar` - Arabic
+    MonthReport:
+      type: object
+      description: 'The fields every month report has: the month, the currency, and
+        what the month holds in any currency.'
+      properties:
+        month:
+          type: string
+          readOnly: true
+          description: '`YYYY-MM`.'
+        currency:
+          allOf:
+          - $ref: '#/components/schemas/CurrencyEnum'
+          readOnly: true
+          description: |-
+            The currency of every amount.
+
+            * `RUB` - RUB
+            * `USD` - USD
+            * `EUR` - EUR
+            * `GBP` - GBP
+            * `TRY` - TRY
+            * `SAR` - SAR
+            * `AED` - AED
+            * `EGP` - EGP
+            * `JPY` - JPY
+            * `KWD` - KWD
+        has_data:
+          type: boolean
+          readOnly: true
+        currencies:
+          type: array
+          items:
+            allOf:
+            - $ref: '#/components/schemas/CurrencyEnum'
+            description: |-
+              The ISO 4217 code of the currency.
+
+              * `RUB` - RUB
+              * `USD` - USD
+              * `EUR` - EUR
+              * `GBP` - GBP
+              * `TRY` - TRY
+              * `SAR` - SAR
+              * `AED` - AED
+              * `EGP` - EGP
+              * `JPY` - JPY
+              * `KWD` - KWD
+          readOnly: true
+          description: Every currency that has something in the month, ordered by
+            code; the amounts are in `currency` only.
+        income_transactions:
+          allOf:
+          - $ref: '#/components/schemas/Amount'
+          readOnly: true
+          description: Income transactions dated in the period. The salary and the
+            recurring income are not included.
+        purchases:
+          allOf:
+          - $ref: '#/components/schemas/Amount'
+          readOnly: true
+          description: Expense transactions dated in the period. The fixed costs are
+            not included.
+        categories:
+          type: array
+          items:
+            $ref: '#/components/schemas/CategorySpend'
+          readOnly: true
+          description: The spending by category (expense transactions only), the biggest
+            `amount` first, ties by `category_id`; the amounts add up to `purchases`.
+        first_part:
+          allOf:
+          - $ref: '#/components/schemas/ReportSlice'
+          readOnly: true
+          nullable: true
+          description: Days 1 to 15; `null` for a month paid once.
+        second_part:
+          allOf:
+          - $ref: '#/components/schemas/ReportSlice'
+          readOnly: true
+          nullable: true
+          description: Day 16 to the end of the month; `null` for a month paid once.
+      required:
+      - categories
+      - currencies
+      - currency
+      - first_part
+      - has_data
+      - income_transactions
+      - month
+      - purchases
+      - second_part
+    Overview:
+      type: object
+      description: 'The fields every month report has: the month, the currency, and
+        what the month holds in any currency.'
+      properties:
+        month:
+          type: string
+          readOnly: true
+          description: '`YYYY-MM`.'
+        currency:
+          allOf:
+          - $ref: '#/components/schemas/CurrencyEnum'
+          readOnly: true
+          description: |-
+            The currency of every amount.
+
+            * `RUB` - RUB
+            * `USD` - USD
+            * `EUR` - EUR
+            * `GBP` - GBP
+            * `TRY` - TRY
+            * `SAR` - SAR
+            * `AED` - AED
+            * `EGP` - EGP
+            * `JPY` - JPY
+            * `KWD` - KWD
+        has_data:
+          type: boolean
+          readOnly: true
+        currencies:
+          type: array
+          items:
+            allOf:
+            - $ref: '#/components/schemas/CurrencyEnum'
+            description: |-
+              The ISO 4217 code of the currency.
+
+              * `RUB` - RUB
+              * `USD` - USD
+              * `EUR` - EUR
+              * `GBP` - GBP
+              * `TRY` - TRY
+              * `SAR` - SAR
+              * `AED` - AED
+              * `EGP` - EGP
+              * `JPY` - JPY
+              * `KWD` - KWD
+          readOnly: true
+          description: Every currency that has something in the month, ordered by
+            code; the amounts are in `currency` only.
+        total:
+          allOf:
+          - $ref: '#/components/schemas/OverviewBlock'
+          readOnly: true
+          description: The whole month.
+        first_part:
+          allOf:
+          - $ref: '#/components/schemas/OverviewBlock'
+          readOnly: true
+          nullable: true
+          description: Days 1 to 15; `null` for a month paid once.
+        second_part:
+          allOf:
+          - $ref: '#/components/schemas/OverviewBlock'
+          readOnly: true
+          nullable: true
+          description: Day 16 to the end of the month; `null` for a month paid once.
+      required:
+      - currencies
+      - currency
+      - first_part
+      - has_data
+      - month
+      - second_part
+      - total
+    OverviewBlock:
+      type: object
+      description: The figures of the whole month or of one part, all positive except
+        the `balance`.
+      properties:
+        salary:
+          allOf:
+          - $ref: '#/components/schemas/Amount'
+          readOnly: true
+          description: The saved month's total after tax, or the payment of this part;
+            0 if the month was not saved in this currency.
+        recurring_income:
+          allOf:
+          - $ref: '#/components/schemas/Amount'
+          readOnly: true
+          description: The saved month's fixed income of this part (all of it with
+            one payment).
+        fixed_costs:
+          allOf:
+          - $ref: '#/components/schemas/Amount'
+          readOnly: true
+          description: The saved month's fixed expenses of this part (all of them
+            with one payment).
+        income_transactions:
+          allOf:
+          - $ref: '#/components/schemas/Amount'
+          readOnly: true
+          description: Income transactions dated in the period. The salary and the
+            recurring income are not included.
+        purchases:
+          allOf:
+          - $ref: '#/components/schemas/Amount'
+          readOnly: true
+          description: Expense transactions dated in the period. The fixed costs are
+            not included.
+        debt_repayments_received:
+          allOf:
+          - $ref: '#/components/schemas/Amount'
+          readOnly: true
+          description: Repayments dated in the period on debts the person lent.
+        debt_repayments_made:
+          allOf:
+          - $ref: '#/components/schemas/Amount'
+          readOnly: true
+          description: Repayments dated in the period on debts the person borrowed.
+        balance:
+          allOf:
+          - $ref: '#/components/schemas/SignedAmount'
+          readOnly: true
+          description: '`salary` + `recurring_income` + `income_transactions` - `fixed_costs`
+            - `purchases` + `debt_repayments_received` - `debt_repayments_made`.'
+      required:
+      - balance
+      - debt_repayments_made
+      - debt_repayments_received
+      - fixed_costs
+      - income_transactions
+      - purchases
+      - recurring_income
+      - salary
     PaginatedAccountList:
       type: object
       required:
@@ -6523,6 +7163,32 @@ components:
       required:
       - amount
       - date
+    ReportSlice:
+      type: object
+      properties:
+        income_transactions:
+          allOf:
+          - $ref: '#/components/schemas/Amount'
+          readOnly: true
+          description: Income transactions dated in the period. The salary and the
+            recurring income are not included.
+        purchases:
+          allOf:
+          - $ref: '#/components/schemas/Amount'
+          readOnly: true
+          description: Expense transactions dated in the period. The fixed costs are
+            not included.
+        categories:
+          type: array
+          items:
+            $ref: '#/components/schemas/CategorySpend'
+          readOnly: true
+          description: The spending by category (expense transactions only), the biggest
+            `amount` first, ties by `category_id`; the amounts add up to `purchases`.
+      required:
+      - categories
+      - income_transactions
+      - purchases
     ResendCodeRequest:
       type: object
       properties:
