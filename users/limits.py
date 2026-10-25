@@ -70,12 +70,13 @@ def _seconds_until(moment: float, now: datetime) -> int:
     return max(1, math.ceil(moment - now.timestamp()))
 
 
-@fail_closed
-def hit(key: str, window: int, now: datetime | None = None) -> tuple[int, int]:
+def count_hit(key: str, window: int, now: datetime | None = None) -> tuple[int, int]:
     """Count one request in a fixed window; returns the count so far and the seconds until the window ends.
 
     The counter and the window's start are separate keys. If the store still holds a counter that the
-    clock says is over (or lost its start), the window begins again at one.
+    clock says is over (or lost its start), the window begins again at one. A failure of the store is a
+    ``RedisError``: :func:`hit` turns it into ``503``, and the per-user limits that fail open (ADR 0021)
+    call this one and let the request through.
     """
     now = now or timezone.now()
     count = _increment(key, window)
@@ -85,6 +86,9 @@ def hit(key: str, window: int, now: datetime | None = None) -> tuple[int, int]:
         cache.set(f"{key}:start", now.timestamp(), timeout=window)
         count, started = 1, now.timestamp()
     return count, _seconds_until(started + window, now)
+
+
+hit = fail_closed(count_hit)
 
 
 # --- the sign-in lock -------------------------------------------------------------------------

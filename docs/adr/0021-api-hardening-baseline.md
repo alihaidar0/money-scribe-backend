@@ -47,7 +47,8 @@ This record closes them before the first ledger endpoint, so the later issues on
 One shared field and validator in `common` for every user-entered text field (names, notes, a person's name):
 
 - trim, then normalize to Unicode NFC, then count the length in code points;
-- reject control characters, including newline and tab;
+- reject control characters, including newline and tab, the line and paragraph separators (U+2028 and U+2029) and
+  unpaired surrogates (a JSON escape can produce one and no database can store it);
 - reject the bidirectional override, embedding and isolate characters (U+202A to U+202E and U+2066 to U+2069), which can
   make text display as something it is not;
 - keep the direction marks (U+200E, U+200F, U+061C) and the joiners (U+200C, U+200D), because Arabic text needs them;
@@ -88,8 +89,11 @@ in the search group, not also in the reads. A call over its limit is `429` with 
 - A request body over **256 KB** is `400 request_too_large` (`attr` `null`), checked with and without a
   `Content-Length`. The CSV import has its own larger limit of **1 MB**, set with that endpoint: 500 rows of text can
   reach about 0.6 KB each in the worst case, which is about 300 KB.
-- Django's body size setting may not cover the stream that DRF's parsers read. That is **not verified**; the
-  implementation checks the header, bounds the read of a body that has none, and a test sends both.
+- The check is on `Content-Length`, before anything reads the body. Django's own body size setting is not relied on,
+  because DRF's parsers read the request stream, not `request.body`. A request without a `Content-Length` reaches
+  Django with no body at all under a WSGI server (the stream is limited to the declared length), so it cannot grow past
+  the limit unseen; a test sends both cases (verified on 2026-10-25 with Django's test client; a different server
+  would need the same check again).
 
 ### Not chosen: encryption of free-text fields in the application
 

@@ -98,13 +98,12 @@ Initial registry:
 | `precondition_failed` | 412 | the `If-Match` version is not the stored one, or `If-None-Match: *` found the record; reload it |
 | `fixed_item_limit_reached` | 409 | a salary month already has 100 fixed items |
 | `month_has_fixed_items` | 409 | changing the currency of a salary month that still has fixed items ([ADR 0007](0007-salary-calculation-on-the-server.md)) |
+| `invalid_characters` | 400 | a text value has a control character, a line separator, an unpaired surrogate or a bidirectional override, embedding or isolate character; `attr` is the field ([ADR 0021](0021-api-hardening-baseline.md)) |
+| `request_too_large` | 400 | the request body is over the size limit; `attr` is `null` ([ADR 0021](0021-api-hardening-baseline.md)) |
 
 **Decided, not yet implemented.** Agreed with the Flutter developer on 2026-10-25. Each moves into the table above, with its
 `ErrorCode` member, in the pull request that implements it; the issue of each endpoint can still refine the details.
 
-- `invalid_characters` (400): a text value has a control character or a bidirectional override, embedding or isolate
-  character; `attr` is the field ([ADR 0021](0021-api-hardening-baseline.md)).
-- `request_too_large` (400): the request body is over the size limit; `attr` is `null` ([ADR 0021](0021-api-hardening-baseline.md)).
 - `name_taken` (400): the name is already used, case-insensitively after trimming, by another account or another custom
   category of the same user; `attr` is `name`.
 - `does_not_exist` (400): DRF's own code, used as it is. An id in a body field (`category_id`, `account_id`) is unknown or

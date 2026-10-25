@@ -30,8 +30,15 @@ from rest_framework.exceptions import ErrorDetail, ValidationError
 from config.error_codes import ErrorCode
 from config.exceptions import conflict
 
-from . import attestation, emails, limits, services
-from .models import DeviceKey, Platform, Session, User
+from . import attestation, emails, events, limits, services
+from .models import (
+    DeviceKey,
+    Platform,
+    SecurityEventType,
+    Session,
+    SignInMethod,
+    User,
+)
 from .network import rate_limit_key
 
 logger = logging.getLogger(__name__)
@@ -276,6 +283,9 @@ def register_key(
         key.last_used_at = None
         key.expires_at = now + timedelta(days=settings.DEVICE_KEY_LIFETIME_DAYS)
         key.save()
+        events.record_key_event(
+            user, SecurityEventType.DEVICE_KEY_ADDED, key, acting=session, now=now
+        )
     emails.send_device_key_added_notice(
         email=user.email, language=user.language, device_name=key.device_name
     )
@@ -347,7 +357,9 @@ def sign_in(
             key.save(update_fields=["last_used_at", "expires_at"])
             limits.clear_device_sign_in_failures(device.device_id)
             services.remember_client(key.user, language, time_zone)
-            return services.start_session(key.user, device, client, now)
+            return services.start_session(
+                key.user, device, client, now, method=SignInMethod.DEVICE_KEY
+            )
     limits.record_device_sign_in_failure(device.device_id, client_ip, now)
     raise services.auth_failure(
         ErrorCode.DEVICE_SIGN_IN_FAILED, "The sign-in with the fingerprint failed."
@@ -362,6 +374,22 @@ def keys_of(user: User) -> QuerySet[DeviceKey]:
     return DeviceKey.objects.filter(user=user).order_by("-created_at", "-id")
 
 
-def remove_key(*, user: User, device_id: uuid.UUID) -> None:
-    """Delete the person's key of a device. Nothing there, or a key that is not theirs, is not an error."""
-    DeviceKey.objects.filter(user=user, device_id=device_id).delete()
+def remove_key(
+    *, user: User, device_id: uuid.UUID, session: Session | None = None
+) -> None:
+    """Delete the person's key of a device and record it. Nothing there, or a key that is not theirs, is not an error.
+
+    ``session`` is the session that asked, so the event can name it (ADR 0022).
+    """
+    with transaction.atomic():
+        key = (
+            DeviceKey.objects.select_for_update()
+            .filter(user=user, device_id=device_id)
+            .first()
+        )
+        if key is None:
+            return
+        events.record_key_event(
+            user, SecurityEventType.DEVICE_KEY_REMOVED, key, acting=session
+        )
+        key.delete()

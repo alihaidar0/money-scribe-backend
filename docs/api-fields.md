@@ -11,7 +11,9 @@ Common rules:
 - A calendar day is `YYYY-MM-DD` with no time zone and no instant. This holds for a transaction `date`, a debt's start and
   due dates and a repayment's `date`; pay periods split at day 15, and a time zone shift would move an entry into the wrong
   half.
-- Ids are UUID strings ([ADR 0005](adr/0005-apps-and-model-conventions.md)). Text is trimmed before it is validated.
+- Ids are UUID strings ([ADR 0005](adr/0005-apps-and-model-conventions.md)). Text follows the
+  [text rules](api-conventions.md#text): trimmed, NFC, and `400 invalid_characters` for a character that has no place in a name
+  or a note.
 - A rule that fails answers `400` with the codes of [ADR 0004](adr/0004-error-status-codes.md).
 - Every record has `id`, `created_at`, `updated_at` and, when it can be edited, a read-only `version`
   ([ADR 0016](adr/0016-safe-writes.md)). Every `POST` that creates a record needs an `Idempotency-Key` header, and an

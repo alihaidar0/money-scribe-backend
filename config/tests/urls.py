@@ -16,6 +16,12 @@ from config.api import OwnerScopedMixin
 from config.api_errors import CONFLICT_RESPONSE
 from config.error_codes import ErrorCode
 from config.exceptions import conflict, throttled
+from config.throttling import (
+    ExportThrottle,
+    ReportsThrottle,
+    SessionActionThrottle,
+    SessionBulkActionThrottle,
+)
 from users.models import User
 
 Ok = inline_serializer("Ok", {"ok": serializers.BooleanField()})
@@ -64,6 +70,60 @@ class InvalidView(APIView):  # type: ignore[misc]
         raise ValidationError({"name": ["This field is required."]})
 
 
+class SearchableView(APIView):  # type: ignore[misc]
+    """A list that takes ``search``: the default throttle puts such a call in the search group."""
+
+    @extend_schema(responses={200: Ok})
+    def get(self, request: Request) -> Response:
+        return Response({"ok": True})
+
+    @extend_schema(request=None, responses={200: Ok})
+    def post(self, request: Request) -> Response:
+        return Response({"ok": True})
+
+
+class ReportView(APIView):  # type: ignore[misc]
+    throttle_classes: ClassVar[list[Any]] = [ReportsThrottle]
+
+    @extend_schema(responses={200: Ok})
+    def get(self, request: Request) -> Response:
+        return Response({"ok": True})
+
+
+class ExportView(APIView):  # type: ignore[misc]
+    throttle_classes: ClassVar[list[Any]] = [ExportThrottle]
+
+    @extend_schema(request=None, responses={200: Ok})
+    def post(self, request: Request) -> Response:
+        return Response({"ok": True})
+
+
+class EndOneView(APIView):  # type: ignore[misc]
+    throttle_classes: ClassVar[list[Any]] = [SessionActionThrottle]
+
+    @extend_schema(responses={204: None})
+    def delete(self, request: Request) -> Response:
+        return Response(status=204)
+
+
+class EndAllView(APIView):  # type: ignore[misc]
+    throttle_classes: ClassVar[list[Any]] = [SessionBulkActionThrottle]
+
+    @extend_schema(request=None, responses={200: Ok})
+    def post(self, request: Request) -> Response:
+        return Response({"ok": True})
+
+
+class NamedGroupView(APIView):  # type: ignore[misc]
+    """A view that names its group with ``throttle_group`` and keeps the default throttle class."""
+
+    throttle_group = "reports"
+
+    @extend_schema(responses={200: Ok})
+    def get(self, request: Request) -> Response:
+        return Response({"ok": True})
+
+
 class UserSerializer(serializers.ModelSerializer):  # type: ignore[misc]
     class Meta:
         model = User
@@ -87,6 +147,12 @@ api_patterns: list[URLPattern | URLResolver] = [
     path("conflict/", ConflictView.as_view()),
     path("locked/", LockedView.as_view()),
     path("invalid/", InvalidView.as_view()),
+    path("searchable/", SearchableView.as_view()),
+    path("report/", ReportView.as_view()),
+    path("export/", ExportView.as_view()),
+    path("end-one/", EndOneView.as_view()),
+    path("end-all/", EndAllView.as_view()),
+    path("named-group/", NamedGroupView.as_view()),
     path("users/<uuid:pk>/", OwnUserView.as_view()),
 ]
 

@@ -7,6 +7,8 @@ from django.conf import settings
 from rest_framework import serializers
 from rest_framework.exceptions import ErrorDetail
 
+from common.serializers import TextField
+
 from .models import DeviceKey, Language, Platform, User
 from .validators import normalize_password, password_errors
 
@@ -65,7 +67,7 @@ class PasswordField(serializers.CharField):  # type: ignore[misc]
 
 
 class RegisterSerializer(ClientSettingsMixin):
-    name = serializers.CharField(max_length=100)
+    name = TextField(max_length=100)
     email = serializers.EmailField(max_length=254)
     password = PasswordField(
         help_text="At least 15 characters; no other composition rule. It must not resemble the name or "
@@ -148,7 +150,7 @@ class ChangePasswordSerializer(serializers.Serializer):  # type: ignore[misc]
 class ProfileUpdateSerializer(serializers.Serializer):  # type: ignore[misc]
     """Only the name can be edited here; any other field is refused instead of silently ignored."""
 
-    name = serializers.CharField(
+    name = TextField(
         max_length=100,
         help_text="The display name, 1 to 100 characters, trimmed.",
     )
