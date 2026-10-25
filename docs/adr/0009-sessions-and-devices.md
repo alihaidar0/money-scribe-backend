@@ -2,6 +2,7 @@
 
 - Status: accepted
 - Date: 2026-10-15
+- Amended: 2026-10-25, the privacy list gains the security events of [ADR 0022](0022-security-events.md).
 
 ## Context
 
@@ -72,6 +73,7 @@ These emails are throttled.
 | sign-in, last-active and end times and the end reason | show the user their sessions | same |
 | the Firebase installation ID (FID) of the device (once the `notifications` feature exists) | send push notifications to the device | until the session ends or expires, at most 90 days; deleted at once when Firebase reports it invalid, and with the account |
 | the public key of the device's sign-in key, its `device_id`, device name, platform, whether it was attested, and its times ([ADR 0018](0018-sign-in-with-a-device-key.md)) | let the person sign in with a fingerprint after a sign-out | until the key is removed, at most 30 days after its last use; deleted when the password or email changes, and with the account |
+| the type and time of an account security action, the device name, platform and app version of its session, how the person signed in, and for a CSV export or import which data and how many rows ([ADR 0022](0022-security-events.md)) | show the person their security activity | 90 days, and deleted with the account |
 | the first five characters of the SHA-1 hash of a new password | the server asks the Pwned Passwords breach service whether the password is known (k-anonymity: the password, the full hash and the user are never sent) | not stored; sent at registration and at later password changes |
 
 Not collected: GPS or any device location, advertising ids, hardware ids, contacts. This data is for account security
