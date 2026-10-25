@@ -433,6 +433,13 @@ when the owner confirms it, and a step that needs the app on staging waits for t
 - [ ] **10.5 preferences**: default currency, default payment mode, pay days and `remind_on_pay_days`; `time_zone` and
   `language` are stored since 8.2 and become changeable here through the same settings `PATCH` (the profile update
   accepts only `name`), so a language change in the app reaches the notifications without a new sign-in
+- [ ] **10.5a `feat/api-hardening`** (before the ledger, decided 2026-10-25 with the Flutter developer): the request id
+  (`X-Request-ID`), `Cache-Control: no-store` on every `/api/v1/` response, the shared text rules (`invalid_characters`),
+  per-user rate limits by route group, and the request size cap ([ADR 0021](adr/0021-api-hardening-baseline.md)); the
+  security event record, written by one service in the same transaction as each action
+  ([ADR 0022](adr/0022-security-events.md)). No new endpoint; the read of the events comes with the sessions step (8.4).
+  The shapes agreed on 2026-10-25 for 10.6 to 10.9 and 8.4 are in their request issues, and the lines of those steps are
+  brought in line in the pull request of each
 - [ ] **10.6 ledger**: accounts (delete refused with `409` when transactions exist; reorder); categories (the built-in
   rows with their keys, read-only; custom ones, reorder; deleting a custom one moves its transactions to `other`, ADR
   0017); transactions (the category must allow the kind; ordered `-date`, `-created_at`, `-id` with the filters,
@@ -465,7 +472,9 @@ when the owner confirms it, and a step that needs the app on staging waits for t
   already ([ADR 0006](adr/0006-authentication-tokens.md): sign-in, registration, code resend and verification, per
   account and per client address, counters in Redis, `429` with `Retry-After`). Before production, give every other
   operation default limits too: per signed-in user, and per client address for requests without a token; stricter ones
-  for the costly operations (reports, CSV export and import, from stage 3). The numbers and the reasons go into an ADR;
+  for the costly operations (reports, CSV export and import, from stage 3). The numbers and the reasons go into an ADR
+  (the per-user limits of the signed-in routes are in [ADR 0021](adr/0021-api-hardening-baseline.md); the limits by
+  client address for requests without a token and the proxy count stay open here);
   each limit is documented as a `429` in the schema and tested; `NUM_PROXIES` is the proxy count measured on staging and
   re-checked for the production topology, because a wrong count either shares one address between all clients or lets a
   client choose its own

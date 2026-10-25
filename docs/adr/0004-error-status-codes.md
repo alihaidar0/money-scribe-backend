@@ -99,6 +99,28 @@ Initial registry:
 | `fixed_item_limit_reached` | 409 | a salary month already has 100 fixed items |
 | `month_has_fixed_items` | 409 | changing the currency of a salary month that still has fixed items ([ADR 0007](0007-salary-calculation-on-the-server.md)) |
 
+**Decided, not yet implemented.** Agreed with the Flutter developer on 2026-10-25. Each moves into the table above, with its
+`ErrorCode` member, in the pull request that implements it; the issue of each endpoint can still refine the details.
+
+- `invalid_characters` (400): a text value has a control character or a bidirectional override, embedding or isolate
+  character; `attr` is the field ([ADR 0021](0021-api-hardening-baseline.md)).
+- `request_too_large` (400): the request body is over the size limit; `attr` is `null` ([ADR 0021](0021-api-hardening-baseline.md)).
+- `name_taken` (400): the name is already used, case-insensitively after trimming, by another account or another custom
+  category of the same user; `attr` is `name`.
+- `does_not_exist` (400): DRF's own code, used as it is. An id in a body field (`category_id`, `account_id`) is unknown or
+  belongs to another user, with the same answer for both; `attr` is the field. An id in the URL is `404`.
+- `category_not_allowed` (400): the category does not allow the kind of the transaction; `attr` is `category_id`.
+- `amount_below_repaid` (400): lowering a debt below what was repaid; `attr` is `amount`.
+- `due_before_start` (400): a due date before the start date; `attr` is `due_date`.
+- `repayment_before_start` (400): a repayment dated before the debt starts; `attr` is `date`.
+- `start_after_repayment` (400): moving a debt's start date past an existing repayment; `attr` is `start_date`.
+- `account_limit_reached`, `category_limit_reached`, `transaction_limit_reached`, `debt_limit_reached` and
+  `repayment_limit_reached` (409): the user has 20 accounts, 50 custom categories, 100 000 transactions, 500 debts, or the
+  debt has 200 repayments. Built-in categories do not count.
+- `session_limit_reached` (401): the session was ended because the account reached its limit of 10 active sessions.
+- A new optional member `remaining` (an amount string in the debt's currency) on `exceeds_remaining`, so the app can show
+  what is left.
+
 **Extra members.** An error item is `{code, detail, attr}`. Three optional integer members exist, each sent with one code
 only and documented in the shared error schema: `attempts_left` on `code_invalid` (the wrong tries the 6-digit code still
 allows), `min_length` on `password_too_short` and `max_length` on `password_too_long` (the limits the server enforces,
