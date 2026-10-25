@@ -11,16 +11,10 @@ from operator import or_
 from typing import Any, ClassVar
 
 from django.db.models import (
-    BigIntegerField,
     F,
-    OuterRef,
     Q,
     QuerySet,
-    Subquery,
-    Sum,
-    Value,
 )
-from django.db.models.functions import Coalesce
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 from rest_framework.request import Request
@@ -28,7 +22,8 @@ from rest_framework.request import Request
 from common.days import day_in_range
 from common.serializers import TextField
 
-from .models import Debt, Direction, Repayment, Status
+from .models import Debt, Direction, Status
+from .queries import with_repaid
 
 SEARCH_MIN = 2
 SEARCH_MAX = 50
@@ -87,7 +82,9 @@ class DebtFilterSerializer(TodaySerializer):
     )
 
 
-def parse(serializer_class: type[TodaySerializer], request: Request) -> dict[str, Any]:
+def parse(
+    serializer_class: type[serializers.Serializer[Any]], request: Request
+) -> dict[str, Any]:
     """The validated parameters of a request (``400`` on the parameter that is wrong)."""
     data: dict[str, Any] = {}
     for name, field in serializer_class().fields.items():
@@ -114,19 +111,7 @@ def apply(
             person__icontains=filters["search"]
         )  # Django escapes % and _
     if "status" in filters:
-        repaid = (
-            Repayment.objects.filter(debt=OuterRef("pk"))
-            .values("debt")
-            .annotate(total=Sum("amount"))
-            .values("total")
-        )
-        queryset = queryset.annotate(
-            repaid_total=Coalesce(
-                Subquery(repaid, output_field=BigIntegerField()),
-                Value(0),
-                output_field=BigIntegerField(),
-            )
-        )
+        queryset = with_repaid(queryset)
         settled = Q(repaid_total__gte=F("amount"))
         overdue = ~settled & Q(due_date__lt=today)
         by_status = {

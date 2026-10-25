@@ -1,9 +1,9 @@
-from django.urls import path, register_converter
+from django.urls import path
 
 from . import views
-from .converters import MonthConverter
+from .converters import register_month_converter
 
-register_converter(MonthConverter, "month")
+register_month_converter()
 
 urlpatterns = [
     path("months/", views.SalaryMonthList.as_view(), name="salary-month-list"),
