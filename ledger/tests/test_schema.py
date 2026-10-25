@@ -168,3 +168,139 @@ def test_a_category_is_read_with_a_plain_icon_a_nullable_key_and_a_kind(
         "created_at",
         "updated_at",
     }
+
+
+# --- transactions and the day totals ----------------------------------------------------------
+
+TRANSACTIONS = "/api/v1/transactions/"
+TRANSACTION = "/api/v1/transactions/{id}/"
+DAY_TOTALS = "/api/v1/reports/day-totals/"
+
+
+def test_the_transaction_and_report_operations_have_their_ids_and_tags(
+    schema: dict[str, Any],
+) -> None:
+    found = {
+        (path, method): (body["operationId"], body["tags"])
+        for path in (TRANSACTIONS, TRANSACTION, DAY_TOTALS)
+        for method, body in schema["paths"][path].items()
+    }
+
+    assert found == {
+        (TRANSACTIONS, "get"): ("transaction_list", ["transactions"]),
+        (TRANSACTIONS, "post"): ("transaction_create", ["transactions"]),
+        (TRANSACTION, "get"): ("transaction_read", ["transactions"]),
+        (TRANSACTION, "patch"): ("transaction_update", ["transactions"]),
+        (TRANSACTION, "delete"): ("transaction_delete", ["transactions"]),
+        (DAY_TOTALS, "get"): ("report_day_totals", ["reports"]),
+    }
+
+
+def test_the_transaction_create_needs_the_key_and_declares_409_and_422(
+    schema: dict[str, Any],
+) -> None:
+    operation = op(schema, TRANSACTIONS, "post")
+
+    assert params(operation)["Idempotency-Key"]["required"] is True
+    assert {"201", "400", "401", "409", "422", "429"} <= operation["responses"].keys()
+    assert "transaction_limit_reached" in operation["description"]
+
+
+def test_a_change_and_a_delete_of_a_transaction_take_if_match_and_declare_412(
+    schema: dict[str, Any],
+) -> None:
+    for method in ("patch", "delete"):
+        operation = op(schema, TRANSACTION, method)
+
+        assert "If-Match" in params(operation)
+        assert "412" in operation["responses"]
+
+
+def test_the_list_takes_the_filters_and_search_but_the_totals_do_not_take_search(
+    schema: dict[str, Any],
+) -> None:
+    listed = params(op(schema, TRANSACTIONS, "get"))
+    totals = params(op(schema, DAY_TOTALS, "get"))
+    shared = {
+        "date_from",
+        "date_to",
+        "category_id",
+        "account_id",
+        "kind",
+        "limit",
+        "cursor",
+    }
+
+    assert shared | {"search"} == set(listed)
+    assert shared == set(totals)
+    assert "search" not in totals
+    assert listed["search"]["schema"]["minLength"] == 2
+    assert listed["search"]["schema"]["maxLength"] == 100
+    for name in ("category_id", "account_id"):
+        assert listed[name]["schema"]["type"] == "array"
+        assert listed[name]["schema"]["items"] == {"type": "string", "format": "uuid"}
+        assert listed[name]["schema"]["maxItems"] == 20
+
+
+def test_the_day_totals_are_the_paginated_envelope_of_days_with_their_currencies(
+    schema: dict[str, Any],
+) -> None:
+    envelope = component(schema, "PaginatedDayTotalList")
+    day = component(schema, "DayTotal")
+    currency = component(schema, "CurrencyTotal")
+
+    assert set(envelope["required"]) == {"next", "previous", "results"}
+    assert envelope["properties"]["results"]["items"] == {
+        "$ref": "#/components/schemas/DayTotal"
+    }
+    assert set(day["properties"]) == {"date", "totals"}
+    assert day["properties"]["totals"]["items"] == {
+        "$ref": "#/components/schemas/CurrencyTotal"
+    }
+    assert set(currency["properties"]) == {"currency", "total"}
+    assert currency["properties"]["total"] == {
+        "allOf": [{"$ref": "#/components/schemas/SignedAmount"}],
+        "readOnly": True,
+        "description": currency["properties"]["total"]["description"],
+    }
+
+
+def test_the_currency_is_written_on_create_and_not_on_a_change(
+    schema: dict[str, Any],
+) -> None:
+    create = component(schema, "TransactionCreateRequest")
+    change = component(schema, "PatchedTransactionUpdateRequest")
+
+    assert "currency" in create["properties"]
+    assert "currency" in create["required"]
+    assert "currency" not in change["properties"]
+    assert set(change["properties"]) == {
+        "kind",
+        "amount",
+        "date",
+        "category_id",
+        "account_id",
+        "note",
+    }
+    assert "required" not in change
+
+
+def test_a_transaction_is_read_with_an_amount_and_ids(schema: dict[str, Any]) -> None:
+    transaction = component(schema, "Transaction")["properties"]
+
+    assert set(transaction) == {
+        "id",
+        "kind",
+        "amount",
+        "currency",
+        "date",
+        "category_id",
+        "account_id",
+        "note",
+        "version",
+        "created_at",
+        "updated_at",
+    }
+    assert transaction["amount"]["allOf"] == [{"$ref": "#/components/schemas/Amount"}]
+    assert transaction["category_id"]["format"] == "uuid"
+    assert transaction["date"]["format"] == "date"
