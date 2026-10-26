@@ -210,6 +210,7 @@ INSTALLED_APPS += [
     "ledger",
     "debts",
     "reports",
+    "transfer",
     "outbox",
 ]
 
@@ -449,6 +450,8 @@ SPECTACULAR_SETTINGS = {
         # A debt's `direction` and `status` are named after the debt, not left as two generic words.
         "DebtDirectionEnum": "debts.models.Direction.choices",
         "DebtStatusEnum": "debts.models.Status.choices",
+        # The three datasets of the CSV import, in the request and in the answer.
+        "DatasetEnum": "transfer.importing.DATASET_CHOICES",
     },
     # A nullable enum field is `nullable: true` plus one enum reference, not `oneOf: [Enum, NullEnum]`: Dart
     # client generators turn the union into a class that must implement an enum, which does not compile.
