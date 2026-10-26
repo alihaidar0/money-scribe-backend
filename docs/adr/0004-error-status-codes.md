@@ -115,11 +115,17 @@ Initial registry:
 | `start_after_repayment` | 400 | moving a debt's start date past an existing repayment; `attr` is `start_date` |
 | `debt_limit_reached` | 409 | the user already has 500 debts |
 | `repayment_limit_reached` | 409 | the debt already has 200 repayments |
+| `unknown_category` | row problem | a CSV import row names a category (`category_key` or `category_name`) that does not exist; an import never creates one |
+| `unknown_account` | row problem | a CSV import row names an account (`account_name`) that does not exist; an import never creates one |
+| `duplicate` | row problem | a CSV import row equals an existing record (counted by multiplicity), or a salary month that exists |
 
 **Decided, not yet implemented.** Agreed with the Flutter developer on 2026-10-25. Each moves into the table above, with its
 `ErrorCode` member, in the pull request that implements it; the issue of each endpoint can still refine the details.
 
 - `session_limit_reached` (401): the session was ended because the account reached its limit of 10 active sessions.
+
+**Row problems.** `unknown_category`, `unknown_account` and `duplicate` are not the status of a call: the CSV import answers `200`
+and lists them in `problems[]`, one `{row, code, attr}` per skipped row, next to the codes of the rules of a single create.
 
 **Extra members.** An error item is `{code, detail, attr}`. Four optional members exist, each sent with one code
 only and documented in the shared error schema: `attempts_left` on `code_invalid` (the wrong tries the 6-digit code still

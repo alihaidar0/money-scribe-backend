@@ -411,16 +411,86 @@ two currencies). The server and the app run the same files.
 
 ## CSV
 
-| Field | Rule |
-| --- | --- |
-| export | which data (`transactions`, `debts` or `salary_months`) and a period: `all_time`, `this_year`, or `custom` with `from` and `to` |
-| import | rows as JSON, parsed by the app: a bulk call per resource with at most 500 rows and an `Idempotency-Key`; the answer is how many rows were imported and which were skipped, each with its row number and a reason, `invalid_amount` or `missing_date` (or the code of any other rule the row broke) |
+The export and the import live in the `transfer` app. The data is `transactions`, `debts` (with their repayments) and
+`salary_months` (with their fixed items); accounts, categories and settings are not exported.
 
-The server never parses an uploaded file: the app reads the CSV and sends rows, which pass through the same rules as a
-single create, and each row succeeds or is skipped on its own. An export is built by the server (it only writes), and a
-cell that starts with `=`, `+`, `-` or `@` is neutralized against spreadsheet formula injection in a documented way that
-the app reverses on import. An export must import back without loss; amounts use the form of ADR 0008, and the round trip
-is tested. The exact shapes are agreed in the request issue of step 10.9.
+**Export** (`POST /api/v1/exports/`, a `POST` so the password is never in a URL). Body: `kinds` (1 to 3 different values),
+`from` and `to` (optional inclusive days; both left out is all time) and `current_password`. The period applies to a
+transaction's `date`, a debt's `start_date` and, counted in months, to a salary month's month. One kind is answered as
+`text/csv; charset=utf-8`, several as `application/zip` with `transactions.csv`, `debts.csv` and `salary_months.csv`, with a
+fixed `Content-Disposition` file name (`money-scribe-transactions.csv`, `money-scribe-export.zip`: no personal data and no
+date), `Cache-Control: no-store` and `X-Content-Type-Options: nosniff`. The answer ignores the `Accept` header.
+
+Each file is UTF-8 with a byte order mark, a fixed header row, `,`, `"` quoting and CRLF line ends, oldest first (date, then
+the order the records were added), so a re-import keeps the order within a day. An empty cell means none.
+
+| File | Columns, in this order |
+| --- | --- |
+| `transactions` | `date`, `kind`, `amount`, `currency`, `category_key`, `category_name`, `account_name`, `note` (a built-in category has its key and an empty name, a custom one the reverse) |
+| `debts` | `direction`, `person`, `amount`, `currency`, `start_date`, `due_date`, `note`, `repayments` (a JSON array of `{date, amount}`, `[]` when none) |
+| `salary_months` | `month`, `currency`, `base_salary`, `food_per_day`, `working_days_in_month`, `working_hours_in_month`, `extra_hours`, `tax_rate`, `payment_mode`, `working_days_first_half`, `first_pay_day`, `second_pay_day`, `fixed_items` (a JSON array of `{name, amount, kind, part}`) |
+
+The computed results of a salary month are not exported: the server recomputes them. `extra_hours` is hours with exactly two
+decimals (`7.50`, 0.00 to 744.00) and `tax_rate` a percent with exactly two decimals (`15.00`, 0.00 to 100.00); they convert
+exactly to `extra_hours_hundredths` and `tax_rate_basis_points` (whole numbers of hundredths, no floating point), in both
+directions. The salary month API keeps its own names and units. **Formula injection:** a text cell (`note`, `person`,
+`category_name`, `account_name`) that starts with `=`, `+`, `-`, `@`, a tab, a carriage return or a line feed gets one `'` in
+front, and so does one that starts with any number of `'` followed by one of those (otherwise removing one on the way back
+would lose a quote that was part of the text). The app removes exactly one leading `'` when the rest of the cell starts with
+any number of `'` followed by one of those characters. Amounts, dates, numbers and the JSON cells are never changed. The rule
+is `transfer/cells.py`; `transfer/tests/csv_vectors.json` holds invented cells and a round trip of each dataset, and the app
+runs the same file. How current Excel, Google Sheets and LibreOffice open the file is not verified.
+
+**Security of the export.** The password is checked like at a password change (`400 invalid_password`, the shared lock
+`429 password_attempts_exceeded`); the export group is limited to 5 an hour per person (`429 throttled`); while the limit
+store is down it answers `503 service_unavailable`. A `data_exported` security event is written in the same transaction (the
+kinds and the number of rows, never a value) and the owner gets an email, in the account's language, that an export was made
+(the device name and the time in the person's `time_zone`, no content and no link). Nothing of the content is logged.
+
+**Import** (`POST /api/v1/imports/`). The app reads the CSV and sends rows as JSON; the server never parses an uploaded file.
+Body: `dataset` (`transactions`, `debts` or `salary_months`), `dry_run` (a JSON boolean, default `false`) and `rows` (1 to 500).
+A row is an object with `row` (the line in the file: a positive whole number, unique in the call; anything else is
+`400 invalid` on `rows`) and the fields of the dataset named like the CSV columns. An empty cell is a missing field, the JSON
+cells are arrays, the whole-number columns of the salary months (`working_days_in_month`, `working_hours_in_month`,
+`working_days_first_half`, `first_pay_day`, `second_pay_day`) are JSON numbers and every amount is a string with exactly the
+currency's digits (a client may pad a cell with trailing zeros, never round it). A field that is not a column (an `id`, say)
+is a problem `read_only` on it.
+
+| Dataset | Row fields |
+| --- | --- |
+| `transactions` | `date`, `kind`, `amount`, `currency`, exactly one of `category_key` (a built-in category) and `category_name` (one of the person's own, in any case), `account_name` (in any case), `note` |
+| `debts` | `direction`, `person`, `amount`, `currency`, `start_date`, `due_date`, `note`, `repayments` |
+| `salary_months` | the columns of the file, with `fixed_items` as an array |
+
+Every row goes through the rules of a single create (a `PUT` for a salary month), so it gets the same codes; a problem inside
+`repayments` or `fixed_items` has a dotted `attr` such as `repayments.1.amount`. **The call is one database transaction**; each
+row has its own savepoint: a row that passes is written, a row that fails is skipped and reported with its first problem, and a
+crash leaves nothing half-written. The answer is always `200`: `dataset`, `dry_run`, `imported`, `skipped` and `problems[]`
+(one `{row, code, attr}` per skipped row, ordered by `row`).
+
+- **Unknown category or account:** `unknown_category` (a `category_key` or `category_name` that matches nothing, or a
+  `category_name` that is a built-in category: a built-in is named by its key) or `unknown_account`; an import never creates
+  data. Both columns together are the row problem `invalid` on `category_name`; neither is `required` on
+  `category_key`.
+- **Duplicates:** ids are never read. A row equal to an existing record (transactions: date, kind, amount, currency, category,
+  account, note; debts: direction, person, amount, currency, start date, due date, note, whatever the repayments) is
+  `duplicate`, counted by multiplicity: with 2 identical records in the account and 3 in the file, one is written. A salary
+  month that exists is `duplicate` (attr `month`) and is never overwritten. Identical rows split across calls are compared
+  with the database only, so a repeat of an existing record in a later call is `duplicate`, never silently lost.
+- **Record caps apply:** rows beyond the cap are skipped with `transaction_limit_reached`, `debt_limit_reached`,
+  `repayment_limit_reached` or `fixed_item_limit_reached` (`attr` `null`), and the rest are written up to the cap.
+- **Idempotency:** a real import needs an `Idempotency-Key` ([ADR 0016](adr/0016-safe-writes.md)); a dry run needs none,
+  writes nothing and stores nothing. A dry run is the same work rolled back, so it is exact for the call, but it cannot see rows
+  of the earlier calls of the same file.
+- **Limits:** 500 rows and 1 MB a call (`400 request_too_large`), 120 calls an hour, dry runs included; while the limit store
+  is down it answers `503 service_unavailable`.
+- **Security activity:** a `data_imported` event (the dataset and the rows written) is written for each real call that writes at
+  least one row; a dry run, a failed call and a call that skips every row write none. Events are never merged on the server, so
+  a file of 10 000 rows is up to 20 events of at most 500 rows; the app shows consecutive entries of the same session, less
+  than 15 minutes apart, as one ([ADR 0022](adr/0022-security-events.md)).
+
+An export must import back without loss; amounts use the form of ADR 0008, and the round trip is tested on the shared vectors
+and on seeded random data with risky text.
 
 ## Sessions
 

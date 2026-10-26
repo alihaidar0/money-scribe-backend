@@ -3202,6 +3202,219 @@ paths:
           headers:
             X-Request-ID:
               $ref: '#/components/headers/XRequestId'
+  /api/v1/exports/:
+    post:
+      operationId: export_create
+      description: 'Needs the account password (it is `POST` so the password is never
+        in a URL). `kinds` is 1 to 3 different values of `transactions`, `debts`,
+        `salary_months`; `from` and `to` are optional inclusive days (both left out
+        is all time). One kind is answered as `text/csv; charset=utf-8`, several as
+        `application/zip` with `transactions.csv`, `debts.csv` and `salary_months.csv`.
+        The file name is fixed and has no personal data and no date. Each file is
+        UTF-8 with a byte order mark, a fixed header row, `,`, `\"` quoting, CRLF
+        line ends, oldest first; dates are `YYYY-MM-DD`, months `YYYY-MM`, amounts
+        decimal strings of the currency''s digits, an empty cell means none. A text
+        cell that a spreadsheet could read as a formula gets one `''` in front; the
+        figures and the JSON cells are never changed. Nothing in the period is a file
+        with the header row only. The export is rate limited (5 an hour), a `data_exported`
+        security event is written and the owner gets an email that an export was made.
+        Errors: `400` `invalid_choice`, `min_length` or `max_length` on `kinds`, `invalid_date_range`
+        on `to`, `date_out_of_range`, `required` or `invalid_password` on `current_password`;
+        `429` `password_attempts_exceeded` (shared with the password change) or `throttled`;
+        `503` `service_unavailable` while the limit store is down.'
+      summary: Export the data as CSV
+      tags:
+      - exports
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExportRequestRequest'
+        required: true
+      security:
+      - bearerAuth: []
+      responses:
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error400Response'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '429':
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+              description: Whole seconds to wait before the request may be repeated;
+                at least 1.
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '200':
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+              description: '`attachment; filename="money-scribe-transactions.csv"`
+                for one kind, `money-scribe-export.zip` for several: a fixed name
+                with no personal data and no date.'
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            text/csv:
+              schema:
+                type: string
+                format: binary
+            application/zip:
+              schema:
+                type: string
+                format: binary
+          description: ''
+        '503':
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+              description: Whole seconds to wait before the request may be repeated;
+                at least 1.
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServerErrorResponse'
+          description: A safety control (the rate-limit store) cannot run, so the
+            request is refused before it changes anything; try again after `Retry-After`.
+            The `code` is `service_unavailable`.
+  /api/v1/imports/:
+    post:
+      operationId: import_create
+      description: 'The app reads the CSV and sends rows as JSON; the server never
+        parses an uploaded file. `dataset` is `transactions`, `debts` or `salary_months`,
+        `rows` is 1 to 500 rows, each with its line number `row` (a positive whole
+        number, unique in the call) and the fields of the dataset named like the CSV
+        columns. Every row goes through the rules of a single create (a `PUT` for
+        a salary month) and gets the same codes. The call is one database transaction:
+        a row that passes is written, a row that fails is skipped and reported in
+        `problems` (the first problem of the row), and the answer is always `200`.
+        An import never creates an account or a category (`unknown_category`, `unknown_account`),
+        never reads an id, and never overwrites: a row equal to an existing record
+        is a `duplicate`, counted by multiplicity, and a salary month that exists
+        is a `duplicate`. The record caps apply (`transaction_limit_reached`, `debt_limit_reached`,
+        `repayment_limit_reached`, `fixed_item_limit_reached`). A real import needs
+        an `Idempotency-Key`; with `dry_run` `true` nothing is written or stored and
+        no key is needed. A call that writes at least one row records a `data_imported`
+        security event. Limits: 500 rows and 1 MB a call, 120 calls an hour; `503`
+        `service_unavailable` while the limit store is down.'
+      summary: Import rows of one dataset
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: 'Required unless `dry_run` is `true`: a random id, once per user
+          action, as a quoted string of 16 to 64 letters, digits, hyphens or underscores.
+          The same key with the same body returns the first answer with `Idempotent-Replayed:
+          true`; another body under the same key is `422`.'
+      tags:
+      - imports
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ImportRequestRequest'
+        required: true
+      security:
+      - bearerAuth: []
+      responses:
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error400Response'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '429':
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+              description: Whole seconds to wait before the request may be repeated;
+                at least 1.
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '200':
+          headers:
+            Idempotent-Replayed:
+              schema:
+                type: string
+              description: '`true` when this is the stored answer of an earlier request
+                with the same key.'
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportResult'
+          description: ''
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The `Idempotency-Key` was already used for a different request.
+            The `code` is `idempotency_key_reused`.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '503':
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+              description: Whole seconds to wait before the request may be repeated;
+                at least 1.
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServerErrorResponse'
+          description: A safety control (the rate-limit store) cannot run, so the
+            request is refused before it changes anything; try again after `Retry-After`.
+            The `code` is `service_unavailable`.
   /api/v1/overview/months/{month}/:
     get:
       operationId: overview_month
@@ -5447,6 +5660,12 @@ components:
       required:
       - currency
       - total
+    DatasetEnum:
+      type: string
+      enum:
+      - transactions
+      - debts
+      - salary_months
     DayTotal:
       type: object
       properties:
@@ -6088,17 +6307,17 @@ components:
             `category_not_allowed`, `transaction_limit_reached`, `date_out_of_range`,
             `invalid_date_range`, `too_many_values`, `amount_below_repaid`, `due_before_start`,
             `repayment_before_start`, `start_after_repayment`, `debt_limit_reached`,
-            `repayment_limit_reached`, `idempotency_key_required`, `idempotency_key_invalid`,
-            `idempotency_key_reused`, `idempotency_in_progress`, `precondition_failed`,
-            `fixed_item_limit_reached`, `month_has_fixed_items`, `service_unavailable`,
-            `invalid_characters`, `request_too_large`, `invalid_amount`, `currency_mismatch`,
-            `exceeds_remaining`, `account_has_transactions`, `category_has_transactions`,
-            `category_is_builtin`. Codes raised by the framework for malformed or
-            incomplete input: `required`, `blank`, `null`, `invalid`, `max_length`,
-            `min_length`, `parse_error`, `authentication_failed`, `not_authenticated`,
-            `permission_denied`, `not_found`, `method_not_allowed`, `not_acceptable`,
-            `unsupported_media_type`, `read_only`. A client treats a code it does
-            not know as a generic failure of the status.'
+            `repayment_limit_reached`, `unknown_category`, `unknown_account`, `duplicate`,
+            `idempotency_key_required`, `idempotency_key_invalid`, `idempotency_key_reused`,
+            `idempotency_in_progress`, `precondition_failed`, `fixed_item_limit_reached`,
+            `month_has_fixed_items`, `service_unavailable`, `invalid_characters`,
+            `request_too_large`, `invalid_amount`, `currency_mismatch`, `exceeds_remaining`,
+            `account_has_transactions`, `category_has_transactions`, `category_is_builtin`.
+            Codes raised by the framework for malformed or incomplete input: `required`,
+            `blank`, `null`, `invalid`, `max_length`, `min_length`, `parse_error`,
+            `authentication_failed`, `not_authenticated`, `permission_denied`, `not_found`,
+            `method_not_allowed`, `not_acceptable`, `unsupported_media_type`, `read_only`.
+            A client treats a code it does not know as a generic failure of the status.'
         detail:
           type: string
           description: Human-readable text; not for display.
@@ -6148,6 +6367,39 @@ components:
       required:
       - errors
       - type
+    ExportRequestRequest:
+      type: object
+      description: What to export and the password that allows it. ``from`` is a Python
+        keyword, so it is added in ``get_fields``.
+      properties:
+        kinds:
+          type: array
+          items:
+            $ref: '#/components/schemas/DatasetEnum'
+          minItems: 1
+          maxItems: 3
+          uniqueItems: true
+          description: 1 to 3 different kinds. One kind is answered as a CSV file,
+            several as a ZIP archive with one file per kind.
+        current_password:
+          type: string
+          writeOnly: true
+          minLength: 1
+          description: The account password; it is never put in a URL.
+          maxLength: 1024
+        from:
+          type: string
+          format: date
+          description: The first day, inclusive (`YYYY-MM-DD`). It applies to a transaction's
+            `date`, a debt's `start_date` and, counted in months, to a salary month's
+            month. Both left out means all time.
+        to:
+          type: string
+          format: date
+          description: The last day, inclusive (`YYYY-MM-DD`); the same rules as `from`.
+      required:
+      - current_password
+      - kinds
     FixedItem:
       type: object
       properties:
@@ -6291,6 +6543,89 @@ components:
         * `travel` - travel
         * `subscriptions` - subscriptions
         * `other` - other
+    ImportProblem:
+      type: object
+      properties:
+        row:
+          type: integer
+          readOnly: true
+        code:
+          type: string
+          readOnly: true
+          description: 'The code of a single create''s rule, or `unknown_category`,
+            `unknown_account`, `duplicate`, `read_only` or a limit code. A plain string:
+            a client survives a code it does not know.'
+        attr:
+          type: string
+          readOnly: true
+          nullable: true
+          description: The field of the row that is wrong (dotted inside `repayments`
+            and `fixed_items`), or `null`.
+      required:
+      - attr
+      - code
+      - row
+    ImportRequestRequest:
+      type: object
+      properties:
+        dataset:
+          $ref: '#/components/schemas/DatasetEnum'
+        dry_run:
+          type: boolean
+          default: false
+          description: '`true` answers what the call would do and writes nothing,
+            stores nothing and needs no `Idempotency-Key`.'
+        rows:
+          type: array
+          minItems: 1
+          maxItems: 500
+          items:
+            type: object
+            required:
+            - row
+            additionalProperties: true
+            properties:
+              row:
+                type: integer
+                minimum: 1
+                description: The line in the file; unique in the call.
+          description: Each row has `row` and the fields of the dataset, named like
+            the CSV columns, with the JSON cells as arrays and an empty cell left
+            out. A field that is not a column is a problem `read_only` on it.
+      required:
+      - dataset
+      - rows
+    ImportResult:
+      type: object
+      properties:
+        dataset:
+          allOf:
+          - $ref: '#/components/schemas/DatasetEnum'
+          readOnly: true
+        dry_run:
+          type: boolean
+          readOnly: true
+        imported:
+          type: integer
+          readOnly: true
+          description: The rows written, or that a dry run would write.
+        skipped:
+          type: integer
+          readOnly: true
+          description: The rows with a problem.
+        problems:
+          type: array
+          items:
+            $ref: '#/components/schemas/ImportProblem'
+          readOnly: true
+          description: One item per skipped row, the first problem of the row, ordered
+            by `row`.
+      required:
+      - dataset
+      - dry_run
+      - imported
+      - problems
+      - skipped
     KindEnum:
       enum:
       - income

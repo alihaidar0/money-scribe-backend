@@ -22,6 +22,7 @@ Apps follow the entity groups of the client's domain. An app is created when its
 | `debts` | debts and repayments | `users`, `common` |
 | `preferences` | default currency, pay schedule, pay-day reminders; the endpoint that also changes the language and the time zone of the user | `users`, `common` |
 | `notifications` | push device FIDs, each tied to a session, and reminders (Celery Beat) | `users`, `preferences` |
+| `transfer` | the CSV export and import of transactions, debts and salary months; it has no tables of its own and writes only through the services of the apps it imports into | `users`, `ledger`, `debts`, `salary`, `common` |
 | `reports` | read models only (overview, day totals, category spend, comparisons, debts and period reports) | `ledger`, `salary`, `debts`, `users` |
 
 - `common/` is a plain Python package at the repository root, not an installed app: no tables and no migrations (its

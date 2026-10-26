@@ -1,0 +1,281 @@
+{
+  "about": "Invented cells and files for the CSV export and import (issue 'CSV export and import'). Both the server and the app run this file. `cells`: a text cell the person typed (`text`) and how it is written to the file (`cell`); the app reverses it by removing exactly one leading quote when the rest of the cell starts with any number of quotes followed by one of = + - @ tab CR LF. `round_trips`: after the `accounts` and `custom_categories` exist, importing `records` (rows without a line number to keep, `row` is the line of the file) and exporting the dataset gives exactly `csv` after the byte order mark, and reading `csv` the way the app does gives `records` again. Text columns are `category_name`, `account_name`, `person` and `note`; amounts are decimal strings of the currency's digits; the whole-number columns of the salary months are numbers.",
+  "cells": [
+    {
+      "name": "a plain text is not changed",
+      "text": "Weekly shop",
+      "cell": "Weekly shop"
+    },
+    {
+      "name": "equals",
+      "text": "=Refund",
+      "cell": "'=Refund"
+    },
+    {
+      "name": "a bare equals sign",
+      "text": "=",
+      "cell": "'="
+    },
+    {
+      "name": "plus",
+      "text": "+1",
+      "cell": "'+1"
+    },
+    {
+      "name": "minus",
+      "text": "-5 dollars",
+      "cell": "'-5 dollars"
+    },
+    {
+      "name": "at",
+      "text": "@home",
+      "cell": "'@home"
+    },
+    {
+      "name": "tab first",
+      "text": "\tindented",
+      "cell": "'\tindented"
+    },
+    {
+      "name": "carriage return first",
+      "text": "\rx",
+      "cell": "'\rx"
+    },
+    {
+      "name": "line feed first",
+      "text": "\nx",
+      "cell": "'\nx"
+    },
+    {
+      "name": "one quote then equals",
+      "text": "'=x",
+      "cell": "''=x"
+    },
+    {
+      "name": "two quotes then plus",
+      "text": "''+x",
+      "cell": "'''+x"
+    },
+    {
+      "name": "a quote then a letter is not changed",
+      "text": "'tip",
+      "cell": "'tip"
+    },
+    {
+      "name": "quotes inside are not changed",
+      "text": "rock 'n' roll",
+      "cell": "rock 'n' roll"
+    },
+    {
+      "name": "a formula character inside is not changed",
+      "text": "a=b+c-d@e",
+      "cell": "a=b+c-d@e"
+    },
+    {
+      "name": "a space first is not changed",
+      "text": " =x",
+      "cell": " =x"
+    },
+    {
+      "name": "an empty cell",
+      "text": "",
+      "cell": ""
+    },
+    {
+      "name": "Arabic equals",
+      "text": "=مرحبا",
+      "cell": "'=مرحبا"
+    },
+    {
+      "name": "Arabic text is not changed",
+      "text": "كتاب",
+      "cell": "كتاب"
+    }
+  ],
+  "round_trips": [
+    {
+      "name": "transactions",
+      "dataset": "transactions",
+      "accounts": [
+        "Travel card",
+        "Wallet",
+        "=Cash"
+      ],
+      "custom_categories": [
+        {
+          "name": "Pets",
+          "icon": "gifts"
+        }
+      ],
+      "records": [
+        {
+          "row": 2,
+          "date": "2026-10-24",
+          "kind": "expense",
+          "amount": "12.50",
+          "currency": "USD",
+          "category_key": "groceries",
+          "account_name": "Travel card",
+          "note": "Weekly shop"
+        },
+        {
+          "row": 3,
+          "date": "2026-10-25",
+          "kind": "income",
+          "amount": "50.00",
+          "currency": "USD",
+          "category_key": "other",
+          "account_name": "Travel card",
+          "note": "=Refund"
+        },
+        {
+          "row": 4,
+          "date": "2026-10-25",
+          "kind": "expense",
+          "amount": "8.00",
+          "currency": "USD",
+          "category_name": "Pets",
+          "account_name": "Travel card",
+          "note": "Food, treats"
+        },
+        {
+          "row": 5,
+          "date": "2026-10-26",
+          "kind": "expense",
+          "amount": "1200",
+          "currency": "JPY",
+          "category_key": "dining",
+          "account_name": "Wallet"
+        },
+        {
+          "row": 6,
+          "date": "2026-10-27",
+          "kind": "expense",
+          "amount": "3.250",
+          "currency": "KWD",
+          "category_key": "transport",
+          "account_name": "Wallet",
+          "note": "كتاب \"جديد\""
+        },
+        {
+          "row": 7,
+          "date": "2026-10-28",
+          "kind": "expense",
+          "amount": "1.00",
+          "currency": "USD",
+          "category_key": "other",
+          "account_name": "=Cash",
+          "note": "'=x"
+        }
+      ],
+      "csv": "date,kind,amount,currency,category_key,category_name,account_name,note\r\n2026-10-24,expense,12.50,USD,groceries,,Travel card,Weekly shop\r\n2026-10-25,income,50.00,USD,other,,Travel card,'=Refund\r\n2026-10-25,expense,8.00,USD,,Pets,Travel card,\"Food, treats\"\r\n2026-10-26,expense,1200,JPY,dining,,Wallet,\r\n2026-10-27,expense,3.250,KWD,transport,,Wallet,\"كتاب \"\"جديد\"\"\"\r\n2026-10-28,expense,1.00,USD,other,,'=Cash,''=x\r\n"
+    },
+    {
+      "name": "debts with repayments",
+      "dataset": "debts",
+      "accounts": [],
+      "custom_categories": [],
+      "records": [
+        {
+          "row": 2,
+          "direction": "lent",
+          "person": "Alex",
+          "amount": "200.00",
+          "currency": "USD",
+          "start_date": "2026-10-01",
+          "due_date": "2026-11-01",
+          "note": "Laptop repair",
+          "repayments": [
+            {
+              "date": "2026-10-20",
+              "amount": "50.00"
+            },
+            {
+              "date": "2026-10-22",
+              "amount": "25.00"
+            }
+          ]
+        },
+        {
+          "row": 3,
+          "direction": "borrowed",
+          "person": "=Sam",
+          "amount": "80.500",
+          "currency": "KWD",
+          "start_date": "2026-10-05",
+          "repayments": []
+        },
+        {
+          "row": 4,
+          "direction": "lent",
+          "person": "Lee, Jr.",
+          "amount": "5000",
+          "currency": "JPY",
+          "start_date": "2026-10-05",
+          "due_date": "2026-12-31",
+          "note": "@work",
+          "repayments": [
+            {
+              "date": "2026-10-06",
+              "amount": "1200"
+            }
+          ]
+        }
+      ],
+      "csv": "direction,person,amount,currency,start_date,due_date,note,repayments\r\nlent,Alex,200.00,USD,2026-10-01,2026-11-01,Laptop repair,\"[{\"\"date\"\":\"\"2026-10-20\"\",\"\"amount\"\":\"\"50.00\"\"},{\"\"date\"\":\"\"2026-10-22\"\",\"\"amount\"\":\"\"25.00\"\"}]\"\r\nborrowed,'=Sam,80.500,KWD,2026-10-05,,,[]\r\nlent,\"Lee, Jr.\",5000,JPY,2026-10-05,2026-12-31,'@work,\"[{\"\"date\"\":\"\"2026-10-06\"\",\"\"amount\"\":\"\"1200\"\"}]\"\r\n"
+    },
+    {
+      "name": "salary months with fixed items",
+      "dataset": "salary_months",
+      "accounts": [],
+      "custom_categories": [],
+      "records": [
+        {
+          "row": 2,
+          "month": "2026-10",
+          "currency": "RUB",
+          "base_salary": "3000.00",
+          "food_per_day": "5.00",
+          "working_days_in_month": 22,
+          "working_hours_in_month": 176,
+          "extra_hours": "7.50",
+          "tax_rate": "15.00",
+          "payment_mode": "two_payments",
+          "working_days_first_half": 11,
+          "first_pay_day": 20,
+          "second_pay_day": 5,
+          "fixed_items": [
+            {
+              "name": "Rent",
+              "amount": "300.00",
+              "kind": "expense",
+              "part": "first"
+            },
+            {
+              "name": "=Bonus, yearly",
+              "amount": "100.00",
+              "kind": "income",
+              "part": "second"
+            }
+          ]
+        },
+        {
+          "row": 3,
+          "month": "2026-11",
+          "currency": "JPY",
+          "base_salary": "300000",
+          "food_per_day": "0",
+          "working_days_in_month": 20,
+          "working_hours_in_month": 160,
+          "extra_hours": "0.00",
+          "tax_rate": "12.34",
+          "payment_mode": "one_payment",
+          "first_pay_day": 20,
+          "second_pay_day": 5,
+          "fixed_items": []
+        }
+      ],
+      "csv": "month,currency,base_salary,food_per_day,working_days_in_month,working_hours_in_month,extra_hours,tax_rate,payment_mode,working_days_first_half,first_pay_day,second_pay_day,fixed_items\r\n2026-10,RUB,3000.00,5.00,22,176,7.50,15.00,two_payments,11,20,5,\"[{\"\"name\"\":\"\"Rent\"\",\"\"amount\"\":\"\"300.00\"\",\"\"kind\"\":\"\"expense\"\",\"\"part\"\":\"\"first\"\"},{\"\"name\"\":\"\"=Bonus, yearly\"\",\"\"amount\"\":\"\"100.00\"\",\"\"kind\"\":\"\"income\"\",\"\"part\"\":\"\"second\"\"}]\"\r\n2026-11,JPY,300000,0,20,160,0.00,12.34,one_payment,,20,5,[]\r\n"
+    }
+  ]
+}

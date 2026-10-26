@@ -74,6 +74,11 @@ class ErrorCode(StrEnum):
     DEBT_LIMIT_REACHED = "debt_limit_reached"
     REPAYMENT_LIMIT_REACHED = "repayment_limit_reached"
 
+    # CSV import: the problems of a row (ADR 0004)
+    UNKNOWN_CATEGORY = "unknown_category"
+    UNKNOWN_ACCOUNT = "unknown_account"
+    DUPLICATE = "duplicate"
+
     # Safe writes (ADR 0016)
     IDEMPOTENCY_KEY_REQUIRED = "idempotency_key_required"
     IDEMPOTENCY_KEY_INVALID = "idempotency_key_invalid"
