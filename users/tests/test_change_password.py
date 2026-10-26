@@ -16,6 +16,7 @@ from users.tests.helpers import (
     PASSWORD,
     bearer,
     first_error,
+    new_device,
     refresh,
     sign_in,
     start_session,
@@ -78,8 +79,8 @@ def test_the_old_refresh_token_is_retired(api_client: APIClient, clock: Clock) -
 
 def test_every_other_session_ends_and_says_why(api_client: APIClient) -> None:
     user, first = start_session(api_client)
-    second = sign_in(api_client, user.email).json()
-    third = sign_in(api_client, user.email).json()
+    second = sign_in(api_client, user.email, device=new_device()).json()
+    third = sign_in(api_client, user.email, device=new_device()).json()
 
     change(api_client, first["access_token"])
 

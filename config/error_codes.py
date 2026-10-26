@@ -23,6 +23,7 @@ class ErrorCode(StrEnum):
     SESSION_EMAIL_CHANGED = "session_email_changed"
     SESSION_TOKEN_REUSE = "session_token_reuse"
     SESSION_EXPIRED = "session_expired"
+    SESSION_LIMIT_REACHED = "session_limit_reached"
     EMAIL_NOT_VERIFIED = "email_not_verified"
     SIGN_IN_LOCKED = "sign_in_locked"
     THROTTLED = "throttled"

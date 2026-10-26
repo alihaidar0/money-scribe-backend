@@ -134,6 +134,12 @@ class Platform(models.TextChoices):
     WEB = "web", "Web"
 
 
+class SignInMethod(models.TextChoices):
+    PASSWORD = "password", "Password"
+    EMAIL_CODE = "email_code", "Email code"
+    DEVICE_KEY = "device_key", "Device key"
+
+
 class EndReason(models.TextChoices):
     SIGNED_OUT = "signed_out", "Signed out"
     REVOKED_BY_USER = "revoked_by_user", "Ended by the user"
@@ -141,6 +147,10 @@ class EndReason(models.TextChoices):
     EMAIL_CHANGED = "email_changed", "Email changed"
     TOKEN_REUSE = "token_reuse", "Refresh token reused"
     EXPIRED = "expired", "Expired"
+    # Ended because the account reached its limit of sessions, or because a newer sign-in came from the same device.
+    SESSION_LIMIT = "session_limit", "Session limit reached"
+    REPLACED = "replaced", "Replaced by a newer sign-in"
+    PASSWORD_RESET = "password_reset", "Password reset"
     ACCOUNT_DELETED = "account_deleted", "Account deleted"
 
 
@@ -171,6 +181,10 @@ class Session(models.Model):
     refresh_hash = models.CharField(max_length=64)
     generation = models.PositiveIntegerField(default=0)
     rotated_at = models.DateTimeField(default=timezone.now)
+    # How the person signed in; the sessions that existed before this was stored are ``password``.
+    sign_in_method = models.CharField(
+        max_length=10, choices=SignInMethod, default=SignInMethod.PASSWORD
+    )
     ended_at = models.DateTimeField(null=True, blank=True)
     end_reason = models.CharField(max_length=20, choices=EndReason, blank=True)
 
@@ -178,6 +192,10 @@ class Session(models.Model):
         indexes: ClassVar[list[models.Index]] = [
             models.Index(
                 fields=["user", "-last_active_at", "-id"], name="users_session_by_user"
+            ),
+            # The list of ended sessions: newest sign-in first.
+            models.Index(
+                fields=["user", "-created_at", "-id"], name="users_session_history"
             ),
             models.Index(fields=["ended_at"], name="users_session_ended"),
         ]
@@ -233,12 +251,6 @@ class DeviceKey(models.Model):
 
     def __str__(self) -> str:
         return f"{self.platform} device key of {self.user_id}"
-
-
-class SignInMethod(models.TextChoices):
-    PASSWORD = "password", "Password"
-    EMAIL_CODE = "email_code", "Email code"
-    DEVICE_KEY = "device_key", "Device key"
 
 
 class SecurityEventType(models.TextChoices):

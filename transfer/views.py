@@ -111,7 +111,7 @@ class ExportView(APIView):  # type: ignore[misc]
             email=user.email,
             language=user.language,
             device_name=session.device_name,
-            when=_in_the_persons_day(user, now),
+            when=emails.local_time(user.time_zone, now),
         )
         if len(files) == 1:
             body, content_type = files[0].content, "text/csv; charset=utf-8"
@@ -124,17 +124,6 @@ class ExportView(APIView):  # type: ignore[misc]
         response["Cache-Control"] = "no-store"
         response["X-Content-Type-Options"] = "nosniff"
         return response
-
-
-def _in_the_persons_day(user: User, instant: Any) -> str:
-    """The time as the person reads it: their own zone, to the minute."""
-    from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
-
-    try:
-        zone = ZoneInfo(user.time_zone)
-    except ZoneInfoNotFoundError, ValueError:
-        zone = ZoneInfo("UTC")
-    return f"{instant.astimezone(zone):%Y-%m-%d %H:%M} {zone.key}"
 
 
 class ImportView(APIView):  # type: ignore[misc]

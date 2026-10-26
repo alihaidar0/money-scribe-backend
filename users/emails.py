@@ -1,4 +1,6 @@
 import logging
+from datetime import datetime
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from django.core.mail import send_mail
 
@@ -149,6 +151,33 @@ _DATA_EXPORTED = {
 }
 
 
+_NEW_DEVICE = {
+    Language.ENGLISH: (
+        "A new device signed in to your Money Scribe account",
+        'Your Money Scribe account was just signed in to from a device it has not been used on before: "{device}" '
+        "({network}), {when}.\n"
+        "If this was you, there is nothing to do.\n"
+        "If it was not you, change your password in the app now: that signs every other device out.\n",
+    ),
+    Language.ARABIC: (
+        "تم تسجيل الدخول إلى حسابك في Money Scribe من جهاز جديد",
+        'تم للتو تسجيل الدخول إلى حسابك في Money Scribe من جهاز لم يُستخدم معه الحساب من قبل: "{device}" '
+        "({network}) في {when}.\n"
+        "إذا كنت أنت من فعل ذلك فلا حاجة لأي إجراء.\n"
+        "وإذا لم تكن أنت، فغيّر كلمة المرور من التطبيق الآن: فهذا يُسجّل خروج كل الأجهزة الأخرى.\n",
+    ),
+}
+
+
+def local_time(time_zone: str, instant: datetime) -> str:
+    """The time as the person reads it: their own zone, to the minute, with the zone's name."""
+    try:
+        zone = ZoneInfo(time_zone)
+    except ZoneInfoNotFoundError, ValueError:
+        zone = ZoneInfo("UTC")
+    return f"{instant.astimezone(zone):%Y-%m-%d %H:%M} {zone.key}"
+
+
 def _send(email: str, subject: str, body: str, what: str) -> None:
     """Send one email. A delivery failure is logged without details; the user can ask again."""
     try:
@@ -251,3 +280,23 @@ def send_data_exported_notice(
     )
     body = template.format(device=device_name or "-", when=when)
     _send(email, subject, body, "a data export notice")
+
+
+def send_new_device_notice(
+    *,
+    email: str,
+    language: str,
+    device_name: str,
+    network: str | None,
+    when: str,
+) -> None:
+    """Tell the owner that a device the account has not used before signed in (ADR 0009).
+
+    It names the device the way the app labelled it, the network (the address cut to its /24 or /48) and the time,
+    and carries no link and no financial data.
+    """
+    subject, template = _NEW_DEVICE.get(
+        Language(language), _NEW_DEVICE[Language.ENGLISH]
+    )
+    body = template.format(device=device_name, network=network or "-", when=when)
+    _send(email, subject, body, "a new device notice")
