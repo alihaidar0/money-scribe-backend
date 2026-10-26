@@ -328,9 +328,12 @@ while staging already runs, and each one deploys to staging by itself and is tes
   sign-in screens from this contract
 - [ ] **8.3 `feat/auth-account`**: profile (edit the name; the read is in 8.2), change password, password reset (request, verify, set),
   email change (request, confirm, cancel) and delete account
-- [ ] **8.4 `feat/auth-sessions`**: the keyset cursor class (`config/pagination.py`, ADR 0003) is already there (it came with
-  the salary history, 10.4); list the
-  sessions, end one, end all others; the purge task for ended sessions (Celery Beat, 90 days); the new-device email
+- [ ] **8.4 `feat/sessions-and-security-activity`** (request issue #68): the keyset cursor class (`config/pagination.py`,
+  ADR 0003) is already there (it came with the salary history, 10.4); the list of the sessions (`status` `active` or
+  `ended`), end one (the fingerprint key of that device goes with it), end all others, the security activity read
+  (`session-history`), at most 10 live sessions and one per device, `sign_in_method` stored on each session, the purge task
+  for old sessions (Celery Beat, 90 days) and the new-device email. The push token of an ended session is removed by the
+  notifications step (10.10) through the one place that ends sessions (`users.sessions.end_session`)
 - [ ] **8.5 `feat/auth-web-cookie`**: the web form of the tokens: the `HttpOnly` cookie, `X-Client: web`, the `Origin`
   check, and CORS with credentials for an explicit list of origins (ADR 0006), tested on `localhost`. A shared domain is
   needed only when the web build is tested against staging

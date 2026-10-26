@@ -1,4 +1,5 @@
 import re
+import uuid
 from typing import Any
 
 from django.core import mail
@@ -19,6 +20,13 @@ def device(**overrides: Any) -> dict[str, Any]:
         "app_version": "1.0.0+1",
     }
     return {**body, **overrides}
+
+
+def new_device(**overrides: Any) -> dict[str, Any]:
+    """Another phone: a sign-in from the same device would replace the earlier session (ADR 0009)."""
+    return device(
+        **{"device_id": str(uuid.uuid4()), "device_name": "Galaxy S24", **overrides}
+    )
 
 
 def emailed_code() -> str:

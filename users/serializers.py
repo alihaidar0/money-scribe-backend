@@ -7,9 +7,17 @@ from django.conf import settings
 from rest_framework import serializers
 from rest_framework.exceptions import ErrorDetail
 
-from common.serializers import TextField
+from common.serializers import RefuseUnknownFieldsMixin, TextField
 
-from .models import DeviceKey, Language, Platform, User
+from . import sessions
+from .models import (
+    DeviceKey,
+    Language,
+    Platform,
+    SecurityEventType,
+    SignInMethod,
+    User,
+)
 from .validators import normalize_password, password_errors
 
 # Computed once: the list of IANA names does not change while the process runs.
@@ -374,3 +382,142 @@ class DeviceKeyListSerializer(serializers.Serializer):  # type: ignore[misc]
         allow_null=True, help_text="Always `null`: the list fits one page."
     )
     results = DeviceKeySerializer(many=True)
+
+
+# --- sessions and the security activity (ADR 0009, ADR 0022) --------------------------------------------
+
+
+class SessionSerializer(serializers.Serializer):  # type: ignore[misc]
+    """A session of the person. The serializer is given a ``Session`` and ``current_id`` in its context."""
+
+    id = serializers.UUIDField(
+        read_only=True,
+        help_text="The session id, also the `sid` of its tokens. An identifier, not a credential.",
+    )
+    device_id = serializers.UUIDField(
+        read_only=True,
+        help_text="The install id of the device; several sessions of one device share it, so the app can group them.",
+    )
+    device_name = serializers.CharField(
+        read_only=True, help_text="As the device sent it; shown, never parsed."
+    )
+    platform = serializers.ChoiceField(choices=Platform.choices, read_only=True)
+    os_version = serializers.CharField(
+        read_only=True, help_text="As the device sent it; shown, never parsed."
+    )
+    app_version = serializers.CharField(
+        read_only=True,
+        help_text="As the device sent it (`1.0.0+1`); shown, never parsed.",
+    )
+    signed_in_at = serializers.DateTimeField(read_only=True, source="created_at")
+    last_active_at = serializers.DateTimeField(
+        read_only=True, help_text="Updated at most once every 5 minutes."
+    )
+    expires_at = serializers.DateTimeField(
+        read_only=True, help_text="The 90 day limit of the session."
+    )
+    is_current = serializers.BooleanField(
+        read_only=True,
+        help_text="The session of this very request. Always `false` for an ended session.",
+    )
+    sign_in_method = serializers.ChoiceField(
+        choices=SignInMethod.choices, read_only=True
+    )
+    network = serializers.CharField(
+        read_only=True,
+        allow_null=True,
+        help_text=(
+            "The address the session was last seen at, cut to its network (`203.0.113.0/24`, a `/48` for IPv6), or "
+            "`null`. A full address and a user agent are never returned."
+        ),
+    )
+    ended_at = serializers.DateTimeField(
+        read_only=True,
+        allow_null=True,
+        help_text=(
+            "`null` for an active session. For a session whose refresh token ran out it is the moment it ran out."
+        ),
+    )
+    end_reason = serializers.CharField(
+        read_only=True,
+        allow_null=True,
+        help_text=(
+            "`null` for an active session, else why it ended: `signed_out`, `revoked_by_user`, `expired`, "
+            "`session_limit`, `password_changed`, `password_reset`, `email_changed`, `token_reuse` or `replaced`. "
+            'A client treats a value it does not know as a generic "ended".'
+        ),
+    )
+
+    def to_representation(self, instance: Any) -> dict[str, Any]:
+        data: dict[str, Any] = super().to_representation(
+            sessions.present(instance, current_id=self.context.get("current_id"))
+        )
+        return data
+
+
+class SessionListQuerySerializer(serializers.Serializer):  # type: ignore[misc]
+    status = serializers.ChoiceField(
+        choices=sessions.STATUS_CHOICES,
+        required=False,
+        default="active",
+        help_text=(
+            "`active` (the default): the live sessions, the current one first, at most 10, always the whole list in "
+            "the cursor envelope. `ended`: the sessions that ended in the last 90 days, newest sign-in first, in pages."
+        ),
+    )
+
+
+class RevokeOthersSerializer(RefuseUnknownFieldsMixin, serializers.Serializer):  # type: ignore[misc]
+    current_password = PasswordField(
+        max_length=1024, help_text="The account password, to confirm."
+    )
+
+
+class RevokeOthersResultSerializer(serializers.Serializer):  # type: ignore[misc]
+    ended = serializers.IntegerField(
+        read_only=True, help_text="The sessions this call ended."
+    )
+    device_keys_removed = serializers.IntegerField(
+        read_only=True,
+        help_text="The fingerprint keys removed: every key but the current device's, signed-out phones included.",
+    )
+
+
+class SecurityEventSerializer(serializers.Serializer):  # type: ignore[misc]
+    id = serializers.UUIDField(read_only=True)
+    type = serializers.ChoiceField(
+        choices=SecurityEventType.choices,
+        read_only=True,
+        help_text="A client treats a type it does not know as an open value.",
+    )
+    occurred_at = serializers.DateTimeField(read_only=True)
+    device_name = serializers.CharField(read_only=True, allow_null=True)
+    platform = serializers.ChoiceField(
+        choices=Platform.choices, read_only=True, allow_null=True
+    )
+    app_version = serializers.CharField(read_only=True, allow_null=True)
+    sign_in_method = serializers.ChoiceField(
+        choices=SignInMethod.choices,
+        read_only=True,
+        allow_null=True,
+        help_text="On `signed_in` only.",
+    )
+    session_id = serializers.UUIDField(
+        read_only=True,
+        allow_null=True,
+        help_text="The session the entry belongs to, or `null`: the session may be gone.",
+    )
+    kinds = serializers.ListField(
+        child=serializers.CharField(),
+        read_only=True,
+        allow_null=True,
+        help_text="On `data_exported` and `data_imported` only: which data (an open list).",
+    )
+    count = serializers.IntegerField(
+        read_only=True,
+        allow_null=True,
+        help_text=(
+            "On `data_exported` and `data_imported` only: the rows written to the file or by the call, in total over "
+            "the kinds; skipped rows are not counted."
+        ),
+    )

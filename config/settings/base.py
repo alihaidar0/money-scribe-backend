@@ -258,6 +258,12 @@ REFRESH_REPLAY_WINDOW_SECONDS = int(
 )
 # A normal request refreshes the session's last-activity time at most this often.
 SESSION_ACTIVITY_INTERVAL_SECONDS = 300
+# At most this many live sessions per account; a sign-in at the limit ends the least recently active one (ADR 0009).
+SESSION_MAX_ACTIVE = 10
+# An ended session, or one whose refresh token expired, is shown and kept this long (ADR 0009).
+SESSION_HISTORY_RETENTION_DAYS = 90
+# The emails that name a device the account has not signed in on before: at most this many an hour per account.
+NEW_DEVICE_EMAILS_PER_HOUR = 5
 
 # The 6-digit email codes (NIST asks for at least 6): lifetime, wrong tries per code, the wait between
 # two sends and the sends per hour.
@@ -452,6 +458,9 @@ SPECTACULAR_SETTINGS = {
         "DebtStatusEnum": "debts.models.Status.choices",
         # The three datasets of the CSV import, in the request and in the answer.
         "DatasetEnum": "transfer.importing.DATASET_CHOICES",
+        # The security activity.
+        "SecurityEventTypeEnum": "users.models.SecurityEventType.choices",
+        "SignInMethodEnum": "users.models.SignInMethod.choices",
     },
     # A nullable enum field is `nullable: true` plus one enum reference, not `oneOf: [Enum, NullEnum]`: Dart
     # client generators turn the union into a class that must implement an enum, which does not compile.
@@ -544,6 +553,10 @@ CELERY_BEAT_SCHEDULE = {
     "idempotency-purge": {
         "task": "idempotency.tasks.purge_expired_keys",
         "schedule": crontab(minute=7, hour=4),
+    },
+    "users-purge-sessions": {
+        "task": "users.tasks.purge_old_sessions",
+        "schedule": crontab(minute=27, hour=4),
     },
     "users-purge-device-keys": {
         "task": "users.tasks.purge_expired_device_keys",

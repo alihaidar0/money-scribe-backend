@@ -21,6 +21,7 @@ from users.tests.helpers import (
     PASSWORD,
     bearer,
     first_error,
+    new_device,
     refresh,
     sign_in,
     start_session,
@@ -39,7 +40,7 @@ def delete(client: APIClient, access_token: str, password: str = PASSWORD) -> Re
 
 def test_the_account_and_everything_it_owns_are_deleted(api_client: APIClient) -> None:
     user, body = start_session(api_client, email="sara@example.com")
-    sign_in(api_client, user.email)
+    sign_in(api_client, user.email, device=new_device())
     EmailCode.objects.create(
         user=user,
         purpose=EmailCodePurpose.PASSWORD_RESET,
@@ -62,7 +63,7 @@ def test_the_account_and_everything_it_owns_are_deleted(api_client: APIClient) -
 
 def test_every_token_stops_working_at_once(api_client: APIClient) -> None:
     user, body = start_session(api_client)
-    other_device = sign_in(api_client, user.email).json()
+    other_device = sign_in(api_client, user.email, device=new_device()).json()
 
     delete(api_client, body["access_token"])
 

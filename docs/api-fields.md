@@ -494,8 +494,38 @@ and on seeded random data with risky text.
 
 ## Sessions
 
-The `device` object, the session fields, the three session operations and their retention are in
-[ADR 0009](adr/0009-sessions-and-devices.md).
+The `device` object, the session fields, the session operations and their retention are in
+[ADR 0009](adr/0009-sessions-and-devices.md); the shapes are in the schema (tag `sessions`).
+
+- `GET /api/v1/auth/sessions/?status=active|ended`: `active` (the default) is the live sessions, the current one first,
+  then `-last_active_at`, `-id`, at most 10, always the whole list in the cursor envelope (`next` and `previous` `null`;
+  `limit` and `cursor` are ignored). `ended` is the sessions that ended in the last 90 days, `-created_at`, `-id`, with the
+  usual cursor (`limit` 50, at most 100). A session is live when it has not been ended and its refresh token has not run
+  out; one nobody used for 30 days is `ended` with `end_reason` `expired` and `ended_at` the moment its token ran out (worked
+  out on read, nothing is written). Each entry has `id`, `device_id`, `device_name`, `platform`, `os_version`, `app_version`
+  (shown, never parsed), `signed_in_at`, `last_active_at` (updated at most every 5 minutes), `expires_at`, `is_current`,
+  `sign_in_method`, `network` (the stored address cut to a `/24`, or a `/48` for IPv6, or `null`) and, for an ended session,
+  `ended_at` and `end_reason` (`signed_out`, `revoked_by_user`, `expired`, `session_limit`, `password_changed`,
+  `password_reset`, `email_changed`, `token_reuse`, `replaced`; a client treats an unknown value as a generic "ended").
+  A device that signed in five times has five rows with the same `device_id`; the app groups them.
+- `DELETE /api/v1/auth/sessions/{id}/` ends one of the person's own sessions (`204`; one already over is also `204`; another
+  person's, or an unknown id, is `404`). The current session is a sign-out and the fingerprint key stays. Another session
+  ends as `revoked_by_user` and the fingerprint key of its device is removed in the same transaction, unless it is the
+  current device's; there is no opt-out.
+- `POST /api/v1/auth/sessions/revoke-others/` with `current_password` ends every other session and removes every device key
+  but the current device's, including keys of signed-out phones; it answers `{ended, device_keys_removed}`. A wrong password
+  is `400 invalid_password` with the lock shared with the password change; a field that is not `current_password` is
+  `400 read_only`.
+- **Limits.** At most 10 live sessions per account: a sign-in at the limit ends the least recently active one as
+  `session_limit` (that device gets `401 session_limit_reached`, and a `session_limit_reached` entry is written). A sign-in
+  from a `device_id` that has a live session ends the older one as `replaced` (that device gets `401 session_signed_out`).
+  Both rules run under a lock on the user's row.
+- `GET /api/v1/auth/session-history/` is the security activity ([ADR 0022](adr/0022-security-events.md)): `-occurred_at`,
+  `-id`, cursor-paginated, entries of the last 90 days only. A client treats an unknown `type`, `platform` or
+  `sign_in_method` as an open value.
+- **The new-device email.** A sign-in from a `device_id` that has no session for the account within the retention period
+  sends the owner an email with the device name, the network and the time, in the account's language, with no link; the
+  account's very first sign-in is not announced, and at most 5 such emails go out an hour per account.
 
 ## Device keys (fingerprint sign-in)
 

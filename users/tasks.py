@@ -2,9 +2,18 @@ from datetime import timedelta
 
 from celery import shared_task
 from django.conf import settings
+from django.db.models import Q
 from django.utils import timezone
 
-from .models import DeviceKey, EmailCode, PasswordResetToken, SecurityEvent, User
+from . import sessions
+from .models import (
+    DeviceKey,
+    EmailCode,
+    PasswordResetToken,
+    SecurityEvent,
+    Session,
+    User,
+)
 
 
 @shared_task
@@ -61,4 +70,22 @@ def purge_old_security_events() -> int:
     """
     cutoff = timezone.now() - timedelta(days=settings.SECURITY_EVENT_RETENTION_DAYS)
     deleted, _ = SecurityEvent.objects.filter(occurred_at__lt=cutoff).delete()
+    return deleted
+
+
+@shared_task
+def purge_old_sessions() -> int:
+    """Delete sessions 90 days after they ended or expired; returns how many (ADR 0009).
+
+    A session is deleted when it ended more than ``SESSION_HISTORY_RETENTION_DAYS`` ago, or when it never ended but
+    its refresh token ran out that long ago. The lists never show an older one, whatever this job does, so what a
+    person sees does not depend on it. It only stops the device name, the network and the times from being kept after
+    their purpose is over (data minimisation). A security event keeps no foreign key to a session, so nothing else is
+    touched.
+    """
+    cutoff = sessions.history_cutoff(timezone.now())
+    old = Session.objects.annotate(refresh_expires_at=sessions.refresh_expiry()).filter(
+        Q(ended_at__lt=cutoff) | Q(ended_at__isnull=True, refresh_expires_at__lt=cutoff)
+    )
+    deleted, _ = Session.objects.filter(pk__in=old.values("pk")).delete()
     return deleted

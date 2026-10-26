@@ -1728,6 +1728,338 @@ paths:
           description: A safety control (the rate-limit store) cannot run, so the
             request is refused before it changes anything; try again after `Retry-After`.
             The `code` is `service_unavailable`.
+  /api/v1/auth/session-history/:
+    get:
+      operationId: auth_session_history
+      description: What happened to the account, newest first (`occurred_at`, `id`),
+        in pages (`limit` 50 by default, 100 at most). Entries are kept 90 days; an
+        older one is never returned, even before the purge has run. The types are
+        `signed_in`, `signed_out`, `session_revoked`, `session_limit_reached`, `password_changed`,
+        `password_reset`, `email_changed`, `device_key_added`, `device_key_removed`,
+        `token_reuse_detected`, `data_exported` and `data_imported`; a client treats
+        an unknown type, platform or sign-in method as an open value. **Which device
+        an entry carries:** for `signed_in`, `signed_out`, `password_changed`, `email_changed`,
+        `data_exported` and `data_imported` the device where the action was done;
+        for `session_revoked`, `session_limit_reached` and `token_reuse_detected`
+        the device of the session that was ended (`session_id` is that session); for
+        `device_key_added` and `device_key_removed` the device of the key (`app_version`
+        is `null` when the acting session is on another device); `password_reset`
+        has no session, so its device fields are `null`. **Imports of long files:**
+        an entry is never edited or merged on the server, and an import writes one
+        `data_imported` entry for each call that writes at least one row (at most
+        500 rows), so a file of 10 000 rows is up to 20 entries; the app may show
+        consecutive entries of the same `session_id`, less than 15 minutes apart,
+        as one. No IP address, user agent, amount, note or name is in an entry. Failed
+        sign-ins and the deletion of the account are not entries.
+      summary: The security activity of the account
+      parameters:
+      - name: cursor
+        required: false
+        in: query
+        description: An opaque position taken from `next` or `previous`; never built
+          by the client.
+        schema:
+          type: string
+      - name: limit
+        required: false
+        in: query
+        description: 'How many results a page holds: 50 by default, at most 100.'
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+      tags:
+      - sessions
+      security:
+      - bearerAuth: []
+      responses:
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error400Response'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Retry-After:
+              description: Whole seconds to wait before the request may be repeated;
+                at least 1.
+              schema:
+                type: integer
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedSecurityEventList'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+  /api/v1/auth/sessions/:
+    get:
+      operationId: auth_session_list
+      description: '`status=active` (the default) is the live sessions: the current
+        one first, then the most recently active, at most 10, always the whole list
+        with `next` and `previous` `null` (`limit` and `cursor` are accepted and ignored).
+        A session is live when it has not been ended and its refresh token has not
+        expired. `status=ended` is the sessions that ended in the last 90 days (never
+        older, even before the daily purge has run), newest sign-in first, in pages
+        (`limit` 50 by default, 100 at most). Every sign-in is a session, so a device
+        that signed in five times has five rows with the same `device_id`; the app
+        groups them. A session nobody used for 30 days counts as ended with `end_reason`
+        `expired` and `ended_at` the moment its refresh token ran out; nothing is
+        written for that. `limit` that is not a whole number of at least 1 is `400`
+        `invalid`; a `status` that is not one of the two is `400` `invalid_choice`.'
+      summary: The sessions of the account
+      parameters:
+      - name: cursor
+        required: false
+        in: query
+        description: An opaque position taken from `next` or `previous`; never built
+          by the client.
+        schema:
+          type: string
+      - name: limit
+        required: false
+        in: query
+        description: 'How many results a page holds: 50 by default, at most 100.'
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+      - in: query
+        name: status
+        schema:
+          enum:
+          - active
+          - ended
+          type: string
+          default: active
+          minLength: 1
+        description: |-
+          `active` (the default): the live sessions, the current one first, at most 10, always the whole list in the cursor envelope. `ended`: the sessions that ended in the last 90 days, newest sign-in first, in pages.
+
+          * `active` - active
+          * `ended` - ended
+      tags:
+      - sessions
+      security:
+      - bearerAuth: []
+      responses:
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error400Response'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Retry-After:
+              description: Whole seconds to wait before the request may be repeated;
+                at least 1.
+              schema:
+                type: integer
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedSessionList'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+  /api/v1/auth/sessions/{id}/:
+    delete:
+      operationId: auth_session_end
+      description: Ends one of the person's own sessions (`204`). A session that is
+        already over is also `204` and nothing changes. An id that is not theirs,
+        or does not exist, is `404`. Ending the **current** session is a sign-out
+        (the fingerprint key stays; the app uses the sign-out call for this). Ending
+        **another** session makes that device answer `401` `session_revoked_by_user`
+        on its next call, records a `session_revoked` entry in the security activity,
+        and removes the fingerprint key of that session's device (unless it is the
+        current device's) in the same transaction; there is no opt-out and the answer
+        has no body. It counts in the session actions rate group (30 an hour) and
+        keeps working while the limit store is down, because it only reduces access.
+      summary: End a session
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: The session id.
+        required: true
+      tags:
+      - sessions
+      security:
+      - bearerAuth: []
+      responses:
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error400Response'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Retry-After:
+              description: Whole seconds to wait before the request may be repeated;
+                at least 1.
+              schema:
+                type: integer
+        '204':
+          description: No response body
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+  /api/v1/auth/sessions/revoke-others/:
+    post:
+      operationId: auth_session_revoke_others
+      description: 'Needs the password. Ends every session but the current one and
+        removes every fingerprint key but the current device''s, the keys of signed-out
+        phones included, in one transaction. Answers `200` with how many of each;
+        with no other sessions `ended` is 0 and the keys of other devices are still
+        removed. A wrong password is `400` `invalid_password` on `current_password`;
+        too many wrong ones are `429` `password_attempts_exceeded` (the lock shared
+        with the password change); a field that is not `current_password` is `400`
+        `read_only`. It counts in the session actions rate group (30 an hour) and
+        fails closed: `503` `service_unavailable` while the limit store is down.'
+      summary: End every other session
+      tags:
+      - sessions
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RevokeOthersRequest'
+        required: true
+      security:
+      - bearerAuth: []
+      responses:
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error400Response'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '429':
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+              description: Whole seconds to wait before the request may be repeated;
+                at least 1.
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RevokeOthersResult'
+          description: ''
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '503':
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+              description: Whole seconds to wait before the request may be repeated;
+                at least 1.
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServerErrorResponse'
+          description: A safety control (the rate-limit store) cannot run, so the
+            request is refused before it changes anything; try again after `Retry-After`.
+            The `code` is `service_unavailable`.
   /api/v1/auth/sign-in/:
     post:
       operationId: auth_sign_in
@@ -6295,9 +6627,9 @@ components:
             Registered codes: `invalid_credentials`, `email_not_registered`, `wrong_password`,
             `captcha_required`, `captcha_invalid`, `token_expired`, `token_invalid`,
             `session_signed_out`, `session_revoked_by_user`, `session_password_changed`,
-            `session_email_changed`, `session_token_reuse`, `session_expired`, `email_not_verified`,
-            `sign_in_locked`, `throttled`, `device_sign_in_failed`, `challenge_invalid`,
-            `public_key_invalid`, `attestation_invalid`, `platform_not_supported`,
+            `session_email_changed`, `session_token_reuse`, `session_expired`, `session_limit_reached`,
+            `email_not_verified`, `sign_in_locked`, `throttled`, `device_sign_in_failed`,
+            `challenge_invalid`, `public_key_invalid`, `attestation_invalid`, `platform_not_supported`,
             `device_key_limit_reached`, `code_invalid`, `code_expired`, `code_attempts_exceeded`,
             `resend_too_soon`, `resend_limit_reached`, `email_already_registered`,
             `email_unchanged`, `invalid_password`, `password_too_short`, `password_too_long`,
@@ -6978,6 +7310,50 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/SalaryMonth'
+    PaginatedSecurityEventList:
+      type: object
+      required:
+      - next
+      - previous
+      - results
+      properties:
+        next:
+          type: string
+          format: uri
+          nullable: true
+          description: The URL of the next page, or `null` on the last one. Follow
+            it as it is.
+        previous:
+          type: string
+          format: uri
+          nullable: true
+          description: The URL of the previous page, or `null` on the first one.
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/SecurityEvent'
+    PaginatedSessionList:
+      type: object
+      required:
+      - next
+      - previous
+      - results
+      properties:
+        next:
+          type: string
+          format: uri
+          nullable: true
+          description: The URL of the next page, or `null` on the last one. Follow
+            it as it is.
+        previous:
+          type: string
+          format: uri
+          nullable: true
+          description: The URL of the previous page, or `null` on the first one.
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Session'
     PaginatedTransactionList:
       type: object
       required:
@@ -7585,6 +7961,37 @@ components:
       - income_before_tax
       - tax
       - total_after_tax
+    RevokeOthersRequest:
+      type: object
+      description: |-
+        A field that the serializer does not have is ``400 read_only`` on that field, never silently ignored.
+
+        For the edit of a record that has fields the client may not set (a version, a result, an id): a client that
+        sends one learns at once that it was not applied.
+      properties:
+        current_password:
+          type: string
+          writeOnly: true
+          minLength: 1
+          description: The account password, to confirm.
+          maxLength: 1024
+      required:
+      - current_password
+    RevokeOthersResult:
+      type: object
+      properties:
+        ended:
+          type: integer
+          readOnly: true
+          description: The sessions this call ended.
+        device_keys_removed:
+          type: integer
+          readOnly: true
+          description: 'The fingerprint keys removed: every key but the current device''s,
+            signed-out phones included.'
+      required:
+      - device_keys_removed
+      - ended
     SalaryMonth:
       type: object
       description: A saved month with its results, its fixed items, their totals and
@@ -7791,6 +8198,121 @@ components:
       - tax_rate_basis_points
       - working_days_in_month
       - working_hours_in_month
+    SecurityEvent:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        type:
+          allOf:
+          - $ref: '#/components/schemas/SecurityEventTypeEnum'
+          readOnly: true
+          description: |-
+            A client treats a type it does not know as an open value.
+
+            * `signed_in` - Signed in
+            * `signed_out` - Signed out
+            * `session_revoked` - Session revoked
+            * `session_limit_reached` - Session limit reached
+            * `password_changed` - Password changed
+            * `password_reset` - Password reset
+            * `email_changed` - Email changed
+            * `device_key_added` - Device key added
+            * `device_key_removed` - Device key removed
+            * `token_reuse_detected` - Token reuse detected
+            * `data_exported` - Data exported
+            * `data_imported` - Data imported
+        occurred_at:
+          type: string
+          format: date-time
+          readOnly: true
+        device_name:
+          type: string
+          readOnly: true
+          nullable: true
+        platform:
+          allOf:
+          - $ref: '#/components/schemas/PlatformEnum'
+          readOnly: true
+          nullable: true
+        app_version:
+          type: string
+          readOnly: true
+          nullable: true
+        sign_in_method:
+          allOf:
+          - $ref: '#/components/schemas/SignInMethodEnum'
+          readOnly: true
+          nullable: true
+          description: |-
+            On `signed_in` only.
+
+            * `password` - Password
+            * `email_code` - Email code
+            * `device_key` - Device key
+        session_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+          description: 'The session the entry belongs to, or `null`: the session may
+            be gone.'
+        kinds:
+          type: array
+          items:
+            type: string
+          readOnly: true
+          nullable: true
+          description: 'On `data_exported` and `data_imported` only: which data (an
+            open list).'
+        count:
+          type: integer
+          readOnly: true
+          nullable: true
+          description: 'On `data_exported` and `data_imported` only: the rows written
+            to the file or by the call, in total over the kinds; skipped rows are
+            not counted.'
+      required:
+      - app_version
+      - count
+      - device_name
+      - id
+      - kinds
+      - occurred_at
+      - platform
+      - session_id
+      - sign_in_method
+      - type
+    SecurityEventTypeEnum:
+      enum:
+      - signed_in
+      - signed_out
+      - session_revoked
+      - session_limit_reached
+      - password_changed
+      - password_reset
+      - email_changed
+      - device_key_added
+      - device_key_removed
+      - token_reuse_detected
+      - data_exported
+      - data_imported
+      type: string
+      description: |-
+        * `signed_in` - Signed in
+        * `signed_out` - Signed out
+        * `session_revoked` - Session revoked
+        * `session_limit_reached` - Session limit reached
+        * `password_changed` - Password changed
+        * `password_reset` - Password reset
+        * `email_changed` - Email changed
+        * `device_key_added` - Device key added
+        * `device_key_removed` - Device key removed
+        * `token_reuse_detected` - Token reuse detected
+        * `data_exported` - Data exported
+        * `data_imported` - Data imported
     ServerErrorEnum:
       enum:
       - server_error
@@ -7810,6 +8332,99 @@ components:
       required:
       - errors
       - type
+    Session:
+      type: object
+      description: A session of the person. The serializer is given a ``Session``
+        and ``current_id`` in its context.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+          description: The session id, also the `sid` of its tokens. An identifier,
+            not a credential.
+        device_id:
+          type: string
+          format: uuid
+          readOnly: true
+          description: The install id of the device; several sessions of one device
+            share it, so the app can group them.
+        device_name:
+          type: string
+          readOnly: true
+          description: As the device sent it; shown, never parsed.
+        platform:
+          allOf:
+          - $ref: '#/components/schemas/PlatformEnum'
+          readOnly: true
+        os_version:
+          type: string
+          readOnly: true
+          description: As the device sent it; shown, never parsed.
+        app_version:
+          type: string
+          readOnly: true
+          description: As the device sent it (`1.0.0+1`); shown, never parsed.
+        signed_in_at:
+          type: string
+          format: date-time
+          readOnly: true
+        last_active_at:
+          type: string
+          format: date-time
+          readOnly: true
+          description: Updated at most once every 5 minutes.
+        expires_at:
+          type: string
+          format: date-time
+          readOnly: true
+          description: The 90 day limit of the session.
+        is_current:
+          type: boolean
+          readOnly: true
+          description: The session of this very request. Always `false` for an ended
+            session.
+        sign_in_method:
+          allOf:
+          - $ref: '#/components/schemas/SignInMethodEnum'
+          readOnly: true
+        network:
+          type: string
+          readOnly: true
+          nullable: true
+          description: The address the session was last seen at, cut to its network
+            (`203.0.113.0/24`, a `/48` for IPv6), or `null`. A full address and a
+            user agent are never returned.
+        ended_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+          description: '`null` for an active session. For a session whose refresh
+            token ran out it is the moment it ran out.'
+        end_reason:
+          type: string
+          readOnly: true
+          nullable: true
+          description: '`null` for an active session, else why it ended: `signed_out`,
+            `revoked_by_user`, `expired`, `session_limit`, `password_changed`, `password_reset`,
+            `email_changed`, `token_reuse` or `replaced`. A client treats a value
+            it does not know as a generic "ended".'
+      required:
+      - app_version
+      - device_id
+      - device_name
+      - end_reason
+      - ended_at
+      - expires_at
+      - id
+      - is_current
+      - last_active_at
+      - network
+      - os_version
+      - platform
+      - sign_in_method
+      - signed_in_at
     Settings:
       type: object
       description: Every setting, with the app's own default for one that was never
@@ -7870,6 +8485,16 @@ components:
       - time_zone
       - updated_at
       - version
+    SignInMethodEnum:
+      enum:
+      - password
+      - email_code
+      - device_key
+      type: string
+      description: |-
+        * `password` - Password
+        * `email_code` - Email code
+        * `device_key` - Device key
     SignInRequest:
       type: object
       description: '``language`` and ``time_zone``: the device the user signs in on

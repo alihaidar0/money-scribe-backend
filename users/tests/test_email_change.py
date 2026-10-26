@@ -26,6 +26,7 @@ from users.tests.helpers import (
     bearer,
     emailed_code,
     first_error,
+    new_device,
     refresh,
     sign_in,
     start_session,
@@ -300,7 +301,7 @@ def test_the_old_address_is_told_without_the_new_one(api_client: APIClient) -> N
 
 def test_the_other_sessions_end_and_this_one_continues(api_client: APIClient) -> None:
     user, first = start_session(api_client)
-    second = sign_in(api_client, user.email).json()
+    second = sign_in(api_client, user.email, device=new_device()).json()
     code = start_change(api_client, first)
 
     confirm(api_client, first["access_token"], code)
