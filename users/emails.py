@@ -133,6 +133,22 @@ _DEVICE_KEY_ADDED = {
 }
 
 
+_DATA_EXPORTED = {
+    Language.ENGLISH: (
+        "Your Money Scribe data was exported",
+        'An export of your Money Scribe data was just made from the device "{device}" ({when}).\n'
+        "It needed your password. This email says only that it happened: it has no content and no link.\n"
+        "If this was not you, change your password in the app now: that signs the other devices out.\n",
+    ),
+    Language.ARABIC: (
+        "تم تصدير بياناتك في Money Scribe",
+        'تم للتو تصدير بياناتك في Money Scribe من الجهاز "{device}" ({when}).\n'
+        "وقد تطلّب ذلك كلمة المرور. تذكر هذه الرسالة أن العملية تمت فقط: لا تحتوي على أي بيانات ولا على رابط.\n"
+        "إذا لم تكن أنت، فغيّر كلمة المرور من التطبيق الآن: فهذا يُسجّل خروج الأجهزة الأخرى.\n",
+    ),
+}
+
+
 def _send(email: str, subject: str, body: str, what: str) -> None:
     """Send one email. A delivery failure is logged without details; the user can ask again."""
     try:
@@ -221,3 +237,17 @@ def send_device_key_added_notice(
         Language(language), _DEVICE_KEY_ADDED[Language.ENGLISH]
     )
     _send(email, subject, template.format(device=device_name), "a device key notice")
+
+
+def send_data_exported_notice(
+    *, email: str, language: str, device_name: str | None, when: str
+) -> None:
+    """Tell the owner that an export was made, so a stranger's export is noticed.
+
+    It names the device the way the app labelled it and the time, and carries no content and no link.
+    """
+    subject, template = _DATA_EXPORTED.get(
+        Language(language), _DATA_EXPORTED[Language.ENGLISH]
+    )
+    body = template.format(device=device_name or "-", when=when)
+    _send(email, subject, body, "a data export notice")

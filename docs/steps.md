@@ -454,9 +454,11 @@ when the owner confirms it, and a step that needs the app on staging waits for t
 - [ ] **10.8 reports** (`feat/reports`, request issue #67): the Overview of a month and of each part, the month report (spending
   by category), and the debts report, with the shared test vectors; the salary and the fixed items of the Overview come from
   the same code as the salary month's balances (the day totals came with 10.6, in the new `reports` app)
-- [ ] **10.9 CSV export and import** of transactions, debts and salary months: the server builds the export; the import is
-  a bulk call of rows the app has parsed (the server never parses an uploaded file), with skipped-row reporting and a
-  lossless round trip
+- [ ] **10.9 CSV export and import** (`feat/csv-export-import`, request issue #69), in the new `transfer` app: the export of
+  transactions, debts (with their repayments) and salary months as one CSV file or a ZIP, behind the password, with its
+  rate limit, security event and email notice; the import as a bulk call of rows the app has parsed (the server never parses
+  an uploaded file), each row through the rules of a single create, skipped and reported on its own, duplicates counted by
+  multiplicity, a dry run, and a lossless round trip with the formula injection rule, tested on shared vectors
 - [ ] **10.10 notifications**: push device FIDs (Firebase installation IDs, one per session, removed when it ends),
   pay-day reminders through a scheduled call while hosting is free
   ([ADR 0020](adr/0020-scheduled-calls-instead-of-a-free-worker.md)) and through Celery Beat once a worker exists, and the push provider wiring (the last open decision for this stage; `firebase-admin`
