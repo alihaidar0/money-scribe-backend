@@ -363,8 +363,11 @@ Gunicorn reads extra command-line options from the environment variable `GUNICOR
 The default value (when nothing is set on Render):
 
 ```text
---bind=0.0.0.0:$PORT --threads=4 --timeout=120 --access-logfile=- --error-logfile=- --no-control-socket
+--bind=0.0.0.0:$PORT --threads=4 --timeout=120 --access-logfile=- --access-logformat='%(t)s "%(m)s %(U)s" %(s)s %(b)s %(M)sms %({x-request-id}o)s' --error-logfile=- --no-control-socket
 ```
+
+The default access log line has the time, the method, the path **without** the query string (a `search` parameter is the
+person's own text), the status, the size, the duration and the request id; no client address and no user agent.
 
 The temporary value used for the measurement:
 
