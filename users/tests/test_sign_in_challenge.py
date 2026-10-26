@@ -238,6 +238,45 @@ def test_a_token_without_an_action_is_accepted(
     assert attempt(api_client, PASSWORD, captcha_token="t").status_code == 200
 
 
+@pytest.mark.parametrize(
+    ("hostname", "status"),
+    [
+        ("api.example.com", 200),
+        ("API.example.com", 200),
+        ("elsewhere.example.net", 400),
+        (None, 400),
+    ],
+)
+def test_with_hostnames_set_a_token_from_another_host_is_refused(
+    api_client: APIClient,
+    turnstile: FakeTurnstile,
+    settings: Any,
+    hostname: str | None,
+    status: int,
+) -> None:
+    settings.TURNSTILE_HOSTNAMES = ["api.example.com"]
+    VerifiedUserFactory.create(email=EMAIL)
+    fail_until_challenged(api_client)
+    turnstile.answer = {"success": True, "action": "sign_in", "hostname": hostname}
+
+    response = attempt(api_client, PASSWORD, captcha_token="t")
+
+    assert response.status_code == status
+    if status == 400:
+        assert first_error(response)["code"] == "captcha_invalid"
+
+
+def test_without_hostnames_any_host_is_accepted(
+    api_client: APIClient, turnstile: FakeTurnstile, settings: Any
+) -> None:
+    settings.TURNSTILE_HOSTNAMES = []
+    VerifiedUserFactory.create(email=EMAIL)
+    fail_until_challenged(api_client)
+    turnstile.answer = {"success": True, "hostname": "elsewhere.example.net"}
+
+    assert attempt(api_client, PASSWORD, captcha_token="t").status_code == 200
+
+
 def test_bad_tokens_count_towards_the_address_lock(
     api_client: APIClient, turnstile: FakeTurnstile
 ) -> None:

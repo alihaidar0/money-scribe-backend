@@ -94,6 +94,10 @@ def verify(token: str, client_ip: str | None) -> bool:
         logger.error("The bot challenge service could not be reached.")
         raise service_unavailable() from None
     if answer.get("success") is True:
+        # Cloudflare names the host the challenge was served on; with TURNSTILE_HOSTNAMES set, any other is refused.
+        hostnames = settings.TURNSTILE_HOSTNAMES
+        if hostnames and str(answer.get("hostname") or "").lower() not in hostnames:
+            return False
         # A token made for another flow carries its own action. One made without any (and Cloudflare's
         # dummy test keys) is accepted: the widget of this site key is the sign-in one.
         return answer.get("action") in (None, "", ACTION)

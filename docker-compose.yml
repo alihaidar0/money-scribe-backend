@@ -94,6 +94,8 @@ x-dev-image: &dev-image
     # The secret key of the Cloudflare Turnstile widget (the bot challenge of sign-in, docs/sign-in-challenge.md).
     # Empty switches the challenge off; staging and production set a real one.
     TURNSTILE_SECRET_KEY: ${TURNSTILE_SECRET_KEY:-}
+    # The widget's hostnames, comma separated; empty accepts any (the dummy test keys need that).
+    TURNSTILE_HOSTNAMES: ${TURNSTILE_HOSTNAMES:-}
     DEVICE_KEY_REQUIRE_ATTESTATION: ${DEVICE_KEY_REQUIRE_ATTESTATION:-False}
     DEVICE_KEY_ANDROID_PACKAGE: ${DEVICE_KEY_ANDROID_PACKAGE:-}
     DEVICE_KEY_ANDROID_CERT_SHA256: ${DEVICE_KEY_ANDROID_CERT_SHA256:-}
