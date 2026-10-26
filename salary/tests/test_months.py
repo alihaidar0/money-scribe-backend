@@ -3,7 +3,8 @@
 from typing import Any
 
 import pytest
-from django.db import IntegrityError
+from django.db import IntegrityError, connection
+from django.test.utils import CaptureQueriesContext
 from rest_framework.test import APIClient
 
 from config.tests.isolation import assert_hidden_from_other_users
@@ -625,6 +626,27 @@ def test_the_history_is_paged_by_cursor(
     assert [m["month"] for m in second["results"]] == ["2026-03", "2026-02"]
     assert [m["month"] for m in third["results"]] == ["2026-01"]
     assert third["next"] is None
+
+
+def test_the_history_costs_the_same_number_of_queries_whatever_it_holds(
+    client: APIClient, account: tuple[User, str]
+) -> None:
+    """Each month's fixed items are fetched for the whole page at once, not one query per month."""
+
+    def count() -> int:
+        with CaptureQueriesContext(connection) as queries:
+            response = client.get(f"{API}/months/", headers=bearer(account[1]))
+        assert response.status_code == 200
+        return len(queries)
+
+    put_month(client, account[1], "2026-01")
+    add_item(client, account[1], "2026-01")
+    few = count()
+    for number in range(2, 11):
+        put_month(client, account[1], f"2026-{number:02d}")
+        add_item(client, account[1], f"2026-{number:02d}")
+
+    assert count() == few
 
 
 def test_the_history_shows_only_the_own_months(
