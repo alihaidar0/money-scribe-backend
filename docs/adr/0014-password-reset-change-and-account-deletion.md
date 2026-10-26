@@ -42,7 +42,8 @@ session rules of [ADR 0006](0006-authentication-tokens.md).
   `400 reset_token_invalid` (`attr` `reset_token`), one code for all four so that it tells nothing. The password rules
   apply (`password_*`, `attr` `password`); a failed rule keeps the token so the user can try another password until it
   expires. Success ends **all** the user's sessions (`session_password_changed`), deletes the pending codes and token,
-  and emails the owner. It answers `204` and signs nobody in.
+  lifts the account-wide sign-in lock (the one that 50 failures from all addresses set, which anyone who knows the address
+  can reach; the lock of one client address stays), and emails the owner. It answers `204` and signs nobody in.
 - **A reset may reuse the current password.** `password_unchanged` is not applied here: the reset proves the mailbox, not the
   old password, and refusing a repeat would give whoever reads the mailbox a free, unlimited way to test guesses of the
   current password.
