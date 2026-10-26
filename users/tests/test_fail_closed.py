@@ -102,3 +102,10 @@ def test_a_signed_in_user_keeps_working_while_the_store_is_down(
     assert profile.status_code == 200
     assert renewed.status_code == 200
     assert signed_out.status_code == 204
+
+
+def test_lifting_the_account_lock_after_a_reset_survives_an_outage(
+    redis_down: None,
+) -> None:
+    """The password has already changed when the lock is lifted, so an outage there must not fail the reset."""
+    limits.clear_account_sign_in_lock(EMAIL)

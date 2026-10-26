@@ -14,7 +14,9 @@ Free, no card needed.
    widget mode. Production gets its own widget later, with its own keys and its own hostname.
 3. Copy the **Site key** (public; it goes into the app) and the **Secret key** (private).
 4. Put the secret key in the password manager, and into the Render service as `TURNSTILE_SECRET_KEY`
-   ([`staging-render.md`](staging-render.md), step 5). Never commit it or paste it in an issue.
+   ([`staging-render.md`](staging-render.md), step 5). Never commit it or paste it in an issue. Set
+   `TURNSTILE_HOSTNAMES` to the widget's hostnames from step 2 (public, comma separated): the server then refuses a
+   token whose `hostname` is another one, as Cloudflare's server-side validation guide advises.
 5. After the deploy, `python manage.py check --deploy` no longer shows `users.W001`.
 
 Rotate the secret key from the same dashboard page if it ever leaks; the site key is public and stays.

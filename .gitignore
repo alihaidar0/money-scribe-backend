@@ -20,6 +20,8 @@
 service-account*.json
 application_default_credentials.json
 key.json
+# Local review notes, kept out of the repository.
+docs/review.md
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 #  PYTHON

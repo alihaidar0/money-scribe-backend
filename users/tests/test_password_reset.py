@@ -496,3 +496,26 @@ def test_a_token_of_one_account_is_no_use_after_a_second_reset_of_another(
     assert confirm_reset(api_client, sara_token).status_code == 204
     assert sign_in(api_client, EMAIL, NEW_PASSWORD).status_code == 200
     assert sign_in(api_client, "omar@example.com", NEW_PASSWORD).status_code == 200
+
+
+def test_a_reset_lifts_the_lock_that_failures_from_everywhere_set(
+    api_client: APIClient,
+) -> None:
+    """50 failures from all addresses lock the account for everyone; the reset proves the mailbox and unlocks it."""
+    VerifiedUserFactory.create(email=EMAIL)
+    for network in range(10):
+        for _ in range(5):
+            api_client.post(
+                f"{AUTH}/sign-in/",
+                {
+                    "email": EMAIL,
+                    "password": "wrong-password-0",
+                    "device": new_device(),
+                },
+                REMOTE_ADDR=f"198.51.100.{network + 1}",
+            )
+    assert first_error(sign_in(api_client, EMAIL))["code"] == "sign_in_locked"
+
+    assert confirm_reset(api_client, get_reset_token(api_client)).status_code == 204
+
+    assert sign_in(api_client, EMAIL, NEW_PASSWORD).status_code == 200

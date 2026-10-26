@@ -209,6 +209,22 @@ def clear_sign_in_failures(email: str, client_ip: str) -> None:
     cache.delete(f"signin:fails:{_digest(email)}:{_digest(client_ip)}")
 
 
+def clear_account_sign_in_lock(email: str) -> None:
+    """A completed password reset lifts the account-wide lock and its count (ADR 0014).
+
+    Anyone who knows an address can reach the 50 failures that lock the account for everyone; the reset proves the
+    mailbox, so its owner gets back in at once. The locks of one client address stay. Best effort: the password has
+    already changed, so a store outage is only logged.
+    """
+    account = _digest(email)
+    try:
+        cache.delete_many([f"signin:fails:{account}", f"signin:lock:{account}"])
+    except RedisError:
+        logger.warning(
+            "The limit store is unavailable; the account lock was not lifted."
+        )
+
+
 # --- the email-code sends ---------------------------------------------------------------------
 
 

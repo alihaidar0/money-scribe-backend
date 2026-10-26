@@ -30,7 +30,8 @@ mitigation. The challenge has to be free, cost real users nothing, and work in a
 - **Verified by the server.** The token is posted with the secret key to Cloudflare's `siteverify` endpoint, with the
   client address. Tokens are single use and live five minutes, which Cloudflare enforces. A token that names an action
   other than `sign_in` is refused; the widget is created with that action, and a token without any action is accepted
-  because the site key belongs to sign-in alone.
+  because the site key belongs to sign-in alone. With `TURNSTILE_HOSTNAMES` set (the widget's hostnames), a token whose
+  `hostname` is not one of them is refused too; empty accepts any, which Cloudflare's dummy test keys need.
 - **Fail closed.** If Cloudflare cannot be reached, or refuses our secret key, a client that must be challenged gets
   `503 service_unavailable` with `Retry-After`, like the other safety controls (ADR 0006). Clients that need no challenge
   are not affected, so an outage never blocks the people who type their password right.
