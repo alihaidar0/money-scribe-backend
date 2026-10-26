@@ -24,6 +24,7 @@ from users.tests.helpers import (
     bearer,
     emailed_code,
     first_error,
+    new_device,
     refresh,
     sign_in,
 )
@@ -321,14 +322,15 @@ def test_the_new_password_replaces_the_old_one(api_client: APIClient) -> None:
 def test_every_session_ends_and_says_why(api_client: APIClient) -> None:
     VerifiedUserFactory.create(email=EMAIL)
     first = sign_in(api_client, EMAIL).json()
-    second = sign_in(api_client, EMAIL).json()
+    second = sign_in(api_client, EMAIL, device=new_device()).json()
     token = get_reset_token(api_client)
 
     confirm_reset(api_client, token)
 
     assert Session.objects.filter(ended_at__isnull=True).count() == 0
+    # A reset is its own reason, and the device is told what it is told after a change.
     assert set(Session.objects.values_list("end_reason", flat=True)) == {
-        EndReason.PASSWORD_CHANGED
+        EndReason.PASSWORD_RESET
     }
     for body in (first, second):
         profile = api_client.get(
@@ -475,7 +477,7 @@ def test_a_token_changes_only_its_own_account(api_client: APIClient) -> None:
 
     confirm_reset(api_client, token)
 
-    assert sign_in(api_client, other.email).status_code == 200
+    assert sign_in(api_client, other.email, device=new_device()).status_code == 200
     profile = api_client.get(
         f"{AUTH}/profile/", headers=bearer(other_session["access_token"])
     )

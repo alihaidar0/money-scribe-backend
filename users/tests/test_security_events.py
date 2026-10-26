@@ -641,14 +641,17 @@ def test_every_end_reason_is_accounted_for() -> None:
 
     written_now = {
         EndReason.SIGNED_OUT,  # signed_out
-        EndReason.PASSWORD_CHANGED,  # password_changed, password_reset
+        EndReason.PASSWORD_CHANGED,  # password_changed
+        EndReason.PASSWORD_RESET,  # password_reset
         EndReason.EMAIL_CHANGED,  # email_changed
         EndReason.TOKEN_REUSE,  # token_reuse_detected
+        EndReason.REVOKED_BY_USER,  # session_revoked
+        EndReason.SESSION_LIMIT,  # session_limit_reached
     }
     no_event_yet_or_by_decision = {
         EndReason.EXPIRED,  # not an event (ADR 0022)
         EndReason.ACCOUNT_DELETED,  # keeps nothing (ADR 0014)
-        EndReason.REVOKED_BY_USER,  # session_revoked, written by the sessions issue
+        EndReason.REPLACED,  # a newer sign-in of the same device: the person did it, nothing to warn about
     }
 
     assert written_now | no_event_yet_or_by_decision == set(EndReason)

@@ -7,6 +7,7 @@ from users.tests.helpers import (
     AUTH,
     bearer,
     first_error,
+    new_device,
     refresh,
     sign_in,
     start_session,
@@ -78,7 +79,7 @@ def test_a_valid_access_token_wins_over_a_refresh_token_of_another_session(
     api_client: APIClient,
 ) -> None:
     user, first = start_session(api_client)
-    second = sign_in(api_client, user.email).json()
+    second = sign_in(api_client, user.email, device=new_device()).json()
 
     api_client.post(
         SIGN_OUT,

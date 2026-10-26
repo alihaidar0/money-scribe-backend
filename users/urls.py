@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import views
+from . import session_views, views
 
 urlpatterns = [
     path("register/", views.RegisterView.as_view(), name="auth-register"),
@@ -38,6 +38,24 @@ urlpatterns = [
     ),
     path(
         "account/delete/", views.DeleteAccountView.as_view(), name="auth-account-delete"
+    ),
+    path(
+        "sessions/", session_views.SessionListView.as_view(), name="auth-session-list"
+    ),
+    path(
+        "sessions/revoke-others/",
+        session_views.RevokeOthersView.as_view(),
+        name="auth-session-revoke-others",
+    ),
+    path(
+        "sessions/<uuid:id>/",
+        session_views.SessionDetailView.as_view(),
+        name="auth-session-end",
+    ),
+    path(
+        "session-history/",
+        session_views.SessionHistoryView.as_view(),
+        name="auth-session-history",
     ),
     path(
         "device-keys/",

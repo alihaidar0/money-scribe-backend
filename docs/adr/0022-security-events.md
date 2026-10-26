@@ -89,7 +89,8 @@ The row added to the table of ADR 0009 (to be declared in the policy and in the 
 ## Consequences
 
 - `users` gains the `SecurityEvent` model, the writing service and a daily purge. The read endpoint
-  (`GET /api/v1/auth/session-history/`, cursor-paginated, newest first) comes with the sessions and history issue.
+  (`GET /api/v1/auth/session-history/`, cursor-paginated, newest first, the last 90 days only) came with the sessions
+  step (8.4), together with the `session_revoked` and `session_limit_reached` entries.
 - ADR 0009 gains the row above in the same change as this record, because changing what is stored changes that list first.
 - The history screen shows the types; a client treats an unknown type as an open enum value (ADR 0021).
 - Rejected: storing the truncated IP in an event (the session record already holds it while it lives, and an event needs

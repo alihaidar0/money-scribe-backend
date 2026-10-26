@@ -29,7 +29,7 @@ conflict says so with the shared response, `@extend_schema(responses={..., 409: 
 | 412 | an `If-Match` version no longer matches the stored record ([ADR 0016](0016-safe-writes.md)) | declared per operation, like `409`; nothing changed |
 | 422 | an `Idempotency-Key` reused for a different request ([ADR 0016](0016-safe-writes.md)) | declared per operation, like `409` |
 | 429 | rate limit, sign-in lock or a cooldown | always sends `Retry-After` with the remaining whole seconds (RFC 9110) |
-| 503 | a safety control cannot run | sent with `Retry-After`, only by the calls that depend on a limit; those fourteen operations declare it (`config.api_errors.SERVICE_UNAVAILABLE_RESPONSE`), with `type` `server_error` |
+| 503 | a safety control cannot run | sent with `Retry-After`, only by the calls that depend on a limit; those operations declare it (`config.api_errors.SERVICE_UNAVAILABLE_RESPONSE`), with `type` `server_error` |
 
 Rules:
 
@@ -51,12 +51,13 @@ Initial registry:
 | `wrong_password` | 401 | the email has an account and the password is wrong (`attr`: `password`) |
 | `token_expired` | 401 | the access token has expired; refresh once and retry |
 | `token_invalid` | 401 | the token is malformed or its signature is wrong |
-| `session_signed_out` | 401 | the session was ended by sign-out |
+| `session_signed_out` | 401 | the session was ended by sign-out, or replaced by a newer sign-in of the same device |
 | `session_revoked_by_user` | 401 | the user ended it from another device |
 | `session_password_changed` | 401 | ended by a password change or reset |
 | `session_email_changed` | 401 | ended by an email change |
 | `session_token_reuse` | 401 | a used refresh token was replayed, so the session was ended |
-| `session_expired` | 401 | the session reached its 90 day limit |
+| `session_expired` | 401 | the session reached its 90 day limit, or its refresh token ran out |
+| `session_limit_reached` | 401 | the session was ended because the account reached its limit of 10 active sessions and a newer sign-in took its place ([ADR 0009](0009-sessions-and-devices.md)) |
 | `email_not_verified` | 403 | the credentials are right but the email is not verified |
 | `captcha_required` | 400 | sign-in from an address that keeps failing needs a solved bot challenge (`attr`: `captcha_token`), [ADR 0013](0013-sign-in-bot-challenge.md) |
 | `captcha_invalid` | 400 | the bot challenge token is wrong, expired or already used (`attr`: `captcha_token`) |
@@ -118,11 +119,6 @@ Initial registry:
 | `unknown_category` | row problem | a CSV import row names a category (`category_key` or `category_name`) that does not exist; an import never creates one |
 | `unknown_account` | row problem | a CSV import row names an account (`account_name`) that does not exist; an import never creates one |
 | `duplicate` | row problem | a CSV import row equals an existing record (counted by multiplicity), or a salary month that exists |
-
-**Decided, not yet implemented.** Agreed with the Flutter developer on 2026-10-25. Each moves into the table above, with its
-`ErrorCode` member, in the pull request that implements it; the issue of each endpoint can still refine the details.
-
-- `session_limit_reached` (401): the session was ended because the account reached its limit of 10 active sessions.
 
 **Row problems.** `unknown_category`, `unknown_account` and `duplicate` are not the status of a call: the CSV import answers `200`
 and lists them in `problems[]`, one `{row, code, attr}` per skipped row, next to the codes of the rules of a single create.

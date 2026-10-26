@@ -334,6 +334,7 @@ def sign_in(
     client_ip = rate_limit_key(client.ip)
     limits.check_device_sign_in_lock(device.device_id, client_ip, now)
     record = _claim_challenge(challenge_id)
+    signed_in: services.SignedIn | None = None
     with transaction.atomic():
         key = (
             DeviceKey.objects.select_for_update()
@@ -357,9 +358,11 @@ def sign_in(
             key.save(update_fields=["last_used_at", "expires_at"])
             limits.clear_device_sign_in_failures(device.device_id)
             services.remember_client(key.user, language, time_zone)
-            return services.start_session(
+            signed_in = services.start_session(
                 key.user, device, client, now, method=SignInMethod.DEVICE_KEY
             )
+    if signed_in is not None:
+        return services.notify_new_device(signed_in)  # after the transaction
     limits.record_device_sign_in_failure(device.device_id, client_ip, now)
     raise services.auth_failure(
         ErrorCode.DEVICE_SIGN_IN_FAILED, "The sign-in with the fingerprint failed."

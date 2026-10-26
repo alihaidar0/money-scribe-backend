@@ -431,3 +431,17 @@ def record_device_sign_in_failure(
 def clear_device_sign_in_failures(device_id: uuid.UUID) -> None:
     """A success starts the count of this device afresh; the address count runs out by itself."""
     cache.delete(f"devicekey:fails:{_digest(str(device_id))}")
+
+
+def allow_new_device_email(user_id: uuid.UUID, now: datetime | None = None) -> bool:
+    """Whether one more new-device email may go to this account in this hour (ADR 0009).
+
+    It never fails a sign-in: if the limit store is down the email is simply not sent, which is the safe side of a
+    cap whose job is to stop a flood.
+    """
+    try:
+        count, _ = count_hit(f"newdevice:{_digest(str(user_id))}", HOUR, now)
+    except RedisError:
+        logger.warning("The limit store is unavailable; no new-device email is sent.")
+        return False
+    return count <= settings.NEW_DEVICE_EMAILS_PER_HOUR
