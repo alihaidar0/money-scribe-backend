@@ -80,5 +80,7 @@ source = ["."]
 omit = [".venv/*", "*/migrations/*", "*/tests/*", "manage.py", "config/asgi.py", "config/wsgi.py"]
 
 [tool.coverage.report]
+# CI fails below this total (pytest-cov reads it with --cov); raise it as coverage grows, never lower it to pass.
+fail_under = 97
 show_missing = true
 skip_covered = true

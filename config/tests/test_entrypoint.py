@@ -2,6 +2,7 @@
 
 import importlib
 import os
+import shlex
 import subprocess
 from pathlib import Path
 
@@ -56,3 +57,22 @@ def test_the_installed_gunicorn_knows_the_option() -> None:
     options = config.parser().parse_args(["--no-control-socket"])
 
     assert options.control_socket_disable is True
+
+
+def test_the_access_log_has_no_query_string_and_no_client_address(
+    tmp_path: Path,
+) -> None:
+    """A search parameter is the person's own text, and a full address is never kept (ADR 0009)."""
+    result = run_entrypoint(tmp_path)
+    cmd_args = next(
+        line.removeprefix("cmd_args=")
+        for line in result.stdout.splitlines()
+        if line.startswith("cmd_args=")
+    )
+    config = importlib.import_module("gunicorn.config").Config()
+    options = config.parser().parse_args(shlex.split(cmd_args))
+
+    assert "%(U)s" in options.access_log_format
+    assert "%({x-request-id}o)s" in options.access_log_format
+    for atom in ("%(r)s", "%(q)s", "%(h)s", "%(a)s"):
+        assert atom not in options.access_log_format

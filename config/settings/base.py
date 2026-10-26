@@ -21,18 +21,6 @@ from corsheaders.defaults import default_headers
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
 
-# Quick-start development settings - unsuitable for production
-# See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
-
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = "django-insecure-shvvvc=xw6xwiv1wore_&6@n$_m^c1f(i+an+yy+uz798tn*z-"
-
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
-
-ALLOWED_HOSTS = []
-
-
 # Application definition
 
 INSTALLED_APPS = [
@@ -72,17 +60,6 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = "config.wsgi.application"
-
-
-# Database
-# https://docs.djangoproject.com/en/6.0/ref/settings/#databases
-
-DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.sqlite3",
-        "NAME": BASE_DIR / "db.sqlite3",
-    }
-}
 
 
 # Password validation
@@ -154,7 +131,9 @@ STATIC_URL = "static/"
 # ── Environment-driven settings (scripts/init-django.sh) ─────────────────
 # Values come from docker-compose.yml / .env in development and from the
 # platform's environment in production.
-SECRET_KEY = os.environ.get("SECRET_KEY", SECRET_KEY)
+# No key in the repository (the deployment checklist): production.py requires one, development.py and testing.py
+# fall back to their own fake ones, and an empty key makes Django refuse to start anywhere else.
+SECRET_KEY = os.environ.get("SECRET_KEY", "")
 DEBUG = os.environ.get("DEBUG", "False").lower() in {"1", "true", "yes", "on"}
 ALLOWED_HOSTS = [
     h.strip()
@@ -287,6 +266,13 @@ SIGN_IN_CHALLENGE_AFTER_FAILURES = 5
 # staging and production set it (users.W001 warns when they do not). Never log it, never commit it.
 TURNSTILE_SECRET_KEY = os.environ.get("TURNSTILE_SECRET_KEY", "")
 TURNSTILE_TIMEOUT_SECONDS = 3
+# The hostnames of the widget (comma separated, as in the Cloudflare dashboard): a token solved on any other host is
+# refused. Empty accepts any hostname, as Cloudflare's dummy test keys need. Public identifiers, set per deployment.
+TURNSTILE_HOSTNAMES = [
+    h.strip().lower()
+    for h in os.environ.get("TURNSTILE_HOSTNAMES", "").split(",")
+    if h.strip()
+]
 SIGN_IN_LOCK_SECONDS = 900
 
 # Password reset (ADR 0014): the code is verified for a reset token, which lives this long and works once.

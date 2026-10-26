@@ -3,6 +3,11 @@ import os
 from .base import *
 
 DEBUG = True
+# A key for local work only (the compose file sets its own); staging and production must set a real one.
+SECRET_KEY = (
+    os.environ.get("SECRET_KEY")
+    or "dev-only-not-a-real-secret-key-change-in-production"
+)
 # Mailpit (SMTP) by default; set EMAIL_BACKEND to the database outbox to read codes in the admin.
 EMAIL_BACKEND = os.environ.get(
     "EMAIL_BACKEND", "django.core.mail.backends.smtp.EmailBackend"

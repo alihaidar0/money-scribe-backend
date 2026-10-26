@@ -835,6 +835,7 @@ def reset_password(*, reset_token: str, password: str) -> None:
         _forget_password_secrets(user)
         forget_device_keys(user, now=now)
         events.record_account_event(user, SecurityEventType.PASSWORD_RESET, now=now)
+    limits.clear_account_sign_in_lock(user.email)
     emails.send_password_changed_notice(email=user.email, language=user.language)
 
 
