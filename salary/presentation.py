@@ -35,6 +35,7 @@ def present_item(item: FixedItem) -> SimpleNamespace:
         currency=item.currency,
         kind=item.kind,
         part=item.part,
+        day=item.day,
         version=item.version,
         created_at=item.created_at,
         updated_at=item.updated_at,

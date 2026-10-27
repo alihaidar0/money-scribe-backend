@@ -79,6 +79,33 @@ def test_the_default_source_is_the_most_recent_saved_month_before_this_one(
     ]
 
 
+def test_the_copy_carries_the_day_and_a_missing_day_stays_missing(
+    client: APIClient, account: tuple[User, str]
+) -> None:
+    token = account[1]
+    put_month(client, token, "2026-09")
+    add_item(
+        client,
+        token,
+        "2026-09",
+        {"name": "rent", "amount": "100.00", "kind": "expense", "day": 31},
+    )
+    add_item(
+        client,
+        token,
+        "2026-09",
+        {"name": "gym", "amount": "100.00", "kind": "expense"},
+    )
+    put_month(client, token, "2026-10")
+
+    body = copy(client, token).json()
+
+    assert [(i["name"], i["day"]) for i in body["fixed_items"]] == [
+        ("rent", 31),
+        ("gym", None),
+    ]
+
+
 def test_the_items_are_new_rows_with_their_own_ids_and_version_one(
     client: APIClient, account: tuple[User, str]
 ) -> None:

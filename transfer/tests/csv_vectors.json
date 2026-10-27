@@ -318,7 +318,8 @@
               "name": "=Bonus, yearly",
               "amount": "100.00",
               "kind": "income",
-              "part": "second"
+              "part": "second",
+              "day": 20
             }
           ]
         },
@@ -338,7 +339,7 @@
           "fixed_items": []
         }
       ],
-      "csv": "month,currency,base_salary,food_per_day,working_days_in_month,working_hours_in_month,extra_hours,tax_rate,payment_mode,working_days_first_half,first_pay_day,second_pay_day,fixed_items\r\n2026-10,RUB,3000.00,5.00,22,176,7.50,15.00,two_payments,11,20,5,\"[{\"\"name\"\":\"\"Rent\"\",\"\"amount\"\":\"\"300.00\"\",\"\"kind\"\":\"\"expense\"\",\"\"part\"\":\"\"first\"\"},{\"\"name\"\":\"\"=Bonus, yearly\"\",\"\"amount\"\":\"\"100.00\"\",\"\"kind\"\":\"\"income\"\",\"\"part\"\":\"\"second\"\"}]\"\r\n2026-11,JPY,300000,0,20,160,0.00,12.34,one_payment,,20,5,[]\r\n"
+      "csv": "month,currency,base_salary,food_per_day,working_days_in_month,working_hours_in_month,extra_hours,tax_rate,payment_mode,working_days_first_half,first_pay_day,second_pay_day,fixed_items\r\n2026-10,RUB,3000.00,5.00,22,176,7.50,15.00,two_payments,11,20,5,\"[{\"\"name\"\":\"\"Rent\"\",\"\"amount\"\":\"\"300.00\"\",\"\"kind\"\":\"\"expense\"\",\"\"part\"\":\"\"first\"\"},{\"\"name\"\":\"\"=Bonus, yearly\"\",\"\"amount\"\":\"\"100.00\"\",\"\"kind\"\":\"\"income\"\",\"\"part\"\":\"\"second\"\",\"\"day\"\":20}]\"\r\n2026-11,JPY,300000,0,20,160,0.00,12.34,one_payment,,20,5,[]\r\n"
     }
   ]
 }

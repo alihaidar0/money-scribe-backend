@@ -79,7 +79,7 @@ SALARY_COLUMNS = (
     "second_pay_day",
     "fixed_items",
 )
-FIXED_ITEM_KEYS = ("name", "amount", "kind", "part")
+FIXED_ITEM_KEYS = ("name", "amount", "kind", "part", "day")
 
 # The salary month's own inputs keep their names and units; the CSV names two of them differently.
 RENAMED: dict[str, str] = {
