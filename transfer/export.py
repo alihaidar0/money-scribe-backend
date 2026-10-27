@@ -199,6 +199,8 @@ def _salary_months(user: User, period: Period) -> Iterator[list[str]]:
                         "amount": _money(item.amount, month.currency),
                         "kind": item.kind,
                         "part": item.part,
+                        # an item that never had a day has no key, so an older file reads the same
+                        **({} if item.day is None else {"day": item.day}),
                     }
                     for item in ordered(month.fixed_items.all())
                 ]

@@ -208,6 +208,7 @@ def test_salary_months_survive_the_trip_with_their_fixed_items(
                     "amount": Money(generator.randint(1, 10**8), currency).to_string(),
                     "kind": generator.choice(["income", "expense"]),
                     "part": generator.choice(["first", "second"]),
+                    "day": generator.choice([None, *range(1, 32)]),
                 },
             )
             assert added.status_code == 201, added.json()

@@ -358,6 +358,31 @@ def test_a_salary_month_has_readable_hours_and_percent_and_no_results(
     ]
 
 
+def test_a_fixed_item_with_a_day_exports_it_and_one_without_has_no_day_key(
+    client: APIClient, me: tuple[User, str]
+) -> None:
+    put_month(client, me[1], "2026-10", month_body())
+    add_item(
+        client,
+        me[1],
+        "2026-10",
+        {"name": "Rent", "amount": "300.00", "kind": "expense", "day": 31},
+    )
+    add_item(
+        client,
+        me[1],
+        "2026-10",
+        {"name": "Gym", "amount": "20.00", "kind": "expense", "part": "second"},
+    )
+
+    rows = parse_csv(text_of(export(client, me[1], ["salary_months"])))
+
+    assert rows[1][-1] == (
+        '[{"name":"Rent","amount":"300.00","kind":"expense","part":"first","day":31},'
+        '{"name":"Gym","amount":"20.00","kind":"expense","part":"second"}]'
+    )
+
+
 def test_a_salary_month_paid_once_has_an_empty_first_half(
     client: APIClient, me: tuple[User, str]
 ) -> None:

@@ -70,7 +70,7 @@ Operations: the history list (newest first, each month with its results), read, 
   (default: the most recent saved month before this one). Both months must be saved (`404` otherwise, also when there is
   no earlier month), `from` cannot be the month itself (`400` on `from`) and must have the same currency
   (`400 currency_mismatch` on `from`). The items are added to the ones already there, with new ids, version 1 and the
-  copied `name`, `amount`, `kind` and `part`. If the result would pass 100 items, nothing is copied
+  copied `name`, `amount`, `kind`, `part` and `day`. If the result would pass 100 items, nothing is copied
   (`409 fixed_item_limit_reached`). A source with no items copies nothing and is not an error.
 
 ## Fixed item
@@ -83,6 +83,12 @@ Belongs to a month and is returned inline with it, so there is no separate list.
 | `amount` | amount, greater than 0 |
 | `kind` | `income` or `expense` |
 | `part` | `first` or `second`, ignored for a month with one payment (then every item counts); defaults to `first` |
+| `day` | optional whole number 1 to 31, or `null` for none (the default, and what an item saved before the field existed has); the day of the month the item falls on |
+
+The `day` is stored and returned as sent: a day past the end of the month (31 in September) counts as the last day of that
+month, and the reader applies that, so the item keeps its day when it is copied to a longer month. The server does not
+derive `part` from `day` and never checks one against the other; the app sends both (days 1 to 15 are the first part, day 16
+to the end the second). A `PATCH` that leaves `day` out keeps it, and `"day": null` clears it.
 
 A fixed item has no currency of its own: it uses the month's. A request may leave `currency` out; one that carries
 another currency answers `400 currency_mismatch`. Adding an item to a month that is not saved answers `404`. A month holds at most 100 items; the 101st answers `409 fixed_item_limit_reached`. A month can
@@ -434,7 +440,7 @@ the order the records were added), so a re-import keeps the order within a day. 
 | `categories` | `name`, `icon` (one of the eight icons of the picker: `gifts`, `health`, `entertainment`, `shopping`, `education`, `travel`, `subscriptions`, `other`); the custom categories only, oldest first. A custom category is always of the kind `both`, so there is no `kind` column, and a built-in category is the same for everyone, so it is not in the file |
 | `transactions` | `date`, `kind`, `amount`, `currency`, `category_key`, `category_name`, `account_name`, `note` (a built-in category has its key and an empty name, a custom one the reverse) |
 | `debts` | `direction`, `person`, `amount`, `currency`, `start_date`, `due_date`, `note`, `repayments` (a JSON array of `{date, amount}`, `[]` when none) |
-| `salary_months` | `month`, `currency`, `base_salary`, `food_per_day`, `working_days_in_month`, `working_hours_in_month`, `extra_hours`, `tax_rate`, `payment_mode`, `working_days_first_half`, `first_pay_day`, `second_pay_day`, `fixed_items` (a JSON array of `{name, amount, kind, part}`) |
+| `salary_months` | `month`, `currency`, `base_salary`, `food_per_day`, `working_days_in_month`, `working_hours_in_month`, `extra_hours`, `tax_rate`, `payment_mode`, `working_days_first_half`, `first_pay_day`, `second_pay_day`, `fixed_items` (a JSON array of `{name, amount, kind, part}`, and `day` when the item has one) |
 
 The computed results of a salary month are not exported: the server recomputes them. `extra_hours` is hours with exactly two
 decimals (`7.50`, 0.00 to 744.00) and `tax_rate` a percent with exactly two decimals (`15.00`, 0.00 to 100.00); they convert
