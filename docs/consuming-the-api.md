@@ -102,6 +102,14 @@ Errors come out as a few shared classes, not one per endpoint: `Error400Response
 these defaults the whole sample API generated 13 data classes. `type` is an enum, `attr` is nullable.
 Decode an error response body into these classes when the status is `4xx` and the body is JSON.
 
+### Files: the CSV export
+
+`POST /api/v1/exports/` answers a file (`text/csv` or `application/zip`), not JSON, and the schema says so with
+`format: binary` under each media type. The Flutter developer reported that `swagger_parser` 1.45.0 with `retrofit`
+4.10.0 generates a `Stream<String>` decoded as UTF-8 text for it, which corrupts a ZIP (reported, not verified here).
+Read the answer as bytes with a hand-written call, and keep the generated client for everything else. The file name
+comes from `Content-Disposition`, and `Content-Length` is sent.
+
 ## Check that the client matches the contract
 
 Commit the generated code, so a contract change shows up as a reviewable diff, and add a CI step that

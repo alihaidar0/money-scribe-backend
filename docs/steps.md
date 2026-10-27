@@ -458,9 +458,10 @@ when the owner confirms it, and a step that needs the app on staging waits for t
   by category), and the debts report, with the shared test vectors; the salary and the fixed items of the Overview come from
   the same code as the salary month's balances (the day totals came with 10.6, in the new `reports` app)
 - [ ] **10.9 CSV export and import** (`feat/csv-export-import`, request issue #69), in the new `transfer` app: the export of
-  transactions, debts (with their repayments) and salary months as one CSV file or a ZIP, behind the password, with its
+  accounts, custom categories, transactions, debts (with their repayments) and salary months as one CSV file or a ZIP (so a
+  file can be restored into an empty account; added in `feat/csv-accounts-categories`), behind the password, with its
   rate limit, security event and email notice; the import as a bulk call of rows the app has parsed (the server never parses
-  an uploaded file), each row through the rules of a single create, skipped and reported on its own, duplicates counted by
+  an uploaded file; the schema has one typed row per dataset), each row through the rules of a single create, skipped and reported on its own, duplicates counted by
   multiplicity, a dry run, and a lossless round trip with the formula injection rule, tested on shared vectors
 - [ ] **10.10 notifications**: push device FIDs (Firebase installation IDs, one per session, removed when it ends),
   pay-day reminders through a scheduled call while hosting is free

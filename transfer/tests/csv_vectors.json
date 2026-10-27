@@ -1,5 +1,5 @@
 {
-  "about": "Invented cells and files for the CSV export and import (issue 'CSV export and import'). Both the server and the app run this file. `cells`: a text cell the person typed (`text`) and how it is written to the file (`cell`); the app reverses it by removing exactly one leading quote when the rest of the cell starts with any number of quotes followed by one of = + - @ tab CR LF. `round_trips`: after the `accounts` and `custom_categories` exist, importing `records` (rows without a line number to keep, `row` is the line of the file) and exporting the dataset gives exactly `csv` after the byte order mark, and reading `csv` the way the app does gives `records` again. Text columns are `category_name`, `account_name`, `person` and `note`; amounts are decimal strings of the currency's digits; the whole-number columns of the salary months are numbers.",
+  "about": "Invented cells and files for the CSV export and import (issue 'CSV export and import'). Both the server and the app run this file. `cells`: a text cell the person typed (`text`) and how it is written to the file (`cell`); the app reverses it by removing exactly one leading quote when the rest of the cell starts with any number of quotes followed by one of = + - @ tab CR LF. `round_trips`: after the `accounts` and `custom_categories` exist, importing `records` (rows without a line number to keep, `row` is the line of the file) and exporting the dataset gives exactly `csv` after the byte order mark, and reading `csv` the way the app does gives `records` again. Text columns are `name` (of an account and of a category), `category_name`, `account_name`, `person` and `note`; amounts are decimal strings of the currency's digits; the whole-number columns of the salary months are numbers.",
   "cells": [
     {
       "name": "a plain text is not changed",
@@ -93,6 +93,69 @@
     }
   ],
   "round_trips": [
+    {
+      "name": "accounts",
+      "dataset": "accounts",
+      "accounts": [],
+      "custom_categories": [],
+      "records": [
+        {
+          "row": 2,
+          "name": "Travel card",
+          "kind": "card"
+        },
+        {
+          "row": 3,
+          "name": "Wallet",
+          "kind": "cash"
+        },
+        {
+          "row": 4,
+          "name": "=Savings",
+          "kind": "other"
+        },
+        {
+          "row": 5,
+          "name": "Cash, \"spare\"",
+          "kind": "cash"
+        },
+        {
+          "row": 6,
+          "name": "محفظة",
+          "kind": "other"
+        }
+      ],
+      "csv": "name,kind\r\nTravel card,card\r\nWallet,cash\r\n'=Savings,other\r\n\"Cash, \"\"spare\"\"\",cash\r\nمحفظة,other\r\n"
+    },
+    {
+      "name": "categories",
+      "dataset": "categories",
+      "accounts": [],
+      "custom_categories": [],
+      "records": [
+        {
+          "row": 2,
+          "name": "Pets",
+          "icon": "gifts"
+        },
+        {
+          "row": 3,
+          "name": "+Odd, \"name\"",
+          "icon": "other"
+        },
+        {
+          "row": 4,
+          "name": "حيوانات",
+          "icon": "travel"
+        },
+        {
+          "row": 5,
+          "name": "'=Quoted",
+          "icon": "subscriptions"
+        }
+      ],
+      "csv": "name,icon\r\nPets,gifts\r\n\"'+Odd, \"\"name\"\"\",other\r\nحيوانات,travel\r\n''=Quoted,subscriptions\r\n"
+    },
     {
       "name": "transactions",
       "dataset": "transactions",

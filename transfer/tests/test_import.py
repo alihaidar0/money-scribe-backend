@@ -535,7 +535,7 @@ def test_500_rows_are_accepted_and_501_is_max_length(
 def test_an_unknown_dataset_is_invalid_choice(
     client: APIClient, me: tuple[User, str]
 ) -> None:
-    response = import_rows(client, me[1], "accounts", [row(2)])
+    response = import_rows(client, me[1], "nope", [row(2)])
 
     error = first_error(response)
     assert (response.status_code, error["code"], error["attr"]) == (

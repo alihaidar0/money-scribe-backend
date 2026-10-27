@@ -109,6 +109,9 @@ pmcs
 pmmk
 pmsu
 
+# Arabic typography named in the docs
+tatweel
+
 # Arabic text in the docs (the default account names)
 بطاقة
 نقدًا

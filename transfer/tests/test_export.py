@@ -396,7 +396,7 @@ def test_the_period_of_salary_months_is_counted_in_months(
 # --- several kinds ----------------------------------------------------------------------------
 
 
-def test_several_kinds_are_a_zip_with_one_file_per_kind_in_the_order_asked(
+def test_several_kinds_are_a_zip_with_one_file_per_kind_in_a_fixed_order(
     client: APIClient, me: tuple[User, str], wallet: Account
 ) -> None:
     spend(wallet, "2026-10-24")
@@ -411,7 +411,8 @@ def test_several_kinds_are_a_zip_with_one_file_per_kind_in_the_order_asked(
     )
     assert response["Cache-Control"] == "no-store"
     members = zip_members(response)
-    assert list(members) == ["salary_months.csv", "transactions.csv", "debts.csv"]
+    # Whatever the order asked, the members are in the order of a restore.
+    assert list(members) == ["transactions.csv", "debts.csv", "salary_months.csv"]
     assert all(body.startswith(BOM.encode("utf-8")) for body in members.values())
     assert len(parse_csv(members["transactions.csv"].decode("utf-8")[1:])) == 2
 
@@ -449,8 +450,18 @@ def test_the_same_data_gives_the_same_bytes(
     [
         ([], "min_length"),
         (["transactions", "transactions"], "invalid_choice"),
-        (["accounts"], "invalid_choice"),
-        (["transactions", "debts", "salary_months", "transactions"], "max_length"),
+        (["nope"], "invalid_choice"),
+        (
+            [
+                "accounts",
+                "categories",
+                "transactions",
+                "debts",
+                "salary_months",
+                "accounts",
+            ],
+            "max_length",
+        ),
         ("transactions", "invalid"),
         (None, "null"),
     ],

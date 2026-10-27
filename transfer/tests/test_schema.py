@@ -73,8 +73,8 @@ def test_the_export_asks_for_kinds_a_password_and_an_optional_period(
     assert set(request["required"]) == {"kinds", "current_password"}
     assert set(request["properties"]) == {"kinds", "current_password", "from", "to"}
     kinds = request["properties"]["kinds"]
-    assert (kinds["minItems"], kinds["maxItems"], kinds["uniqueItems"]) == (1, 3, True)
-    # The same three values as the datasets of the import: one shared component.
+    assert (kinds["minItems"], kinds["maxItems"], kinds["uniqueItems"]) == (1, 5, True)
+    # The same five values as the datasets of the import: one shared component.
     assert kinds["items"] == {"$ref": "#/components/schemas/DatasetEnum"}
     assert request["properties"]["from"]["format"] == "date"
     assert request["properties"]["current_password"]["writeOnly"] is True
@@ -92,22 +92,98 @@ def test_the_key_is_declared_but_not_required_because_a_dry_run_needs_none(
     assert "422" in operation["responses"]
 
 
-def test_the_import_takes_one_to_500_rows_each_with_a_row_number(
+DATASETS = ["accounts", "categories", "transactions", "debts", "salary_months"]
+IMPORT_SHAPES = {
+    "accounts": "AccountImportRequest",
+    "categories": "CategoryImportRequest",
+    "transactions": "TransactionImportRequest",
+    "debts": "DebtImportRequest",
+    "salary_months": "SalaryMonthImportRequest",
+}
+COLUMNS = {
+    "accounts": {"name", "kind"},
+    "categories": {"name", "icon"},
+    "transactions": {
+        "date",
+        "kind",
+        "amount",
+        "currency",
+        "category_key",
+        "category_name",
+        "account_name",
+        "note",
+    },
+    "debts": {
+        "direction",
+        "person",
+        "amount",
+        "currency",
+        "start_date",
+        "due_date",
+        "note",
+        "repayments",
+    },
+    "salary_months": {
+        "month",
+        "currency",
+        "base_salary",
+        "food_per_day",
+        "working_days_in_month",
+        "working_hours_in_month",
+        "extra_hours",
+        "tax_rate",
+        "payment_mode",
+        "working_days_first_half",
+        "first_pay_day",
+        "second_pay_day",
+        "fixed_items",
+    },
+}
+
+
+def test_the_import_request_is_one_shape_per_dataset_told_apart_by_dataset(
     schema: dict[str, Any],
 ) -> None:
-    request = component(schema, "ImportRequestRequest")
+    body = op(schema, IMPORTS)["requestBody"]["content"]["application/json"]["schema"]
+    assert body == {"$ref": "#/components/schemas/ImportRequest"}
+    union = component(schema, "ImportRequest")
+
+    assert [item["$ref"].rsplit("/", 1)[1] for item in union["oneOf"]] == list(
+        IMPORT_SHAPES.values()
+    )
+    assert union["discriminator"]["propertyName"] == "dataset"
+    assert union["discriminator"]["mapping"] == {
+        dataset: f"#/components/schemas/{name}"
+        for dataset, name in IMPORT_SHAPES.items()
+    }
+
+
+@pytest.mark.parametrize("dataset", DATASETS)
+def test_each_shape_takes_one_to_500_typed_rows_with_a_row_number(
+    schema: dict[str, Any], dataset: str
+) -> None:
+    request = component(schema, IMPORT_SHAPES[dataset])
     rows = request["properties"]["rows"]
+    row = component(schema, rows["items"]["$ref"].rsplit("/", 1)[1])
 
     assert set(request["required"]) == {"dataset", "rows"}
     assert (rows["minItems"], rows["maxItems"]) == (1, 500)
-    assert rows["items"]["required"] == ["row"]
-    assert rows["items"]["properties"]["row"]["minimum"] == 1
     assert request["properties"]["dry_run"]["default"] is False
-    assert component(schema, "DatasetEnum")["enum"] == [
-        "transactions",
-        "debts",
-        "salary_months",
-    ]
+    assert row["properties"]["row"]["minimum"] == 1
+    assert "row" in row["required"]
+    # The columns of the document are the columns of the file, nothing more and nothing less.
+    assert set(row["properties"]) - {"row"} == COLUMNS[dataset]
+    assert row.get("additionalProperties") is None
+
+
+def test_the_dataset_of_each_shape_is_one_value_and_the_list_of_all_is_shared(
+    schema: dict[str, Any],
+) -> None:
+    assert component(schema, "DatasetEnum")["enum"] == DATASETS
+    for dataset, name in IMPORT_SHAPES.items():
+        field = component(schema, name)["properties"]["dataset"]
+        enum = component(schema, field["allOf"][0]["$ref"].rsplit("/", 1)[1])
+        assert enum["enum"] == [dataset]
 
 
 def test_the_answer_lists_one_problem_per_skipped_row_with_a_plain_string_code(
