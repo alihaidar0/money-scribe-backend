@@ -411,13 +411,17 @@ two currencies). The server and the app run the same files.
 
 ## CSV
 
-The export and the import live in the `transfer` app. The data is `transactions`, `debts` (with their repayments) and
-`salary_months` (with their fixed items); accounts, categories and settings are not exported.
+The export and the import live in the `transfer` app. The data is `accounts`, `categories` (the person's custom ones only),
+`transactions`, `debts` (with their repayments) and `salary_months` (with their fixed items), always in this order: it is
+the order of a restore, because a transaction names an account and a category. Settings are not exported. Accounts and
+categories are in the file so that it can be restored into an empty account (see "Restoring into an empty account" below).
 
-**Export** (`POST /api/v1/exports/`, a `POST` so the password is never in a URL). Body: `kinds` (1 to 3 different values),
+**Export** (`POST /api/v1/exports/`, a `POST` so the password is never in a URL). Body: `kinds` (1 to 5 different values),
 `from` and `to` (optional inclusive days; both left out is all time) and `current_password`. The period applies to a
-transaction's `date`, a debt's `start_date` and, counted in months, to a salary month's month. One kind is answered as
-`text/csv; charset=utf-8`, several as `application/zip` with `transactions.csv`, `debts.csv` and `salary_months.csv`, with a
+transaction's `date`, a debt's `start_date` and, counted in months, to a salary month's month; accounts and categories have no
+date, so it does not apply to them (all of them are exported). One kind is answered as
+`text/csv; charset=utf-8`, several as `application/zip` with `accounts.csv`, `categories.csv`, `transactions.csv`, `debts.csv`
+and `salary_months.csv`, always in this order whatever the order of `kinds`, with a
 fixed `Content-Disposition` file name (`money-scribe-transactions.csv`, `money-scribe-export.zip`: no personal data and no
 date), `Cache-Control: no-store` and `X-Content-Type-Options: nosniff`. The answer ignores the `Accept` header.
 
@@ -426,6 +430,8 @@ the order the records were added), so a re-import keeps the order within a day. 
 
 | File | Columns, in this order |
 | --- | --- |
+| `accounts` | `name`, `kind` (`card`, `cash` or `other`); all of the person's accounts, oldest first |
+| `categories` | `name`, `icon` (one of the eight icons of the picker: `gifts`, `health`, `entertainment`, `shopping`, `education`, `travel`, `subscriptions`, `other`); the custom categories only, oldest first. A custom category is always of the kind `both`, so there is no `kind` column, and a built-in category is the same for everyone, so it is not in the file |
 | `transactions` | `date`, `kind`, `amount`, `currency`, `category_key`, `category_name`, `account_name`, `note` (a built-in category has its key and an empty name, a custom one the reverse) |
 | `debts` | `direction`, `person`, `amount`, `currency`, `start_date`, `due_date`, `note`, `repayments` (a JSON array of `{date, amount}`, `[]` when none) |
 | `salary_months` | `month`, `currency`, `base_salary`, `food_per_day`, `working_days_in_month`, `working_hours_in_month`, `extra_hours`, `tax_rate`, `payment_mode`, `working_days_first_half`, `first_pay_day`, `second_pay_day`, `fixed_items` (a JSON array of `{name, amount, kind, part}`) |
@@ -433,8 +439,8 @@ the order the records were added), so a re-import keeps the order within a day. 
 The computed results of a salary month are not exported: the server recomputes them. `extra_hours` is hours with exactly two
 decimals (`7.50`, 0.00 to 744.00) and `tax_rate` a percent with exactly two decimals (`15.00`, 0.00 to 100.00); they convert
 exactly to `extra_hours_hundredths` and `tax_rate_basis_points` (whole numbers of hundredths, no floating point), in both
-directions. The salary month API keeps its own names and units. **Formula injection:** a text cell (`note`, `person`,
-`category_name`, `account_name`) that starts with `=`, `+`, `-`, `@`, a tab, a carriage return or a line feed gets one `'` in
+directions. The salary month API keeps its own names and units. **Formula injection:** a text cell (`name` of an account
+or a category, `note`, `person`, `category_name`, `account_name`) that starts with `=`, `+`, `-`, `@`, a tab, a carriage return or a line feed gets one `'` in
 front, and so does one that starts with any number of `'` followed by one of those (otherwise removing one on the way back
 would lose a quote that was part of the text). The app removes exactly one leading `'` when the rest of the cell starts with
 any number of `'` followed by one of those characters. Amounts, dates, numbers and the JSON cells are never changed. The rule
@@ -448,7 +454,11 @@ kinds and the number of rows, never a value) and the owner gets an email, in the
 (the device name and the time in the person's `time_zone`, no content and no link). Nothing of the content is logged.
 
 **Import** (`POST /api/v1/imports/`). The app reads the CSV and sends rows as JSON; the server never parses an uploaded file.
-Body: `dataset` (`transactions`, `debts` or `salary_months`), `dry_run` (a JSON boolean, default `false`) and `rows` (1 to 500).
+Body: `dataset` (`accounts`, `categories`, `transactions`, `debts` or `salary_months`), `dry_run` (a JSON boolean, default `false`) and `rows` (1 to 500).
+In the schema the request is a `oneOf` with the discriminator `dataset`: one typed row per dataset (`AccountImportRow`,
+`CategoryImportRow`, `TransactionImportRow`, `DebtImportRow`, `SalaryMonthImportRow`), whose properties are the CSV columns.
+The call itself only checks the frame (a known dataset, 1 to 500 rows, a unique `row` each); a wrong value in a row is a
+problem of that row, never a `400` for the call.
 A row is an object with `row` (the line in the file: a positive whole number, unique in the call; anything else is
 `400 invalid` on `rows`) and the fields of the dataset named like the CSV columns. An empty cell is a missing field, the JSON
 cells are arrays, the whole-number columns of the salary months (`working_days_in_month`, `working_hours_in_month`,
@@ -458,6 +468,8 @@ is a problem `read_only` on it.
 
 | Dataset | Row fields |
 | --- | --- |
+| `accounts` | `name`, `kind` |
+| `categories` | `name`, `icon` |
 | `transactions` | `date`, `kind`, `amount`, `currency`, exactly one of `category_key` (a built-in category) and `category_name` (one of the person's own, in any case), `account_name` (in any case), `note` |
 | `debts` | `direction`, `person`, `amount`, `currency`, `start_date`, `due_date`, `note`, `repayments` |
 | `salary_months` | the columns of the file, with `fixed_items` as an array |
@@ -469,19 +481,31 @@ crash leaves nothing half-written. The answer is always `200`: `dataset`, `dry_r
 (one `{row, code, attr}` per skipped row, ordered by `row`).
 
 - **Unknown category or account:** `unknown_category` (a `category_key` or `category_name` that matches nothing, or a
-  `category_name` that is a built-in category: a built-in is named by its key) or `unknown_account`; an import never creates
-  data. Both columns together are the row problem `invalid` on `category_name`; neither is `required` on
-  `category_key`.
+  `category_name` that is a built-in category: a built-in is named by its key) or `unknown_account`; a transaction row never
+  creates an account or a category, only the datasets `accounts` and `categories` do. Both columns together are the row
+  problem `invalid` on `category_name`; neither is `required` on `category_key`.
+- **Accounts and categories:** a row gets the codes of a single create: an unknown `kind` or `icon` is `invalid_choice`, a
+  missing `icon` is `required` (there is no default icon; the app tells the person), a `kind` column on a category is
+  `read_only` (a custom category is always `both`), a name that is a built-in key or name is `name_taken`, and the caps are
+  `account_limit_reached` (20) and `category_limit_reached` (50) with `attr` `null`. A name that the person already has,
+  compared after trimming and Unicode NFC normalization and without regard to case, is `duplicate` (`attr` `name`): the
+  existing record is kept as it is (its kind or icon is not changed), also inside one file and also at the cap. The server
+  changes nothing else of a name (no NFKC, no removal of diacritics or tatweel). The two accounts made at sign-up are
+  duplicates only when the names are equal.
 - **Duplicates:** ids are never read. A row equal to an existing record (transactions: date, kind, amount, currency, category,
   account, note; debts: direction, person, amount, currency, start date, due date, note, whatever the repayments) is
   `duplicate`, counted by multiplicity: with 2 identical records in the account and 3 in the file, one is written. A salary
   month that exists is `duplicate` (attr `month`) and is never overwritten. Identical rows split across calls are compared
   with the database only, so a repeat of an existing record in a later call is `duplicate`, never silently lost.
-- **Record caps apply:** rows beyond the cap are skipped with `transaction_limit_reached`, `debt_limit_reached`,
-  `repayment_limit_reached` or `fixed_item_limit_reached` (`attr` `null`), and the rest are written up to the cap.
+- **Record caps apply:** rows beyond the cap are skipped with `account_limit_reached`, `category_limit_reached`,
+  `transaction_limit_reached`, `debt_limit_reached`, `repayment_limit_reached` or `fixed_item_limit_reached` (`attr` `null`),
+  and the rest are written up to the cap.
 - **Idempotency:** a real import needs an `Idempotency-Key` ([ADR 0016](adr/0016-safe-writes.md)); a dry run needs none,
   writes nothing and stores nothing. A dry run is the same work rolled back, so it is exact for the call, but it cannot see rows
-  of the earlier calls of the same file.
+  of the earlier calls of the same file. Two consequences for the app: never split one day between two calls (group
+  transactions by `date` and debts by `start_date` before cutting calls of 500), because identical rows split across calls
+  are compared with the database only; and a dry run of `transactions` cannot see accounts or categories that were not really
+  imported yet, so import those two for real first.
 - **Limits:** 500 rows and 1 MB a call (`400 request_too_large`), 120 calls an hour, dry runs included; while the limit store
   is down it answers `503 service_unavailable`.
 - **Security activity:** a `data_imported` event (the dataset and the rows written) is written for each real call that writes at
@@ -491,6 +515,11 @@ crash leaves nothing half-written. The answer is always `200`: `dataset`, `dry_r
 
 An export must import back without loss; amounts use the form of ADR 0008, and the round trip is tested on the shared vectors
 and on seeded random data with risky text.
+
+**Restoring into an empty account.** Import in this order, each dataset in calls of at most 500 rows: `accounts`,
+`categories`, `transactions`, `debts`, `salary_months`. The first two are small (at most 20 accounts and 50 custom
+categories), so do their real imports first; the transactions can then be sent as real calls, which report the same
+problems as a dry run. Nested problems carry the index, which starts at 0: `repayments.0.date`, `fixed_items.1.amount`.
 
 ## Sessions
 

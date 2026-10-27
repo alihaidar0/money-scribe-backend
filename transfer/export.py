@@ -4,7 +4,9 @@ Every file is UTF-8 with a byte order mark (spreadsheet programs then read Arabi
 as the separator, ``"`` quoting and CRLF line ends, oldest first, so an import of the file keeps the order within a day.
 Dates are ``YYYY-MM-DD``, months ``YYYY-MM`` and amounts decimal strings of the currency's digits (ADR 0008); an empty
 cell means "none". A text cell is passed through :func:`transfer.cells.escape_cell`; a JSON cell and every figure never is.
-The computed results of a salary month are not exported, because the server recomputes them on import.
+The computed results of a salary month are not exported, because the server recomputes them on import. The accounts and
+the custom categories are exported too, so a file can be restored into an empty account; they have no date, so a period
+does not apply to them.
 """
 
 import csv
@@ -20,7 +22,7 @@ from django.db.models import Prefetch
 
 from common.money import Currency, Money
 from debts.models import Debt, Repayment
-from ledger.models import Transaction
+from ledger.models import Account, Category, Transaction
 from salary.models import SalaryMonth
 from salary.presentation import ordered
 from users.models import User
@@ -29,9 +31,13 @@ from .cells import escape_cell
 from .units import write_hundredths
 
 BOM: Final = "﻿"
-KINDS: Final = ("transactions", "debts", "salary_months")
+# The order of the files in a ZIP, and the order a person restores them in: a transaction names an account and a
+# category, so those two come first.
+KINDS: Final = ("accounts", "categories", "transactions", "debts", "salary_months")
 
 HEADERS: Final[dict[str, list[str]]] = {
+    "accounts": ["name", "kind"],
+    "categories": ["name", "icon"],
     "transactions": [
         "date",
         "kind",
@@ -98,6 +104,18 @@ def _json(value: Any) -> str:
 
 def _money(amount: int, currency: str) -> str:
     return Money(amount, Currency(currency)).to_string()
+
+
+def _accounts(user: User, period: Period) -> Iterator[list[str]]:
+    """Every account of the person, oldest first; a period does not apply (an account has no date)."""
+    for account in Account.objects.filter(owner=user).order_by("created_at", "id"):
+        yield [escape_cell(account.name), account.kind]
+
+
+def _categories(user: User, period: Period) -> Iterator[list[str]]:
+    """The person's custom categories, oldest first (a built-in one is the same for everyone and is not exported)."""
+    for category in Category.objects.filter(owner=user).order_by("created_at", "id"):
+        yield [escape_cell(category.name), category.icon]
 
 
 def _transactions(user: User, period: Period) -> Iterator[list[str]]:
@@ -189,6 +207,8 @@ def _salary_months(user: User, period: Period) -> Iterator[list[str]]:
 
 
 _WRITERS = {
+    "accounts": _accounts,
+    "categories": _categories,
     "transactions": _transactions,
     "debts": _debts,
     "salary_months": _salary_months,
@@ -208,9 +228,9 @@ def write_csv(header: list[str], rows: Iterable[list[str]]) -> tuple[bytes, int]
 
 
 def export_files(user: User, kinds: list[str], period: Period) -> list[ExportFile]:
-    """One file per kind, in the order the kinds were asked for."""
+    """One file per kind asked for, always in the order of ``KINDS`` whatever the order of the request."""
     files = []
-    for kind in kinds:
+    for kind in (kind for kind in KINDS if kind in kinds):
         content, count = write_csv(HEADERS[kind], _WRITERS[kind](user, period))
         files.append(ExportFile(kind=kind, content=content, rows=count))
     return files

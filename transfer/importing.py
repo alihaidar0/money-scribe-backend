@@ -1,8 +1,9 @@
 """The CSV import: rows of one dataset written one by one, each in its own savepoint (the issue 'CSV export and import').
 
 The caller makes one database transaction of the whole call. A row that passes is written; a row that fails is rolled
-back to its savepoint, skipped and reported with its first problem (``row``, ``code``, ``attr``). An import never
-creates an account or a category, never reads an id, and never overwrites: a row equal to an existing record is a
+back to its savepoint, skipped and reported with its first problem (``row``, ``code``, ``attr``). Only the datasets
+``accounts`` and ``categories`` create an account or a category (a transaction row never does), no import reads an id,
+and none overwrites: a row equal to an existing record is a
 ``duplicate``, counted by multiplicity (if the person has 2 identical records and the file 3, one is written), and a
 salary month that exists is a ``duplicate`` too. The record caps apply as for a single create. A dry run is the same
 work rolled back by the caller, so it answers exactly what a real call would. Nothing here logs a value.
@@ -123,6 +124,35 @@ class Seen:
             self._left[key] -= 1
             return True
         return False
+
+
+# --- accounts and custom categories -----------------------------------------------------------
+
+
+def _import_account(owner: User, raw: dict[str, Any], seen: Seen) -> None:
+    serializer = shapes.AccountRow(data=raw)
+    serializer.is_valid(raise_exception=True)
+    data = serializer.validated_data
+    # A name is one account whatever the case, so a repeat is a duplicate (also at the cap, and within the file).
+    if ledger_services.account_name_is_taken(owner, data["name"]):
+        raise RowProblem(DUPLICATE, "name")
+    ledger_services.create_account(owner=owner, data=data)
+
+
+def _import_category(owner: User, raw: dict[str, Any], seen: Seen) -> None:
+    serializer = shapes.CategoryRow(data=raw)
+    serializer.is_valid(raise_exception=True)
+    data = serializer.validated_data
+    # Only the person's own categories make a duplicate; a name that is a built-in key or name is `name_taken`, which
+    # the create raises, as it does for a single create. An existing category keeps its icon: nothing is overwritten.
+    own = (
+        Category.objects.filter(owner=owner)
+        .annotate(lowered=Lower("name"))
+        .filter(lowered=data["name"].lower())
+    )
+    if own.exists():
+        raise RowProblem(DUPLICATE, "name")
+    ledger_services.create_category(owner=owner, data=data)
 
 
 # --- transactions -----------------------------------------------------------------------------
@@ -331,6 +361,8 @@ def _import_salary_month(owner: User, raw: dict[str, Any], seen: Seen) -> None:
 
 
 _DATASETS: dict[str, Callable[[User, dict[str, Any], Seen], None]] = {
+    "accounts": _import_account,
+    "categories": _import_category,
     "transactions": _import_transaction,
     "debts": _import_debt,
     "salary_months": _import_salary_month,

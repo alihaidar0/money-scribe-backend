@@ -27,7 +27,7 @@ One row per event, in `users`, written only by one service function and never ed
 | `session_id` | the session the event belongs to, or `null`. A plain id, not a foreign key: the session may be gone |
 | `device_name`, `platform`, `app_version` | the device of the event, copied at that moment (which device: see below); `null` when there is none or it is not known |
 | `sign_in_method` | `password`, `email_code` or `device_key`, on `signed_in` only |
-| `kinds`, `count` | on `data_exported` and `data_imported` only: which data (`transactions`, `debts`, `salary_months`; an open list) and how many rows were written to the file or written by the import (the total over the kinds; skipped rows are not counted). Never a value |
+| `kinds`, `count` | on `data_exported` and `data_imported` only: which data (`accounts`, `categories`, `transactions`, `debts`, `salary_months`; an open list) and how many rows were written to the file or written by the import (the total over the kinds; skipped rows are not counted). Never a value |
 
 There is no IP address, no user agent, no amount, no note and no name of a person or a category in an event.
 

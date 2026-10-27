@@ -24,6 +24,7 @@ from users import services as user_services
 from users.models import SecurityEventType, Session, User
 
 from . import export, importing
+from .schema_shapes import IMPORT_REQUEST
 from .serializers import (
     ExportRequestSerializer,
     ImportRequestSerializer,
@@ -63,10 +64,12 @@ class ExportView(APIView):  # type: ignore[misc]
         tags=["exports"],
         summary="Export the data as CSV",
         description=(
-            "Needs the account password (it is `POST` so the password is never in a URL). `kinds` is 1 to 3 different "
-            "values of `transactions`, `debts`, `salary_months`; `from` and `to` are optional inclusive days (both left "
-            "out is all time). One kind is answered as `text/csv; charset=utf-8`, several as `application/zip` with "
-            "`transactions.csv`, `debts.csv` and `salary_months.csv`. The file name is fixed and has no personal data "
+            "Needs the account password (it is `POST` so the password is never in a URL). `kinds` is 1 to 5 different "
+            "values of `accounts`, `categories`, `transactions`, `debts`, `salary_months`; `from` and `to` are optional "
+            "inclusive days (both left out is all time; they do not apply to accounts and categories, which have no "
+            "date). One kind is answered as `text/csv; charset=utf-8`, several as `application/zip` with "
+            "`accounts.csv`, `categories.csv`, `transactions.csv`, `debts.csv` and `salary_months.csv`, always in this "
+            "order. The categories are the person's custom ones. The file name is fixed and has no personal data "
             'and no date. Each file is UTF-8 with a byte order mark, a fixed header row, `,`, `\\"` quoting, CRLF line '
             "ends, oldest first; dates are `YYYY-MM-DD`, months `YYYY-MM`, amounts decimal strings of the currency's "
             "digits, an empty cell means none. A text cell that a spreadsheet could read as a formula gets one `'` in "
@@ -163,7 +166,7 @@ class ImportView(APIView):  # type: ignore[misc]
             IDEMPOTENT_REPLAYED_HEADER,
             RETRY_AFTER_HEADER,
         ],
-        request=ImportRequestSerializer,
+        request=IMPORT_REQUEST,
         responses={
             200: ImportResultSerializer,
             422: UNPROCESSABLE_RESPONSE,

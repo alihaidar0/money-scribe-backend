@@ -23,14 +23,14 @@ from .importing import DATASET_CHOICES, MAX_ROWS
     }
 )
 class KindsField(serializers.Field):  # type: ignore[misc]
-    """One to three different kinds of data. Empty is ``min_length``, more than three ``max_length``; an unknown kind or
+    """One to five different kinds of data. Empty is ``min_length``, more than five ``max_length``; an unknown kind or
     a repeated one is ``invalid_choice``."""
 
     default_error_messages: ClassVar[dict[str, str]] = {
         "invalid": "A list of kinds.",
         "min_length": "At least one kind.",
         "max_length": f"At most {len(KINDS)} kinds.",
-        "invalid_choice": "Each kind is `transactions`, `debts` or `salary_months`, once.",
+        "invalid_choice": "Each kind is `accounts`, `categories`, `transactions`, `debts` or `salary_months`, once.",
     }
 
     def to_internal_value(self, data: Any) -> list[str]:
@@ -53,7 +53,8 @@ class ExportRequestSerializer(serializers.Serializer):  # type: ignore[misc]
 
     kinds = KindsField(
         help_text=(
-            "1 to 3 different kinds. One kind is answered as a CSV file, several as a ZIP archive with one file per kind."
+            "1 to 5 different kinds. One kind is answered as a CSV file, several as a ZIP archive with one file per kind "
+            "(always in the order accounts, categories, transactions, debts, salary months)."
         )
     )
     current_password = PasswordField(
@@ -67,7 +68,8 @@ class ExportRequestSerializer(serializers.Serializer):  # type: ignore[misc]
             validators=[day_in_range],
             help_text=(
                 "The first day, inclusive (`YYYY-MM-DD`). It applies to a transaction's `date`, a debt's `start_date` "
-                "and, counted in months, to a salary month's month. Both left out means all time."
+                "and, counted in months, to a salary month's month; accounts and categories have no date, so it does "
+                "not apply to them. Both left out means all time."
             ),
         )
         fields["to"] = serializers.DateField(
