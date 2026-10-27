@@ -18,7 +18,25 @@ from common.serializers import (
     TextField,
 )
 from debts.serializers import DebtCreateSerializer
-from ledger.models import TransactionKind
+from ledger.defaults import CUSTOM_ICONS
+from ledger.models import AccountKind, TransactionKind
+
+
+class AccountRow(RefuseUnknownFieldsMixin, serializers.Serializer):  # type: ignore[misc]
+    """An account row: the same two fields as an account create."""
+
+    name = TextField(max_length=30, help_text="1 to 30 characters, trimmed.")
+    kind = serializers.ChoiceField(choices=AccountKind.choices)
+
+
+class CategoryRow(RefuseUnknownFieldsMixin, serializers.Serializer):  # type: ignore[misc]
+    """A custom category row. Its kind is always ``both``, so a ``kind`` column is ``read_only``."""
+
+    name = TextField(max_length=30, help_text="1 to 30 characters, trimmed.")
+    icon = serializers.ChoiceField(
+        choices=[(icon, icon) for icon in CUSTOM_ICONS],
+        help_text="One of the icons the picker offers for a custom category. There is no default for a missing one.",
+    )
 
 
 class TransactionRow(

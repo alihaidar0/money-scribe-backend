@@ -3538,22 +3538,25 @@ paths:
     post:
       operationId: export_create
       description: 'Needs the account password (it is `POST` so the password is never
-        in a URL). `kinds` is 1 to 3 different values of `transactions`, `debts`,
-        `salary_months`; `from` and `to` are optional inclusive days (both left out
-        is all time). One kind is answered as `text/csv; charset=utf-8`, several as
-        `application/zip` with `transactions.csv`, `debts.csv` and `salary_months.csv`.
-        The file name is fixed and has no personal data and no date. Each file is
-        UTF-8 with a byte order mark, a fixed header row, `,`, `\"` quoting, CRLF
-        line ends, oldest first; dates are `YYYY-MM-DD`, months `YYYY-MM`, amounts
-        decimal strings of the currency''s digits, an empty cell means none. A text
-        cell that a spreadsheet could read as a formula gets one `''` in front; the
-        figures and the JSON cells are never changed. Nothing in the period is a file
-        with the header row only. The export is rate limited (5 an hour), a `data_exported`
-        security event is written and the owner gets an email that an export was made.
-        Errors: `400` `invalid_choice`, `min_length` or `max_length` on `kinds`, `invalid_date_range`
-        on `to`, `date_out_of_range`, `required` or `invalid_password` on `current_password`;
-        `429` `password_attempts_exceeded` (shared with the password change) or `throttled`;
-        `503` `service_unavailable` while the limit store is down.'
+        in a URL). `kinds` is 1 to 5 different values of `accounts`, `categories`,
+        `transactions`, `debts`, `salary_months`; `from` and `to` are optional inclusive
+        days (both left out is all time; they do not apply to accounts and categories,
+        which have no date). One kind is answered as `text/csv; charset=utf-8`, several
+        as `application/zip` with `accounts.csv`, `categories.csv`, `transactions.csv`,
+        `debts.csv` and `salary_months.csv`, always in this order. The categories
+        are the person''s custom ones. The file name is fixed and has no personal
+        data and no date. Each file is UTF-8 with a byte order mark, a fixed header
+        row, `,`, `\"` quoting, CRLF line ends, oldest first; dates are `YYYY-MM-DD`,
+        months `YYYY-MM`, amounts decimal strings of the currency''s digits, an empty
+        cell means none. A text cell that a spreadsheet could read as a formula gets
+        one `''` in front; the figures and the JSON cells are never changed. Nothing
+        in the period is a file with the header row only. The export is rate limited
+        (5 an hour), a `data_exported` security event is written and the owner gets
+        an email that an export was made. Errors: `400` `invalid_choice`, `min_length`
+        or `max_length` on `kinds`, `invalid_date_range` on `to`, `date_out_of_range`,
+        `required` or `invalid_password` on `current_password`; `429` `password_attempts_exceeded`
+        (shared with the password change) or `throttled`; `503` `service_unavailable`
+        while the limit store is down.'
       summary: Export the data as CSV
       tags:
       - exports
@@ -3670,8 +3673,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ImportRequestRequest'
-        required: true
+              $ref: '#/components/schemas/ImportRequest'
       security:
       - bearerAuth: []
       responses:
@@ -5666,6 +5668,58 @@ components:
       - name
       - updated_at
       - version
+    AccountImportDatasetEnum:
+      enum:
+      - accounts
+      type: string
+      description: '* `accounts` - accounts'
+    AccountImportRequest:
+      type: object
+      properties:
+        dry_run:
+          type: boolean
+          default: false
+          description: '`true` answers what the call would do and writes nothing,
+            stores nothing and needs no `Idempotency-Key`.'
+        dataset:
+          allOf:
+          - $ref: '#/components/schemas/AccountImportDatasetEnum'
+          description: |-
+            The rows are `accounts` rows.
+
+            * `accounts` - accounts
+        rows:
+          type: array
+          items:
+            $ref: '#/components/schemas/AccountImportRowRequest'
+          description: 1 to 500 rows. A field that is not a column of the dataset
+            is a problem `read_only` on it, and an empty cell is left out.
+          maxItems: 500
+          minItems: 1
+      required:
+      - dataset
+      - rows
+    AccountImportRowRequest:
+      type: object
+      description: An account of the file. One whose name exists, in any case, is
+        a `duplicate`.
+      properties:
+        row:
+          type: integer
+          minimum: 1
+          description: 'The line in the file: a positive whole number, unique in the
+            call.'
+        name:
+          type: string
+          minLength: 1
+          description: 1 to 30 characters, trimmed.
+          maxLength: 30
+        kind:
+          $ref: '#/components/schemas/AccountKindEnum'
+      required:
+      - kind
+      - name
+      - row
     AccountInputRequest:
       type: object
       description: An account to add or to change. Anything else (`id`, `version`,
@@ -5774,6 +5828,70 @@ components:
       - name
       - updated_at
       - version
+    CategoryImportDatasetEnum:
+      enum:
+      - categories
+      type: string
+      description: '* `categories` - categories'
+    CategoryImportRequest:
+      type: object
+      properties:
+        dry_run:
+          type: boolean
+          default: false
+          description: '`true` answers what the call would do and writes nothing,
+            stores nothing and needs no `Idempotency-Key`.'
+        dataset:
+          allOf:
+          - $ref: '#/components/schemas/CategoryImportDatasetEnum'
+          description: |-
+            The rows are `categories` rows.
+
+            * `categories` - categories
+        rows:
+          type: array
+          items:
+            $ref: '#/components/schemas/CategoryImportRowRequest'
+          description: 1 to 500 rows. A field that is not a column of the dataset
+            is a problem `read_only` on it, and an empty cell is left out.
+          maxItems: 500
+          minItems: 1
+      required:
+      - dataset
+      - rows
+    CategoryImportRowRequest:
+      type: object
+      description: A custom category of the file. One whose name exists, in any case,
+        is a `duplicate` and keeps its icon.
+      properties:
+        row:
+          type: integer
+          minimum: 1
+          description: 'The line in the file: a positive whole number, unique in the
+            call.'
+        name:
+          type: string
+          minLength: 1
+          description: 1 to 30 characters, trimmed.
+          maxLength: 30
+        icon:
+          allOf:
+          - $ref: '#/components/schemas/IconEnum'
+          description: |-
+            One of the icons the picker offers for a custom category. There is no default for a missing one.
+
+            * `gifts` - gifts
+            * `health` - health
+            * `entertainment` - entertainment
+            * `shopping` - shopping
+            * `education` - education
+            * `travel` - travel
+            * `subscriptions` - subscriptions
+            * `other` - other
+      required:
+      - icon
+      - name
+      - row
     CategoryInputRequest:
       type: object
       description: A custom category to add or to change. Its kind is always `both`;
@@ -5995,6 +6113,8 @@ components:
     DatasetEnum:
       type: string
       enum:
+      - accounts
+      - categories
       - transactions
       - debts
       - salary_months
@@ -6189,6 +6309,108 @@ components:
       description: |-
         * `lent` - Lent
         * `borrowed` - Borrowed
+    DebtImportDatasetEnum:
+      enum:
+      - debts
+      type: string
+      description: '* `debts` - debts'
+    DebtImportRequest:
+      type: object
+      properties:
+        dry_run:
+          type: boolean
+          default: false
+          description: '`true` answers what the call would do and writes nothing,
+            stores nothing and needs no `Idempotency-Key`.'
+        dataset:
+          allOf:
+          - $ref: '#/components/schemas/DebtImportDatasetEnum'
+          description: |-
+            The rows are `debts` rows.
+
+            * `debts` - debts
+        rows:
+          type: array
+          items:
+            $ref: '#/components/schemas/DebtImportRowRequest'
+          description: 1 to 500 rows. A field that is not a column of the dataset
+            is a problem `read_only` on it, and an empty cell is left out.
+          maxItems: 500
+          minItems: 1
+      required:
+      - dataset
+      - rows
+    DebtImportRowRequest:
+      type: object
+      description: A debt of the file, with its repayments as an array.
+      properties:
+        row:
+          type: integer
+          minimum: 1
+          description: 'The line in the file: a positive whole number, unique in the
+            call.'
+        direction:
+          allOf:
+          - $ref: '#/components/schemas/DebtDirectionEnum'
+          description: |-
+            `lent` is money the person gave, `borrowed` money the person received. Fixed for good.
+
+            * `lent` - Lent
+            * `borrowed` - Borrowed
+        person:
+          type: string
+          minLength: 1
+          description: 1 to 50 characters, trimmed.
+          maxLength: 50
+        amount:
+          allOf:
+          - $ref: '#/components/schemas/Amount'
+          description: A decimal string with exactly the number of digits of the currency,
+            such as `12.50`.
+        currency:
+          allOf:
+          - $ref: '#/components/schemas/CurrencyEnum'
+          description: |-
+            Of the debt, and fixed for good.
+
+            * `RUB` - RUB
+            * `USD` - USD
+            * `EUR` - EUR
+            * `GBP` - GBP
+            * `TRY` - TRY
+            * `SAR` - SAR
+            * `AED` - AED
+            * `EGP` - EGP
+            * `JPY` - JPY
+            * `KWD` - KWD
+        start_date:
+          type: string
+          format: date
+          description: A calendar day, 2000-01-01 to 2099-12-31.
+        due_date:
+          type: string
+          format: date
+          nullable: true
+          description: 'A calendar day, 2000-01-01 to 2099-12-31. Not before `start_date`
+            (`400 due_before_start`). `null` or left out: no due date.'
+        note:
+          type: string
+          default: ''
+          description: 0 to 100 characters, trimmed.
+          maxLength: 100
+        repayments:
+          type: array
+          items:
+            $ref: '#/components/schemas/ImportRepaymentRequest'
+          description: '`[]` or a left out cell when there are none. Each is at most
+            the amount still owed.'
+      required:
+      - amount
+      - currency
+      - direction
+      - person
+      - row
+      - start_date
     DebtLine:
       type: object
       properties:
@@ -6709,10 +6931,11 @@ components:
           items:
             $ref: '#/components/schemas/DatasetEnum'
           minItems: 1
-          maxItems: 3
+          maxItems: 5
           uniqueItems: true
-          description: 1 to 3 different kinds. One kind is answered as a CSV file,
-            several as a ZIP archive with one file per kind.
+          description: 1 to 5 different kinds. One kind is answered as a CSV file,
+            several as a ZIP archive with one file per kind (always in the order accounts,
+            categories, transactions, debts, salary months).
         current_password:
           type: string
           writeOnly: true
@@ -6724,7 +6947,8 @@ components:
           format: date
           description: The first day, inclusive (`YYYY-MM-DD`). It applies to a transaction's
             `date`, a debt's `start_date` and, counted in months, to a salary month's
-            month. Both left out means all time.
+            month; accounts and categories have no date, so it does not apply to them.
+            Both left out means all time.
         to:
           type: string
           format: date
@@ -6875,6 +7099,28 @@ components:
         * `travel` - travel
         * `subscriptions` - subscriptions
         * `other` - other
+    ImportFixedItemRequest:
+      type: object
+      description: 'One fixed item in the `fixed_items` cell of a salary month. It
+        has no currency: the month''s.'
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 50
+        amount:
+          allOf:
+          - $ref: '#/components/schemas/Amount'
+          description: A decimal string with exactly the number of digits of the currency,
+            such as `12.50`.
+        kind:
+          $ref: '#/components/schemas/KindEnum'
+        part:
+          $ref: '#/components/schemas/PartEnum'
+      required:
+      - amount
+      - kind
+      - name
     ImportProblem:
       type: object
       properties:
@@ -6897,36 +7143,36 @@ components:
       - attr
       - code
       - row
-    ImportRequestRequest:
+    ImportRepaymentRequest:
       type: object
+      description: One repayment in the `repayments` cell of a debt.
       properties:
-        dataset:
-          $ref: '#/components/schemas/DatasetEnum'
-        dry_run:
-          type: boolean
-          default: false
-          description: '`true` answers what the call would do and writes nothing,
-            stores nothing and needs no `Idempotency-Key`.'
-        rows:
-          type: array
-          minItems: 1
-          maxItems: 500
-          items:
-            type: object
-            required:
-            - row
-            additionalProperties: true
-            properties:
-              row:
-                type: integer
-                minimum: 1
-                description: The line in the file; unique in the call.
-          description: Each row has `row` and the fields of the dataset, named like
-            the CSV columns, with the JSON cells as arrays and an empty cell left
-            out. A field that is not a column is a problem `read_only` on it.
+        date:
+          type: string
+          format: date
+        amount:
+          allOf:
+          - $ref: '#/components/schemas/Amount'
+          description: A decimal string with exactly the number of digits of the currency,
+            such as `12.50`.
       required:
-      - dataset
-      - rows
+      - amount
+      - date
+    ImportRequest:
+      oneOf:
+      - $ref: '#/components/schemas/AccountImportRequest'
+      - $ref: '#/components/schemas/CategoryImportRequest'
+      - $ref: '#/components/schemas/TransactionImportRequest'
+      - $ref: '#/components/schemas/DebtImportRequest'
+      - $ref: '#/components/schemas/SalaryMonthImportRequest'
+      discriminator:
+        propertyName: dataset
+        mapping:
+          accounts: '#/components/schemas/AccountImportRequest'
+          categories: '#/components/schemas/CategoryImportRequest'
+          transactions: '#/components/schemas/TransactionImportRequest'
+          debts: '#/components/schemas/DebtImportRequest'
+          salary_months: '#/components/schemas/SalaryMonthImportRequest'
     ImportResult:
       type: object
       properties:
@@ -8121,6 +8367,131 @@ components:
       - working_days_first_half
       - working_days_in_month
       - working_hours_in_month
+    SalaryMonthImportDatasetEnum:
+      enum:
+      - salary_months
+      type: string
+      description: '* `salary_months` - salary_months'
+    SalaryMonthImportRequest:
+      type: object
+      properties:
+        dry_run:
+          type: boolean
+          default: false
+          description: '`true` answers what the call would do and writes nothing,
+            stores nothing and needs no `Idempotency-Key`.'
+        dataset:
+          allOf:
+          - $ref: '#/components/schemas/SalaryMonthImportDatasetEnum'
+          description: |-
+            The rows are `salary_months` rows.
+
+            * `salary_months` - salary_months
+        rows:
+          type: array
+          items:
+            $ref: '#/components/schemas/SalaryMonthImportRowRequest'
+          description: 1 to 500 rows. A field that is not a column of the dataset
+            is a problem `read_only` on it, and an empty cell is left out.
+          maxItems: 500
+          minItems: 1
+      required:
+      - dataset
+      - rows
+    SalaryMonthImportRowRequest:
+      type: object
+      description: |-
+        A salary month of the file. `extra_hours` and `tax_rate` are the readable forms of the salary month API's
+        `extra_hours_hundredths` and `tax_rate_basis_points`.
+      properties:
+        row:
+          type: integer
+          minimum: 1
+          description: 'The line in the file: a positive whole number, unique in the
+            call.'
+        month:
+          type: string
+          minLength: 1
+          description: '`YYYY-MM`.'
+          pattern: ^20[0-9]{2}-(0[1-9]|1[0-2])$
+        currency:
+          allOf:
+          - $ref: '#/components/schemas/CurrencyEnum'
+          description: |-
+            The ISO 4217 code of the currency.
+
+            * `RUB` - RUB
+            * `USD` - USD
+            * `EUR` - EUR
+            * `GBP` - GBP
+            * `TRY` - TRY
+            * `SAR` - SAR
+            * `AED` - AED
+            * `EGP` - EGP
+            * `JPY` - JPY
+            * `KWD` - KWD
+        base_salary:
+          allOf:
+          - $ref: '#/components/schemas/Amount'
+          description: A decimal string with exactly the number of digits of the currency,
+            such as `12.50`.
+        food_per_day:
+          allOf:
+          - $ref: '#/components/schemas/Amount'
+          description: A decimal string with exactly the number of digits of the currency,
+            such as `12.50`.
+        working_days_in_month:
+          type: integer
+          maximum: 31
+          minimum: 1
+        working_hours_in_month:
+          type: integer
+          minimum: 1
+        extra_hours:
+          type: string
+          minLength: 1
+          description: Hours with exactly two decimals, `0.00` to `744.00` (`7.50`
+            is seven and a half hours).
+          pattern: ^[0-9]+\.[0-9]{2}$
+        tax_rate:
+          type: string
+          minLength: 1
+          description: A percent with exactly two decimals, `0.00` to `100.00`.
+          pattern: ^[0-9]+\.[0-9]{2}$
+        payment_mode:
+          $ref: '#/components/schemas/PaymentModeEnum'
+        working_days_first_half:
+          type: integer
+          minimum: 0
+          nullable: true
+          description: Required with two payments, up to `working_days_in_month`;
+            ignored with one.
+        first_pay_day:
+          type: integer
+          maximum: 28
+          minimum: 1
+        second_pay_day:
+          type: integer
+          maximum: 28
+          minimum: 1
+        fixed_items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ImportFixedItemRequest'
+          description: '`[]` or a left out cell when there are none.'
+      required:
+      - base_salary
+      - currency
+      - extra_hours
+      - first_pay_day
+      - food_per_day
+      - month
+      - payment_mode
+      - row
+      - second_pay_day
+      - tax_rate
+      - working_days_in_month
+      - working_hours_in_month
     SalaryMonthInputRequest:
       type: object
       description: The inputs of a month; the server calculates the rest and the client
@@ -8692,6 +9063,97 @@ components:
       - currency
       - date
       - kind
+    TransactionImportDatasetEnum:
+      enum:
+      - transactions
+      type: string
+      description: '* `transactions` - transactions'
+    TransactionImportRequest:
+      type: object
+      properties:
+        dry_run:
+          type: boolean
+          default: false
+          description: '`true` answers what the call would do and writes nothing,
+            stores nothing and needs no `Idempotency-Key`.'
+        dataset:
+          allOf:
+          - $ref: '#/components/schemas/TransactionImportDatasetEnum'
+          description: |-
+            The rows are `transactions` rows.
+
+            * `transactions` - transactions
+        rows:
+          type: array
+          items:
+            $ref: '#/components/schemas/TransactionImportRowRequest'
+          description: 1 to 500 rows. A field that is not a column of the dataset
+            is a problem `read_only` on it, and an empty cell is left out.
+          maxItems: 500
+          minItems: 1
+      required:
+      - dataset
+      - rows
+    TransactionImportRowRequest:
+      type: object
+      description: |-
+        A transaction of the file. Exactly one of `category_key` (a built-in category) and `category_name` (one of the
+        person's own) names its category, and `account_name` an account that exists; none is created.
+      properties:
+        row:
+          type: integer
+          minimum: 1
+          description: 'The line in the file: a positive whole number, unique in the
+            call.'
+        date:
+          type: string
+          format: date
+        kind:
+          $ref: '#/components/schemas/KindEnum'
+        amount:
+          allOf:
+          - $ref: '#/components/schemas/Amount'
+          description: A decimal string with exactly the number of digits of the currency,
+            such as `12.50`.
+        currency:
+          allOf:
+          - $ref: '#/components/schemas/CurrencyEnum'
+          description: |-
+            The ISO 4217 code of the currency.
+
+            * `RUB` - RUB
+            * `USD` - USD
+            * `EUR` - EUR
+            * `GBP` - GBP
+            * `TRY` - TRY
+            * `SAR` - SAR
+            * `AED` - AED
+            * `EGP` - EGP
+            * `JPY` - JPY
+            * `KWD` - KWD
+        category_key:
+          type: string
+          minLength: 1
+          maxLength: 20
+        category_name:
+          type: string
+          minLength: 1
+          maxLength: 30
+        account_name:
+          type: string
+          minLength: 1
+          maxLength: 30
+        note:
+          type: string
+          default: ''
+          maxLength: 100
+      required:
+      - account_name
+      - amount
+      - currency
+      - date
+      - kind
+      - row
     UserSummary:
       type: object
       properties:

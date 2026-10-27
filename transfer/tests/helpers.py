@@ -67,6 +67,8 @@ def zip_members(response: Response) -> dict[str, bytes]:
 
 
 TEXT_COLUMNS = {
+    "accounts": ("name",),
+    "categories": ("name",),
     "transactions": ("category_name", "account_name", "note"),
     "debts": ("person", "note"),
     "salary_months": (),
