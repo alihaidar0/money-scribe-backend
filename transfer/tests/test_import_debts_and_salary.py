@@ -335,6 +335,25 @@ def test_a_salary_month_is_written_and_recomputed_with_its_fixed_items(
     ]
 
 
+def test_the_day_of_a_fixed_item_is_written_and_a_missing_or_null_one_is_none(
+    client: APIClient, me: tuple[User, str]
+) -> None:
+    items = [
+        {"name": "Rent", "amount": "300.00", "kind": "expense", "day": 31},
+        {"name": "Gym", "amount": "20.00", "kind": "expense", "day": None},
+        {"name": "Bus", "amount": "10.00", "kind": "expense"},
+    ]
+
+    response = months(client, me[1], [month_row(2, fixed_items=items)])
+
+    assert response.json()["problems"] == []
+    assert [(i.name, i.day) for i in FixedItem.objects.order_by("created_at")] == [
+        ("Rent", 31),
+        ("Gym", None),
+        ("Bus", None),
+    ]
+
+
 def test_a_month_paid_once_needs_no_first_half_and_no_items(
     client: APIClient, me: tuple[User, str]
 ) -> None:
@@ -433,6 +452,24 @@ def test_a_month_paid_once_needs_no_first_half_and_no_items(
             },
             "invalid_choice",
             "fixed_items.0.part",
+        ),
+        (
+            {
+                "fixed_items": [
+                    {"name": "Rent", "amount": "300.00", "kind": "expense", "day": 0}
+                ]
+            },
+            "min_value",
+            "fixed_items.0.day",
+        ),
+        (
+            {
+                "fixed_items": [
+                    {"name": "Rent", "amount": "300.00", "kind": "expense", "day": 32}
+                ]
+            },
+            "max_value",
+            "fixed_items.0.day",
         ),
     ],
 )

@@ -168,6 +168,9 @@ class FixedItem(VersionedModel):
     kind = models.CharField(max_length=7, choices=ItemKind)
     # Kept as entered and ignored while the month has one payment, so switching the mode loses nothing.
     part = models.CharField(max_length=6, choices=Part, default=Part.FIRST)
+    # The day of the month the item falls on, as entered; null for an item that never had one. A day past the end
+    # of a short month (31 in September) counts as its last day, which is for the reader to apply: it stays stored.
+    day = models.PositiveSmallIntegerField(null=True, blank=True)
 
     class Meta:
         constraints: ClassVar[list[models.BaseConstraint]] = [
@@ -177,6 +180,10 @@ class FixedItem(VersionedModel):
             ),
             models.CheckConstraint(
                 condition=~Q(name=""), name="salary_fixeditem_name_not_empty"
+            ),
+            models.CheckConstraint(
+                condition=Q(day__isnull=True) | _between("day", 1, 31),
+                name="salary_fixeditem_day_range",
             ),
         ]
         indexes: ClassVar[list[models.Index]] = [

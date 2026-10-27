@@ -57,7 +57,8 @@ Worked example, invented values in minor units: `base` 300000, `food_per_day` 50
   stores the payment mode and the two pay days (1 to 28) it was saved with.
 - A **fixed item** (name, amount greater than zero, `income` or `expense`, `part` of `first` or `second`) belongs to a
   month and is returned inline with it. Its `part` is stored as entered and ignored while the month has one payment, so
-  switching the payment mode loses nothing; a new item defaults to `first`.
+  switching the payment mode loses nothing; a new item defaults to `first`. It may also carry a `day` of the month
+  (1 to 31, `null` for none), stored as entered; `part` is not derived from it.
 - With two payments the **parts** are calendar halves: the first is days 1 to 15 and the second is day 16 to the end of the
   month. Overview and report read models take `part=first|second|all`.
 - The response carries the inputs used, the payment mode, the calculation version, the five results and the payments, the

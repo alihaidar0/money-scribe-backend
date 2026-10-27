@@ -4151,11 +4151,11 @@ paths:
   /api/v1/salary/fixed-items/{id}/:
     patch:
       operationId: salary_fixed_item_update
-      description: 'Changes any of `name`, `amount`, `kind`, `part`; the `currency`,
-        if sent, must be the month''s. Send `If-Match` with the item''s `version`:
-        a stale one is `412` and changes nothing. Answers the item and its new `ETag`;
-        the month''s `version` does not change, but its `fixed_totals` and `balances`
-        do.'
+      description: 'Changes any of `name`, `amount`, `kind`, `part`, `day` (`null`
+        clears it); the `currency`, if sent, must be the month''s. Send `If-Match`
+        with the item''s `version`: a stale one is `412` and changes nothing. Answers
+        the item and its new `ETag`; the month''s `version` does not change, but its
+        `fixed_totals` and `balances` do.'
       summary: Change a fixed item
       parameters:
       - in: header
@@ -4893,13 +4893,13 @@ paths:
     post:
       operationId: salary_fixed_items_copy
       description: 'Adds the fixed items of another saved month to this one (`name`,
-        `amount`, `kind`, `part`, with new ids) and answers this month. Needs an `Idempotency-Key`.
-        `from` is the month to copy from; without it, the most recent saved month
-        before this one. Errors: `404` for a month or a source that is not saved (also
-        when there is no earlier month); `400` on `from` when it is the month itself
-        or has another currency (`currency_mismatch`); `409` `fixed_item_limit_reached`
-        with nothing copied when the total would pass 100. A source with no items
-        copies nothing and is not an error.'
+        `amount`, `kind`, `part`, `day`, with new ids) and answers this month. Needs
+        an `Idempotency-Key`. `from` is the month to copy from; without it, the most
+        recent saved month before this one. Errors: `404` for a month or a source
+        that is not saved (also when there is no earlier month); `400` on `from` when
+        it is the month itself or has another currency (`currency_mismatch`); `409`
+        `fixed_item_limit_reached` with nothing copied when the total would pass 100.
+        A source with no items copies nothing and is not an error.'
       summary: Copy the fixed items of another month
       parameters:
       - in: header
@@ -6997,6 +6997,12 @@ components:
           allOf:
           - $ref: '#/components/schemas/PartEnum'
           readOnly: true
+        day:
+          type: integer
+          readOnly: true
+          nullable: true
+          description: The day of the month, 1 to 31, or `null` when the item has
+            none (an item saved without one).
         version:
           type: integer
           readOnly: true
@@ -7012,6 +7018,7 @@ components:
       - amount
       - created_at
       - currency
+      - day
       - id
       - kind
       - name
@@ -7044,6 +7051,15 @@ components:
 
             * `first` - First part
             * `second` - Second part
+        day:
+          type: integer
+          maximum: 31
+          minimum: 1
+          nullable: true
+          description: The day of the month the item falls on, 1 to 31, or `null`
+            for none. A day past the end of the month (31 in September) counts as
+            its last day; it is stored and returned as sent. It does not change `part`,
+            which is still the one sent.
         currency:
           allOf:
           - $ref: '#/components/schemas/CurrencyEnum'
@@ -7117,6 +7133,12 @@ components:
           $ref: '#/components/schemas/KindEnum'
         part:
           $ref: '#/components/schemas/PartEnum'
+        day:
+          type: integer
+          maximum: 31
+          minimum: 1
+          nullable: true
+          description: The day of the month, 1 to 31. Left out, or `null`, for none.
       required:
       - amount
       - kind
@@ -7787,6 +7809,15 @@ components:
 
             * `first` - First part
             * `second` - Second part
+        day:
+          type: integer
+          maximum: 31
+          minimum: 1
+          nullable: true
+          description: The day of the month the item falls on, 1 to 31, or `null`
+            for none. A day past the end of the month (31 in September) counts as
+            its last day; it is stored and returned as sent. It does not change `part`,
+            which is still the one sent.
         currency:
           allOf:
           - $ref: '#/components/schemas/CurrencyEnum'

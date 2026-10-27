@@ -260,7 +260,7 @@ class FixedItemsCopy(APIView):  # type: ignore[misc]
         tags=TAG,
         summary="Copy the fixed items of another month",
         description=(
-            "Adds the fixed items of another saved month to this one (`name`, `amount`, `kind`, `part`, with new ids) "
+            "Adds the fixed items of another saved month to this one (`name`, `amount`, `kind`, `part`, `day`, with new ids) "
             "and answers this month. Needs an `Idempotency-Key`. `from` is the month to copy from; without it, the "
             "most recent saved month before this one. Errors: `404` for a month or a source that is not saved (also "
             "when there is no earlier month); `400` on `from` when it is the month itself or has another currency "
@@ -295,7 +295,7 @@ class FixedItemsCopy(APIView):  # type: ignore[misc]
         tags=TAG,
         summary="Change a fixed item",
         description=(
-            "Changes any of `name`, `amount`, `kind`, `part`; the `currency`, if sent, must be the month's. Send "
+            "Changes any of `name`, `amount`, `kind`, `part`, `day` (`null` clears it); the `currency`, if sent, must be the month's. Send "
             "`If-Match` with the item's `version`: a stale one is `412` and changes nothing. Answers the item and "
             "its new `ETag`; the month's `version` does not change, but its `fixed_totals` and `balances` do."
         ),

@@ -95,6 +95,17 @@ class FixedItemInputSerializer(MoneySerializerMixin, serializers.Serializer):  #
         default=Part.FIRST.value,
         help_text="Ignored while the month has one payment (every item counts then).",
     )
+    day = serializers.IntegerField(
+        min_value=1,
+        max_value=31,
+        required=False,
+        allow_null=True,
+        help_text=(
+            "The day of the month the item falls on, 1 to 31, or `null` for none. A day past the end of the month "
+            "(31 in September) counts as its last day; it is stored and returned as sent. It does not change `part`, "
+            "which is still the one sent."
+        ),
+    )
     currency = CurrencyField(
         required=False,
         help_text="May be left out. If it is sent it must be the currency of the month.",
@@ -132,6 +143,11 @@ class FixedItemSerializer(serializers.Serializer):  # type: ignore[misc]
     currency = CurrencyField(read_only=True, help_text="The currency of the month.")
     kind = serializers.ChoiceField(choices=ItemKind.choices, read_only=True)
     part = serializers.ChoiceField(choices=Part.choices, read_only=True)
+    day = serializers.IntegerField(
+        read_only=True,
+        allow_null=True,
+        help_text="The day of the month, 1 to 31, or `null` when the item has none (an item saved without one).",
+    )
     version = serializers.IntegerField(read_only=True)
     created_at = serializers.DateTimeField(read_only=True)
     updated_at = serializers.DateTimeField(read_only=True)

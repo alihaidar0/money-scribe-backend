@@ -151,6 +151,7 @@ def add_item(*, month: SalaryMonth, data: dict[str, Any]) -> FixedItem:
         amount=amount.minor,
         kind=data["kind"],
         part=data["part"],
+        day=data.get("day"),
     )
 
 
@@ -164,6 +165,8 @@ def update_item(*, item: FixedItem, data: dict[str, Any]) -> FixedItem:
         item.kind = data["kind"]
     if "part" in data:
         item.part = data["part"]
+    if "day" in data:
+        item.day = data["day"]
     item.save()
     return item
 
@@ -173,8 +176,8 @@ def copy_items(
 ) -> SalaryMonth:
     """Copy the fixed items of another saved month into this one, and answer the target month.
 
-    The items are added to the ones already there, with new ids, version 1 and the same name, amount, kind and
-    part. Nothing is copied if the total would pass 100.
+    The items are added to the ones already there, with new ids, version 1 and the same name, amount, kind,
+    part and day. Nothing is copied if the total would pass 100.
     """
     target = lock_month(owner, month)
     if source is None:
@@ -219,6 +222,7 @@ def copy_items(
                 amount=item.amount,
                 kind=item.kind,
                 part=item.part,
+                day=item.day,
             )
     return target
 

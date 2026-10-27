@@ -54,6 +54,13 @@ class ImportFixedItem(serializers.Serializer):  # type: ignore[misc]
     amount = AmountField(allow_zero=False)
     kind = serializers.ChoiceField(choices=ItemKind.choices)
     part = serializers.ChoiceField(choices=Part.choices, required=False)
+    day = serializers.IntegerField(
+        min_value=1,
+        max_value=31,
+        required=False,
+        allow_null=True,
+        help_text="The day of the month, 1 to 31. Left out, or `null`, for none.",
+    )
 
 
 class AccountImportRow(RowNumber, rows.AccountRow):

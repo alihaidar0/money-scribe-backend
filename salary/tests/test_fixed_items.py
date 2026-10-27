@@ -72,6 +72,51 @@ def test_the_part_defaults_to_the_first(
     assert response.json()["part"] == "first"
 
 
+def test_the_day_is_stored_as_sent_and_never_changes_the_part(
+    client: APIClient, account: tuple[User, str], month: str
+) -> None:
+    response = add_item(
+        client,
+        account[1],
+        body={
+            "name": "Rent",
+            "amount": "3000.00",
+            "kind": "expense",
+            "part": "first",
+            "day": 31,
+        },
+    )
+
+    body = response.json()
+    assert response.status_code == 201
+    # 31 is kept as sent, even though it is past the end of some months
+    assert (body["day"], body["part"]) == (31, "first")
+    assert FixedItem.objects.get().day == 31
+    assert read_month(client, account[1]).json()["fixed_items"][0]["day"] == 31
+
+
+@pytest.mark.parametrize("sent", [{}, {"day": None}])
+def test_an_item_without_a_day_has_a_null_day(
+    client: APIClient, account: tuple[User, str], month: str, sent: dict[str, Any]
+) -> None:
+    body = {"name": "Rent", "amount": "3000.00", "kind": "expense", **sent}
+
+    response = add_item(client, account[1], body=body)
+
+    assert response.status_code == 201
+    assert response.json()["day"] is None
+    assert FixedItem.objects.get().day is None
+
+
+@pytest.mark.parametrize("day", [1, 15, 16, 31])
+def test_the_edges_of_the_day_are_accepted(
+    client: APIClient, account: tuple[User, str], month: str, day: int
+) -> None:
+    body = {"name": "Rent", "amount": "30.00", "kind": "expense", "day": day}
+
+    assert add_item(client, account[1], body=body).json()["day"] == day
+
+
 def test_the_currency_may_be_left_out_or_be_the_months(
     client: APIClient, account: tuple[User, str], month: str
 ) -> None:
@@ -112,6 +157,10 @@ def test_another_currency_than_the_months_is_a_currency_mismatch_on_currency(
         ("amount", 5.5, "invalid_amount"),
         ("kind", "gift", "invalid_choice"),
         ("part", "third", "invalid_choice"),
+        ("day", 0, "min_value"),
+        ("day", 32, "max_value"),
+        ("day", "x", "invalid"),
+        ("day", 1.5, "invalid"),
         ("currency", "XXX", "invalid_choice"),
     ],
 )
@@ -374,6 +423,43 @@ def test_every_field_can_change(
         "income",
         "second",
     )
+
+
+def test_the_day_can_be_set_changed_cleared_and_is_kept_by_other_changes(
+    client: APIClient, account: tuple[User, str], item: dict[str, Any]
+) -> None:
+    token = account[1]
+    assert item["day"] is None
+
+    set_day = patch(client, token, item["id"], {"day": 16})
+    assert (set_day.status_code, set_day.json()["day"], set_day.json()["part"]) == (
+        200,
+        16,
+        "first",
+    )
+    assert set_day.json()["version"] == 2
+
+    other_field = patch(client, token, item["id"], {"amount": "10.00"})
+    assert other_field.json()["day"] == 16  # a change that leaves `day` out keeps it
+
+    cleared = patch(client, token, item["id"], {"day": None})
+    assert cleared.json()["day"] is None
+    assert FixedItem.objects.get().day is None
+
+
+def test_a_wrong_day_on_a_change_is_a_400_and_keeps_the_item(
+    client: APIClient, account: tuple[User, str], item: dict[str, Any]
+) -> None:
+    patch(client, account[1], item["id"], {"day": 5})
+
+    response = patch(client, account[1], item["id"], {"day": 32})
+
+    assert response.status_code == 400
+    assert (first_error(response)["attr"], first_error(response)["code"]) == (
+        "day",
+        "max_value",
+    )
+    assert FixedItem.objects.get().day == 5
 
 
 def test_a_change_moves_the_month_balances(
