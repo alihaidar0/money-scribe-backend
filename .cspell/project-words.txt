@@ -27,6 +27,8 @@ usernamehw
 Argon
 autonumber
 cffi
+chainctl
+chainguard
 DKIM
 DMARC
 errorlens
