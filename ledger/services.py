@@ -27,6 +27,7 @@ from .models import (
     Category,
     CategoryKind,
     Transaction,
+    TransactionKind,
 )
 
 
@@ -312,6 +313,8 @@ def create_transaction(*, owner: User, data: dict[str, Any]) -> Transaction:
         category=category,
         account=account,
         note=data.get("note", ""),
+        part=data.get("part") or "",
+        part_month=data.get("part_month"),
     )
 
 
@@ -337,6 +340,12 @@ def update_transaction(*, record: Transaction, data: dict[str, Any]) -> Transact
     for name in ("date", "note"):
         if name in data:
             changes[name] = data[name]
+    if "part" in data:
+        changes["part"] = data["part"] or ""
+        changes["part_month"] = data["part_month"]
+    elif kind != TransactionKind.INCOME.value:
+        # Turning an income into an expense drops the part it was put on.
+        changes["part"], changes["part_month"] = "", None
     if category is not None:
         changes["category"] = category
     if account is not None:

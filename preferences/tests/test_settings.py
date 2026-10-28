@@ -7,6 +7,7 @@ from django.db import IntegrityError
 from rest_framework.test import APIClient
 
 from common.money import Currency
+from common.pay_cycle import DEFAULT_PAY_DAYS
 from preferences import services
 from preferences.models import Preferences
 from users.models import User
@@ -272,17 +273,17 @@ def test_the_current_version_or_a_star_is_accepted(
 
     assert (
         change(
-            client, account[1], {"first_pay_day": 1}, **{"If-Match": '"1"'}
+            client, account[1], {"first_pay_day": 25}, **{"If-Match": '"1"'}
         ).status_code
         == 200
     )
     assert (
         change(
-            client, account[1], {"first_pay_day": 2}, **{"If-Match": "*"}
+            client, account[1], {"first_pay_day": 26}, **{"If-Match": "*"}
         ).status_code
         == 200
     )
-    assert change(client, account[1], {"first_pay_day": 3}).json()["version"] == 4
+    assert change(client, account[1], {"first_pay_day": 12}).json()["version"] == 4
 
 
 # --- other users, tokens, methods -------------------------------------------------------------
@@ -359,3 +360,52 @@ def test_the_database_refuses_what_the_api_would_(
 ) -> None:
     with pytest.raises(IntegrityError):
         Preferences.objects.create(user=account[0], **changes)
+
+
+# --- the order of the pay days (ADR 0023) ------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        {"first_pay_day": 5, "second_pay_day": 20},
+        {"first_pay_day": 7, "second_pay_day": 7},
+        {"first_pay_day": 3},  # the second day is the default, 5
+        {"second_pay_day": 25},  # the first day is the default, 20
+        {"first_pay_day": None, "second_pay_day": 20},
+    ],
+)
+def test_pay_days_that_are_not_ordered_are_refused_and_change_nothing(
+    client: APIClient, account: tuple[User, str], body: dict[str, Any]
+) -> None:
+    response = change(client, account[1], {**body, "language": "ar"})
+
+    assert response.status_code == 400
+    error = first_error(response)
+    assert (error["code"], error["attr"]) == ("invalid_pay_days", "second_pay_day")
+    assert shown(read(client, account[1])) == DEFAULTS
+
+
+def test_one_day_alone_is_checked_against_the_stored_other(
+    client: APIClient, account: tuple[User, str]
+) -> None:
+    change(client, account[1], {"first_pay_day": 28, "second_pay_day": 27})
+
+    assert change(client, account[1], {"second_pay_day": 28}).status_code == 400
+    assert change(client, account[1], {"second_pay_day": 1}).status_code == 200
+
+
+def test_a_change_that_leaves_the_pay_days_alone_is_not_checked(
+    client: APIClient, account: tuple[User, str]
+) -> None:
+    Preferences.objects.create(user=account[0], first_pay_day=3, second_pay_day=9)
+
+    assert change(client, account[1], {"language": "ar"}).status_code == 200
+
+
+def test_stored_pay_days_out_of_order_fall_back_to_the_defaults(
+    account: tuple[User, str],
+) -> None:
+    Preferences.objects.create(user=account[0], first_pay_day=3, second_pay_day=9)
+
+    assert services.pay_days_of(account[0]) == DEFAULT_PAY_DAYS

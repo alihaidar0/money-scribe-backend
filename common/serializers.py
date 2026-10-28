@@ -13,10 +13,12 @@ This is the one place the API reads or writes an amount; the OpenAPI schema name
 ``SignedAmount`` (``common/openapi.py``).
 """
 
+import datetime
 import re
 from typing import Any, ClassVar
 
 from drf_spectacular.extensions import OpenApiSerializerFieldExtension
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 from rest_framework.exceptions import ErrorDetail, ValidationError
 
@@ -30,6 +32,8 @@ from .money import (
     Money,
 )
 from .text import has_forbidden_character, normalize_text
+
+_MONTH = re.compile(r"(20[0-9]{2})-(0[1-9]|1[0-2])")
 
 
 def _invalid(message: str) -> ValidationError:
@@ -140,6 +144,26 @@ class MoneySerializerMixin(serializers.Serializer):  # type: ignore[misc]
         if errors:
             raise ValidationError(errors)
         return attrs
+
+
+@extend_schema_field(
+    {"type": "string", "pattern": r"^20[0-9]{2}-(0[1-9]|1[0-2])$", "example": "2026-10"}
+)
+class MonthField(serializers.Field):  # type: ignore[misc]
+    """A month as ``YYYY-MM`` (years 2000 to 2099); in the code it is the first day of that month."""
+
+    default_error_messages: ClassVar[dict[str, str]] = {
+        "invalid": "A month as YYYY-MM, from 2000-01 to 2099-12."
+    }
+
+    def to_internal_value(self, data: Any) -> datetime.date:
+        match = _MONTH.fullmatch(data) if isinstance(data, str) else None
+        if match is None:
+            raise self.fail("invalid")
+        return datetime.date(int(match.group(1)), int(match.group(2)), 1)
+
+    def to_representation(self, value: datetime.date) -> str:
+        return f"{value:%Y-%m}"
 
 
 class TextField(serializers.CharField):  # type: ignore[misc]

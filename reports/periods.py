@@ -1,8 +1,9 @@
-"""The month a report covers, its two parts and the settings that decide them (ADR 0007).
+"""The days a report covers, its two parts and the settings that decide them (ADR 0007, 0023).
 
-A month paid twice is cut at the calendar day of a record: days 1 to 15 are the first part, day 16 to the end of the
-month the second. The cut is on the transaction's or the repayment's own ``date``, never on an instant, so it does not
-move with a time zone.
+A month paid once is the calendar month. A month paid twice follows the pay cycle: its first part runs from the first
+pay day of the month to the day before the second pay day of the next month, and its second part from that day to the
+day before the next first pay day (with the days 20 and 5: the 20th to the 4th and the 5th to the 19th). The cut is on
+the transaction's or the repayment's own ``date``, never on an instant, so it does not move with a time zone.
 """
 
 import calendar
@@ -14,36 +15,42 @@ from django.db.models.expressions import Combinable
 
 from common.enums import PaymentMode
 from common.money import Currency
+from common.pay_cycle import PayDays, cycle_of
 from preferences import services as preferences
 from salary.models import SalaryMonth
 from users.models import User
 
-FIRST_PART_LAST_DAY = 15
+FIRST_PART_LAST_DAY = 15  # where a month paid once is split; its parts are not shown
 FIRST, SECOND = 1, 2
 
 
 @dataclass(frozen=True)
 class MonthPeriod:
+    month: datetime.date  # the first day of the month the report is for
     first_day: datetime.date
-    middle: datetime.date  # the last day of the first part
     last_day: datetime.date
+    second_start: datetime.date  # the first day of the second part
 
     def half(self, field: str = "date") -> Combinable:
         """An expression that is 1 for a day of the first part and 2 for a day of the second."""
         return Case(
-            When(**{f"{field}__lte": self.middle}, then=Value(FIRST)),
+            When(**{f"{field}__lt": self.second_start}, then=Value(FIRST)),
             default=Value(SECOND),
             output_field=IntegerField(),
         )
 
 
-def period_of(month: datetime.date) -> MonthPeriod:
-    """The days of the month whose first day is given."""
+def period_of(month: datetime.date, pay_days: PayDays | None = None) -> MonthPeriod:
+    """The days of the month whose first day is given: the pay cycle with ``pay_days``, else the calendar month."""
+    if pay_days is not None:
+        cycle = cycle_of(month, pay_days)
+        return MonthPeriod(month, cycle.start, cycle.end, cycle.second_start)
     last = calendar.monthrange(month.year, month.month)[1]
     return MonthPeriod(
+        month,
         first_day=month,
-        middle=month.replace(day=FIRST_PART_LAST_DAY),
         last_day=month.replace(day=last),
+        second_start=month.replace(day=FIRST_PART_LAST_DAY + 1),
     )
 
 

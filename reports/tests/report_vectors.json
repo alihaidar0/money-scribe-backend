@@ -1,8 +1,8 @@
 {
-  "about": "Invented cases for the month report and the debts report (issue 'Reports and Overview'). Both the server and the app run this file. A `month` case sets up `settings`, `custom_categories`, `transactions` (a `category` is a built-in key such as `groceries`, or `custom:<name>`), `deleted_categories` (custom categories deleted after the transactions are saved, so their records move to `other`) and asks for the month report of `month` in `currency` (`null`: leave it out). `expected` is the answer without `month` and `currency`. A `custom:<name>` `category_id` stands for the id the server gave that category. A `debts` case sets up `debts` with `repayments`, and `today`, and asks for the debts report; `expected` lists the items without their `id`. All amounts are decimal strings of the currency's digits. The first part is days 1 to 15, the second day 16 to the end of the month. The built-in ids are the fixed ones of the data migration.",
+  "about": "Invented cases for the month report and the debts report (issue 'Reports and Overview'). Both the server and the app run this file. A `month` case sets up `settings`, `custom_categories`, `transactions` (a `category` is a built-in key such as `groceries`, or `custom:<name>`), `deleted_categories` (custom categories deleted after the transactions are saved, so their records move to `other`) and asks for the month report of `month` in `currency` (`null`: leave it out). `expected` is the answer without `month` and `currency`. A `custom:<name>` `category_id` stands for the id the server gave that category. A `debts` case sets up `debts` with `repayments`, and `today`, and asks for the debts report; `expected` lists the items without their `id`. All amounts are decimal strings of the currency's digits. A month paid twice follows the pay cycle of the Settings pay days (20 and 5 unless set): its first part runs from the 20th to the 4th of the next month, its second from the 5th to the 19th, and the month is both together. An income joins the part whose pay day is nearest to its date unless the case names a part. The built-in ids are the fixed ones of the data migration.",
   "cases": [
     {
-      "name": "a transaction on the 15th and on the 16th, a month paid twice",
+      "name": "a transaction on the last day of the first part and on the first day of the second, a month paid twice",
       "kind": "month",
       "currency": "RUB",
       "inputs": {
@@ -15,28 +15,28 @@
             "kind": "expense",
             "amount": "10.00",
             "currency": "RUB",
-            "date": "2026-10-15",
+            "date": "2026-11-04",
             "category": "groceries"
           },
           {
             "kind": "expense",
             "amount": "20.00",
             "currency": "RUB",
-            "date": "2026-10-16",
+            "date": "2026-11-05",
             "category": "dining"
           },
           {
             "kind": "expense",
             "amount": "5.00",
             "currency": "RUB",
-            "date": "2026-10-16",
+            "date": "2026-11-05",
             "category": "groceries"
           },
           {
             "kind": "income",
             "amount": "100.00",
             "currency": "RUB",
-            "date": "2026-10-15",
+            "date": "2026-10-21",
             "category": "scholarship"
           }
         ]
@@ -168,7 +168,7 @@
             "kind": "expense",
             "amount": "2.00",
             "currency": "RUB",
-            "date": "2026-10-16",
+            "date": "2026-11-10",
             "category": "dining"
           }
         ]

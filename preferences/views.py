@@ -44,7 +44,8 @@ class SettingsView(APIView):  # type: ignore[misc]
             "`default_currency`, `payment_mode`, `first_pay_day` and `second_pay_day` can be sent as `null` to go back "
             'to "not set". Send `If-Match` with the `version` read: a stale one is `412` and changes nothing. '
             "Errors: `400` on the field that is wrong (`invalid_choice`, `invalid`, `min_value`, `max_value`, `null` "
-            "for a field that cannot be cleared), `400` `read_only` for a field that is not a setting."
+            "for a field that cannot be cleared), `400` `invalid_pay_days` on `second_pay_day` when the pay days that would "
+            "result leave the second on or after the first, `400` `read_only` for a field that is not a setting."
         ),
         parameters=[IF_MATCH_HEADER, ETAG_HEADER],
         request=SettingsUpdateSerializer,
