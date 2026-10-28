@@ -186,10 +186,10 @@ repayment has no read and no list of its own: every debt carries its repayments 
 
 | Field | Rule |
 | --- | --- |
-| `direction` | `lent` or `borrowed`; fixed for good (`400 read_only` on a change, even with the stored value) |
+| `direction` | `lent` or `borrowed`; can be corrected by a change, which keeps the repayments, the amount and the dates, and raises the `version` |
 | `person` | text, 1 to 50 characters; the name of a third party, never written to a log |
 | `amount` | amount, greater than 0; not below what was repaid (`400 amount_below_repaid`) |
-| `currency` | ISO code, required on create and fixed for good, like the `direction` |
+| `currency` | ISO code, required on create and fixed for good (`400 read_only` on a change, even with the stored value) |
 | `start_date` | calendar day, 2000-01-01 to 2099-12-31 (`400 date_out_of_range`); not after a repayment (`400 start_after_repayment`) |
 | `due_date` | calendar day, optional, not before `start_date` (`400 due_before_start` on `due_date`); `null` clears it |
 | `note` | text, up to 100 characters, default empty; `""` clears it and `null` is `400` |

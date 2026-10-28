@@ -3021,10 +3021,12 @@ paths:
           description: ''
     patch:
       operationId: debt_update
-      description: 'Changes any of `person`, `amount`, `start_date`, `due_date`, `note`;
-        fields not sent keep their value. `{"due_date": null}` clears the due date
-        and `"note": ""` the note; `note: null` is `400`. The `direction` and the
-        `currency` cannot be changed: sending them, even the stored value, is `400`
+      description: 'Changes any of `direction`, `person`, `amount`, `start_date`,
+        `due_date`, `note`; fields not sent keep their value. Flipping the `direction`
+        (a debt added as `lent` instead of `borrowed`, or the reverse) keeps the repayments,
+        the amount and the dates, and the status does not depend on it. `{"due_date":
+        null}` clears the due date and `"note": ""` the note; `note: null` is `400`.
+        The `currency` cannot be changed: sending it, even the stored value, is `400`
         `read_only`, like every derived field and any unknown field. The `amount`
         cannot go below what was repaid (`400` `amount_below_repaid`) and the `start_date`
         cannot go past a repayment (`400` `start_after_repayment`). Send `If-Match`
@@ -6257,7 +6259,7 @@ components:
           allOf:
           - $ref: '#/components/schemas/DebtDirectionEnum'
           description: |-
-            `lent` is money the person gave, `borrowed` money the person received. Fixed for good.
+            `lent` is money the person gave, `borrowed` money the person received. Can be corrected later.
 
             * `lent` - Lent
             * `borrowed` - Borrowed
@@ -6360,7 +6362,7 @@ components:
           allOf:
           - $ref: '#/components/schemas/DebtDirectionEnum'
           description: |-
-            `lent` is money the person gave, `borrowed` money the person received. Fixed for good.
+            `lent` is money the person gave, `borrowed` money the person received. Can be corrected later.
 
             * `lent` - Lent
             * `borrowed` - Borrowed
@@ -7770,9 +7772,17 @@ components:
             * `other` - other
     PatchedDebtUpdateRequest:
       type: object
-      description: 'A change to a debt: the fields of the create except `direction`
-        and `currency`, which are `400 read_only`.'
+      description: 'A change to a debt: the fields of the create except the `currency`,
+        which is `400 read_only`.'
       properties:
+        direction:
+          allOf:
+          - $ref: '#/components/schemas/DebtDirectionEnum'
+          description: |-
+            `lent` is money the person gave, `borrowed` money the person received. Flipping it keeps the repayments, the amount and the dates, and the lists, totals and reports follow it on the next read.
+
+            * `lent` - Lent
+            * `borrowed` - Borrowed
         person:
           type: string
           minLength: 1

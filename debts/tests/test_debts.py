@@ -448,6 +448,7 @@ def test_every_writable_field_can_be_changed(
         debt_url(debt.id),
         me[1],
         {
+            "direction": "borrowed",
             "person": "Sam",
             "amount": "250.00",
             "start_date": "2026-09-01",
@@ -458,7 +459,15 @@ def test_every_writable_field_can_be_changed(
 
     assert response.status_code == 200
     debt.refresh_from_db()
-    assert (debt.person, debt.amount, debt.start_date, debt.due_date, debt.note) == (
+    assert (
+        debt.direction,
+        debt.person,
+        debt.amount,
+        debt.start_date,
+        debt.due_date,
+        debt.note,
+    ) == (
+        "borrowed",
         "Sam",
         25000,
         date(2026, 9, 1),
@@ -512,8 +521,6 @@ def test_fields_that_are_not_sent_keep_their_value(
 @pytest.mark.parametrize(
     ("field", "value"),
     [
-        ("direction", "borrowed"),
-        ("direction", "lent"),  # even the stored value
         ("currency", "EUR"),
         ("currency", "USD"),  # even the stored value
         ("repaid", "10.00"),
@@ -671,6 +678,98 @@ def test_a_change_that_changes_nothing_keeps_the_version(
 
     assert response.status_code == 200
     assert (response["ETag"], response.json()["version"]) == ('"1"', 1)
+
+
+def test_the_direction_can_be_flipped_and_everything_else_stays(
+    client: APIClient, me: tuple[User, str]
+) -> None:
+    debt = mine(me, due_date=date(2026, 10, 14))  # overdue on the frozen day
+    repayment = RepaymentFactory.create(debt=debt, amount=5000)
+    before = get(client, debt_url(debt.id), me[1]).json()
+
+    response = patch(
+        client,
+        debt_url(debt.id),
+        me[1],
+        {"direction": "borrowed"},
+        **{"If-Match": '"1"'},
+    )
+
+    assert response.status_code == 200
+    assert response["ETag"] == '"2"'
+    body = response.json()
+    assert (body["direction"], body["version"]) == ("borrowed", 2)
+    changed = {"direction", "version", "updated_at"}
+    assert {k: v for k, v in body.items() if k not in changed} == {
+        k: v for k, v in before.items() if k not in changed
+    }
+    assert [item["id"] for item in body["repayments"]] == [str(repayment.id)]
+    debt.refresh_from_db()
+    assert (debt.direction, debt.version, debt.currency) == ("borrowed", 2, "USD")
+    assert Repayment.objects.filter(debt=debt).count() == 1
+
+
+def test_sending_the_stored_direction_saves_nothing(
+    client: APIClient, me: tuple[User, str]
+) -> None:
+    debt = mine(me, direction="lent")
+
+    response = patch(client, debt_url(debt.id), me[1], {"direction": "lent"})
+
+    assert response.status_code == 200
+    debt.refresh_from_db()
+    assert (debt.direction, debt.version) == ("lent", 1)
+
+
+@pytest.mark.parametrize(
+    ("value", "code"),
+    [("gave", "invalid_choice"), (None, "null"), ("", "invalid_choice")],
+)
+def test_a_bad_direction_is_a_400_on_direction(
+    client: APIClient, me: tuple[User, str], value: Any, code: str
+) -> None:
+    debt = mine(me)
+
+    response = patch(client, debt_url(debt.id), me[1], {"direction": value})
+
+    assert response.status_code == 400
+    assert only_error(response) == (code, "direction", 1)
+    debt.refresh_from_db()
+    assert (debt.direction, debt.version) == ("lent", 1)
+
+
+def test_a_stale_flip_is_412_and_changes_nothing(
+    client: APIClient, me: tuple[User, str]
+) -> None:
+    debt = mine(me)
+    patch(client, debt_url(debt.id), me[1], {"person": "Sam"})  # now version 2
+
+    response = patch(
+        client,
+        debt_url(debt.id),
+        me[1],
+        {"direction": "borrowed"},
+        **{"If-Match": '"1"'},
+    )
+
+    assert response.status_code == 412
+    debt.refresh_from_db()
+    assert (debt.direction, debt.version) == ("lent", 2)
+
+
+def test_the_list_filter_follows_a_flipped_direction(
+    client: APIClient, me: tuple[User, str]
+) -> None:
+    debt = mine(me, direction="lent")
+    patch(client, debt_url(debt.id), me[1], {"direction": "borrowed"})
+
+    lent = get(client, DEBTS, me[1], direction="lent").json()["results"]
+    borrowed = get(client, DEBTS, me[1], direction="borrowed").json()["results"]
+
+    assert ([d["id"] for d in lent], [d["id"] for d in borrowed]) == (
+        [],
+        [str(debt.id)],
+    )
 
 
 def test_a_stale_change_is_412_and_changes_nothing(
