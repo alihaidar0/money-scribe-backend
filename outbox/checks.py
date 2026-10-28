@@ -4,6 +4,7 @@ from django.conf import settings
 from django.core.checks import CheckMessage, Error, Tags, register
 
 OUTBOX_BACKEND = "outbox.backends.DatabaseEmailBackend"
+RESEND_BACKEND = "anymail.backends.resend.EmailBackend"
 ENVIRONMENTS = {"development", "staging", "production"}
 
 
@@ -35,3 +36,23 @@ def check_outbox_environment(app_configs: Any, **kwargs: Any) -> list[CheckMessa
             )
         )
     return errors
+
+
+@register(Tags.security)
+def check_resend_key(app_configs: Any, **kwargs: Any) -> list[CheckMessage]:
+    """Refuse the Resend backend without an API key (ADR 0024).
+
+    A failed send is only logged (``users.emails``), so a missing key would otherwise show up as codes that never
+    arrive.
+    """
+    if settings.EMAIL_BACKEND != RESEND_BACKEND:
+        return []
+    if settings.ANYMAIL.get("RESEND_API_KEY"):
+        return []
+    return [
+        Error(
+            "EMAIL_BACKEND is the Resend backend but RESEND_API_KEY is empty.",
+            hint="Set RESEND_API_KEY in the environment, or choose another EMAIL_BACKEND.",
+            id="outbox.E003",
+        )
+    ]

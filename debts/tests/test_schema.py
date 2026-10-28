@@ -200,6 +200,7 @@ def test_the_create_asks_for_the_fields_of_the_contract_and_the_change_for_none(
     assert create["properties"]["note"]["maxLength"] == 100
     assert create["properties"]["due_date"]["nullable"] is True
     assert set(change["properties"]) == {
+        "direction",
         "person",
         "amount",
         "start_date",
@@ -207,7 +208,6 @@ def test_the_create_asks_for_the_fields_of_the_contract_and_the_change_for_none(
         "note",
     }
     assert "required" not in change
-    assert "direction" not in change["properties"]
     assert "currency" not in change["properties"]
 
 

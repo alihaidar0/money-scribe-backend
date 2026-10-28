@@ -24,6 +24,7 @@ timonwong
 usernamehw
 
 # Tools, services, standards
+anymail
 Argon
 autonumber
 cffi
@@ -31,6 +32,7 @@ chainctl
 chainguard
 DKIM
 DMARC
+domainkey
 errorlens
 fetchone
 ghaction

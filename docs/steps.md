@@ -353,7 +353,8 @@ listed at the end of this section. Each step is its own branch and pull request.
   instance, the `onrender.com` address, the image from the GitHub Container Registry, the worker and Beat deferred)
 - [ ] **9.2 Codes on staging through the outbox**: staging sends no real email yet. It uses the email outbox
   (`EMAIL_BACKEND` set to the database backend), and you copy each 6-digit code from the emails in the admin panel at the
-  staging `ADMIN_URL` (ADR 0010). Real delivery is a separate step before production (section 12)
+  staging `ADMIN_URL` (ADR 0010). Real delivery on staging is Resend, set up by hand once the sending domain is verified
+  ([ADR 0024](adr/0024-resend-email-delivery.md), `docs/staging.md`); the outbox stays as the fallback
 - [x] **9.3 `ci/staging-deploy`: the staging image and its deploy**: `docker.yml` also builds on every merge into
   `develop` (tags `staging` and `sha-<short>`, never `latest`) with the commit as a build argument, so `/healthz` reports
   it in the `X-Release` header; its job "Deploy to staging" then calls the reusable workflow `deploy-staging.yml` with the
@@ -545,9 +546,10 @@ release candidate is stable.
 - [ ] The production deploy workflow: on the published release or a merge into `main`; deploy by image digest, run
   `migrate` once as a release step when more than one instance runs (`RUN_MIGRATIONS=false` on the instances), probe
   `/healthz` for the expected release. `NUM_PROXIES` set to the measured proxy count
-- [ ] Real email delivery: an SMTP provider behind the same `EMAIL_BACKEND` setting, with the sending domain
-  authenticated (SPF, DKIM and DMARC) so that mail is not marked as spam; production must not use the outbox
-  ([ADR 0010](adr/0010-admin-panel-and-email-outbox.md))
+- [ ] Real email delivery on production: Resend ([ADR 0024](adr/0024-resend-email-delivery.md); the code is built, the
+  key and the domain are not) behind the same `EMAIL_BACKEND` setting, with the production sending domain authenticated
+  (SPF, DKIM and DMARC) so that mail is not marked as spam, and a plan sized to the users (the free plan is 100 emails a
+  day); production must not use the outbox ([ADR 0010](adr/0010-admin-panel-and-email-outbox.md))
 - [ ] The admin panel hardened: login throttling or a network restriction (an allow-list or a private network at the
   proxy), two-factor sign-in with a one-time code from an authenticator app, and a non-default `ADMIN_URL`
 - [ ] Secrets and production environment variables prepared (never in the repository)

@@ -69,6 +69,10 @@ x-dev-image: &dev-image
     # instead, so a code can be read in the admin; it is for development and staging only (ADR 0010).
     EMAIL_BACKEND: ${EMAIL_BACKEND:-django.core.mail.backends.smtp.EmailBackend}
     OUTBOX_RETENTION_HOURS: ${OUTBOX_RETENTION_HOURS:-24}
+    # Real delivery with Resend (ADR 0024): EMAIL_BACKEND=anymail.backends.resend.EmailBackend, a sender on a domain
+    # verified there, and the API key. The key is a secret; leave it empty here and set it in the host's environment.
+    DEFAULT_FROM_EMAIL: ${DEFAULT_FROM_EMAIL:-webmaster@localhost}
+    RESEND_API_KEY: ${RESEND_API_KEY:-}
     # Where this runs: development, staging or production. The outbox is refused in production.
     APP_ENVIRONMENT: ${APP_ENVIRONMENT:-development}
     # The path of the admin panel; staging and production use another one.
