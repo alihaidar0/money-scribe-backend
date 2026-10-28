@@ -69,7 +69,9 @@ Use the same region for all three services (for example Frankfurt), or every que
 | `ALLOWED_HOSTS` | `<service>.onrender.com` |
 | `CSRF_TRUSTED_ORIGINS` | `https://<service>.onrender.com` |
 | `ADMIN_URL` | a random path, not `admin` (for example the output of `openssl rand -hex 6`) |
-| `EMAIL_BACKEND` | `outbox.backends.DatabaseEmailBackend` |
+| `EMAIL_BACKEND` | `outbox.backends.DatabaseEmailBackend` until the sending domain is verified, then `anymail.backends.resend.EmailBackend` ([Real email with Resend](#real-email-with-resend)) |
+| `DEFAULT_FROM_EMAIL` | the sender, on the domain verified in Resend, for example `Money Scribe <noreply@mail.example.com>`; needed with Resend only |
+| `RESEND_API_KEY` | the Resend API key (a secret, never in the repository); `check` fails with `outbox.E003` when the Resend backend is chosen and the key is empty |
 | `NUM_PROXIES` | `3` on Render and Cloudflare (measured; start with `1` and measure it, below) |
 | `WEB_CONCURRENCY` | `1` (the free instance has 512 MB) |
 | `PWNED_PASSWORD_CHECK` | `True` |
@@ -85,6 +87,31 @@ is set by the image build; never set it by hand.
 
 Render sets `PORT` itself and the image listens on it. `RUN_MIGRATIONS` stays at its default (migrate when the container
 starts). No `CELERY_*` variable is needed while the worker is not run. Never copy a real value into the repository.
+
+## Real email with Resend
+
+The decision and its limits are in [ADR 0024](adr/0024-resend-email-delivery.md). Resend sends only from a domain you own
+and have verified with DNS records; until then it can reach only the address of your Resend account. The free plan is
+3,000 emails a month and 100 a day (read on 2026-10-28; check [the pricing page](https://resend.com/pricing)).
+
+1. **A sending domain whose DNS records you can edit.** For staging, a free subdomain from
+   [is-a.dev](https://docs.is-a.dev) is the plan: its FAQ lists `MX` and `TXT` among the record types, and names such as
+   `mail._domainkey` are allowed. It is requested with a pull request on GitHub, review times vary, and its FAQ says a
+   root subdomain "must relate to software development": read its terms before applying. The records Resend asks for are
+   written into that pull request in the file format of is-a.dev. Not verified: whether is-a.dev accepts every name and
+   value Resend generates; if it refuses one, say so in the pull request.
+2. **Resend.** Create an account, add the domain (Resend recommends a subdomain, such as `mail.<name>.is-a.dev`), and add
+   the `TXT` and `MX` or `CNAME` records exactly as its Records tab shows them. Verification often takes about 15
+   minutes and can take up to 72 hours. Then create an API key.
+3. **Render, Environment.** Set `RESEND_API_KEY` (the key), `DEFAULT_FROM_EMAIL` (an address on the verified domain) and
+   last `EMAIL_BACKEND` = `anymail.backends.resend.EmailBackend`, then let the service restart. The key goes only into
+   Render and your password manager; if it is ever pasted into the chat, a file or a commit, delete it in Resend and make
+   a new one.
+4. **Check it once**: register in the app with an address you can read and look for the code in the inbox (the first
+   email may land in spam). A refused send is only logged as `Sending ... failed.`, without details: check the key, that
+   the sender's domain is the verified one, and the Resend dashboard.
+5. **Fallback.** If the daily limit is reached, set `EMAIL_BACKEND` back to the outbox and read the codes in the admin
+   panel, as before.
 
 ## Measure `NUM_PROXIES` (once, on the first deploy)
 

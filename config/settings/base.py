@@ -182,6 +182,7 @@ INSTALLED_APPS += [
     "drf_spectacular_sidecar",
     "drf_standardized_errors",
     "django_celery_beat",
+    "anymail",  # the Resend email backend (ADR 0024)
     "users",
     "idempotency",
     "preferences",
@@ -506,10 +507,19 @@ EMAIL_HOST = os.environ.get("EMAIL_HOST", "localhost")
 EMAIL_PORT = int(os.environ.get("EMAIL_PORT", "25"))
 # SMTP unless the environment says otherwise. Development and staging can use the database outbox
 # ("outbox.backends.DatabaseEmailBackend"), where the codes are read in the admin; the outbox app
-# refuses to start in production (ADR 0010).
+# refuses to start in production (ADR 0010). Real delivery is Resend over HTTPS
+# ("anymail.backends.resend.EmailBackend", ADR 0024), because a free Render service blocks SMTP ports.
 EMAIL_BACKEND = os.environ.get(
     "EMAIL_BACKEND", "django.core.mail.backends.smtp.EmailBackend"
 )
+# The sender of every email the app sends. With Resend it must be an address on a domain verified there.
+DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "webmaster@localhost")
+# Read only by the Resend backend. A secret: set it in the host's environment, never in the repository.
+# A request that takes longer than the timeout fails and is logged; the user can ask for a new code.
+ANYMAIL = {
+    "RESEND_API_KEY": os.environ.get("RESEND_API_KEY", ""),
+    "REQUESTS_TIMEOUT": 10,
+}
 OUTBOX_RETENTION_HOURS = int(os.environ.get("OUTBOX_RETENTION_HOURS", "24"))
 
 # Celery (config/celery.py reads every CELERY_* setting)
