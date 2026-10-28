@@ -34,7 +34,7 @@ x-dev-image: &dev-image
   # on), after which the toolchain only changes through a reviewed Dependabot
   # pull request. Keep this a literal line (no ${VAR}) so Dependabot's
   # docker-compose ecosystem can read it.
-  image: alihaidar199527/django-devcontainer:python-3.14.8.2@sha256:6f5ce013ab6487ea4c07f8930fc54d4b458b56d860d570218f90d198c5a3bb5d
+  image: alihaidar199527/django-devcontainer:python-3.14.8.6@sha256:091462aa681833e3921d2fa0573d2d47a20b7bdb11d370629a24d4ae27be0ae1
   # tini as PID 1: forwards signals and reaps zombies, so `docker compose stop`
   # is instant instead of waiting 10 s for `sleep infinity`.
   init: true
