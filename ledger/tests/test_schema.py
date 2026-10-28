@@ -281,6 +281,8 @@ def test_the_currency_is_written_on_create_and_not_on_a_change(
         "category_id",
         "account_id",
         "note",
+        "part",
+        "part_month",
     }
     assert "required" not in change
 
@@ -297,6 +299,8 @@ def test_a_transaction_is_read_with_an_amount_and_ids(schema: dict[str, Any]) ->
         "category_id",
         "account_id",
         "note",
+        "part",
+        "part_month",
         "version",
         "created_at",
         "updated_at",

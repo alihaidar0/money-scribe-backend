@@ -72,6 +72,8 @@ def test_a_transaction_is_added_with_its_version_and_etag(
         "category_id",
         "account_id",
         "note",
+        "part",
+        "part_month",
         "version",
         "created_at",
         "updated_at",

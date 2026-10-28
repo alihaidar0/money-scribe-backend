@@ -29,14 +29,20 @@ class SettingsUpdateSerializer(RefuseUnknownFieldsMixin, ClientSettingsMixin):
         max_value=28,
         required=False,
         allow_null=True,
-        help_text='1 to 28. `null` goes back to "not set" (20).',
+        help_text=(
+            '1 to 28. `null` goes back to "not set" (20). The first pay day starts the first part of a month paid '
+            "twice; the second pay day must be before it, or the change is `400` `invalid_pay_days`."
+        ),
     )
     second_pay_day = WholeNumberField(
         min_value=1,
         max_value=28,
         required=False,
         allow_null=True,
-        help_text='1 to 28. `null` goes back to "not set" (5).',
+        help_text=(
+            '1 to 28. `null` goes back to "not set" (5). It starts the second part, in the month after the first pay '
+            "day, and must be before the first pay day (`400` `invalid_pay_days`; a day never set counts as 20 or 5)."
+        ),
     )
     remind_on_pay_days = StrictBooleanField(required=False)
 

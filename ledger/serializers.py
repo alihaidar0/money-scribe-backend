@@ -1,21 +1,24 @@
 from typing import Any
 
 from rest_framework import serializers
-from rest_framework.exceptions import ValidationError
+from rest_framework.exceptions import ErrorDetail, ValidationError
 
 from common.days import day_in_range
+from common.pay_cycle import PayDays, nearest_pay_day
 from common.serializers import (
     AmountField,
     CurrencyField,
     MoneySerializerMixin,
+    MonthField,
     RefuseUnknownFieldsMixin,
     TextField,
 )
 from config.error_codes import ErrorCode
+from preferences.services import pay_days_of
 
 from . import services
 from .defaults import CUSTOM_ICONS
-from .models import AccountKind, CategoryKind, TransactionKind
+from .models import AccountKind, CategoryKind, TransactionKind, TransactionPart
 
 
 def _name_taken() -> ValidationError:
@@ -121,13 +124,83 @@ class TransactionSerializer(serializers.Serializer):  # type: ignore[misc]
     category_id = serializers.UUIDField(read_only=True)
     account_id = serializers.UUIDField(read_only=True)
     note = serializers.CharField(read_only=True)
+    part = serializers.ChoiceField(
+        choices=TransactionPart.choices,
+        read_only=True,
+        allow_null=True,
+        help_text=(
+            "Of an income: the payment it joins, the one the person chose or else the one whose pay day is nearest to "
+            "the `date`. `null` for an expense. Only the Overview of a month paid twice uses it."
+        ),
+    )
+    part_month = MonthField(
+        read_only=True,
+        allow_null=True,
+        help_text="Of an income: the month the `part` belongs to (`YYYY-MM`). `null` for an expense.",
+    )
     version = serializers.IntegerField(read_only=True)
     created_at = serializers.DateTimeField(read_only=True)
     updated_at = serializers.DateTimeField(read_only=True)
 
+    _pay_days: PayDays | None = None
+
+    def to_representation(self, instance: Any) -> dict[str, Any]:
+        data: dict[str, Any] = super().to_representation(instance)
+        data["part"], data["part_month"] = None, None
+        if instance.kind != TransactionKind.INCOME.value:
+            return data
+        if instance.part:
+            month, part = instance.part_month, instance.part
+        else:
+            if self._pay_days is None:  # read once for a whole page
+                self._pay_days = pay_days_of(self.context["request"].user)
+            month, part = nearest_pay_day(instance.date, self._pay_days)
+        data["part"], data["part_month"] = part, MonthField().to_representation(month)
+        return data
+
+
+class _PartInputMixin(serializers.Serializer):  # type: ignore[misc]
+    """``part`` and ``part_month`` of an income: both set or both ``null`` (ADR 0023)."""
+
+    part = serializers.ChoiceField(
+        choices=TransactionPart.choices,
+        required=False,
+        allow_null=True,
+        help_text=(
+            "Income only: the payment of a month paid twice the money joins. Send it with `part_month`, or send both "
+            "as `null` for the part nearest to the `date`. Ignored by the Overview of a month paid once."
+        ),
+    )
+    part_month = MonthField(
+        required=False,
+        allow_null=True,
+        help_text="The month the `part` belongs to, `YYYY-MM` (2000-01 to 2099-12).",
+    )
+
+    def _invalid_part(self, message: str) -> ValidationError:
+        return ValidationError(
+            {"part": [ErrorDetail(message, code=ErrorCode.INVALID_PART.value)]}
+        )
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        attrs = super().validate(attrs)
+        sent = "part" in attrs or "part_month" in attrs
+        if not sent:
+            return attrs
+        part, month = attrs.get("part"), attrs.get("part_month")
+        if (part is None) != (month is None):
+            raise self._invalid_part(
+                "Send part and part_month together: both set or both null."
+            )
+        kind = attrs.get("kind", getattr(self.instance, "kind", None))
+        if part is not None and kind != TransactionKind.INCOME.value:
+            raise self._invalid_part("Only an income has a part.")
+        return attrs
+
 
 class TransactionCreateSerializer(
     RefuseUnknownFieldsMixin,
+    _PartInputMixin,
     MoneySerializerMixin,
     serializers.Serializer,  # type: ignore[misc]
 ):
@@ -163,6 +236,7 @@ class TransactionCreateSerializer(
 
 class TransactionUpdateSerializer(
     RefuseUnknownFieldsMixin,
+    _PartInputMixin,
     MoneySerializerMixin,
     serializers.Serializer,  # type: ignore[misc]
 ):

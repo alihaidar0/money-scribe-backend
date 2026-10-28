@@ -27,6 +27,7 @@ A decision that changes gets a new record that supersedes the old one; the old f
 | [0020](0020-scheduled-calls-instead-of-a-free-worker.md) | Scheduled calls from GitHub Actions (Cloudflare Workers as the alternative) replace a worker while hosting is free | accepted |
 | [0021](0021-api-hardening-baseline.md) | API hardening baseline: request id, `no-store`, text rules, per-user rate limits, a size cap | accepted |
 | [0022](0022-security-events.md) | Security events: an append-only record of account security actions, kept 90 days | accepted |
+| [0023](0023-pay-cycle-parts.md) | Pay-cycle parts: the Overview and the reports cut a month by the pay days; an income can choose its part | accepted |
 
 The fields and limits of each resource are in [`../api-fields.md`](../api-fields.md).
 

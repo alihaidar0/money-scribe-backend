@@ -3,7 +3,9 @@
 ``balance`` = ``salary`` + ``recurring_income`` + ``income_transactions`` - ``fixed_costs`` - ``purchases`` +
 ``debt_repayments_received`` - ``debt_repayments_made``. The salary and the fixed items come from the saved month, through the
 same function the month's own answer uses (``salary.presentation.part_figures``), so the two cannot disagree; they count
-only when the saved month's currency is the one asked for. Transactions and repayments count by their calendar ``date``.
+only when the saved month's currency is the one asked for. Repayments and expenses count by their calendar ``date``,
+cut through the pay cycle for a month paid twice; an income joins the part it was put on or the nearest pay day
+(``reports.cuts``, ADR 0023).
 A debt that is created is not a movement of money; a repayment is. Nothing is added across currencies.
 """
 
@@ -17,15 +19,15 @@ from django.db.models import Sum
 from common.enums import PaymentMode
 from common.money import Currency, Money
 from debts.models import Repayment
-from ledger.models import Transaction
+from preferences.services import pay_days_of
 from salary.models import SalaryMonth
 from salary.presentation import part_figures
 from users.models import User
 
+from .cuts import transaction_rows
 from .periods import (
     FIRST,
     SECOND,
-    MonthPeriod,
     payment_mode_of,
     period_of,
 )
@@ -69,44 +71,24 @@ class Overview:
 def _sums(
     rows: Iterable[Mapping[str, Any]], key: str, currency: Currency
 ) -> dict[tuple[str, int], Money]:
-    """``{(what, half): money}`` from rows of ``(what, half, total)``."""
-    return {
-        (row[key], int(row["half"])): Money(int(row["total"]), currency) for row in rows
-    }
-
-
-def _currencies_of_the_month(
-    user: User, period: MonthPeriod, saved: SalaryMonth | None
-) -> list[Currency]:
-    """Every currency the month has something in: the saved month, a transaction, a repayment."""
-    found = {
-        *Transaction.objects.filter(
-            owner=user, date__gte=period.first_day, date__lte=period.last_day
-        )
-        .order_by()
-        .values_list("currency", flat=True)
-        .distinct(),
-        *Repayment.objects.filter(
-            debt__owner=user, date__gte=period.first_day, date__lte=period.last_day
-        )
-        .order_by()
-        .values_list("debt__currency", flat=True)
-        .distinct(),
-    }
-    if saved is not None:
-        found.add(saved.currency)
-    return [Currency(code) for code in sorted(found)]
+    """``{(what, half): money}`` from rows of ``(what, half, total)``; rows of the same key are added."""
+    sums: dict[tuple[str, int], int] = {}
+    for row in rows:
+        at = (row[key], int(row["half"]))
+        sums[at] = sums.get(at, 0) + int(row["total"])
+    return {at: Money(minor, currency) for at, minor in sums.items()}
 
 
 def overview(user: User, month: datetime.date, currency: Currency) -> Overview:
     """The Overview of the month whose first day is ``month``. Raises ``AmountOutOfRange`` for a sum past the largest."""
-    period = period_of(month)
     saved = (
         SalaryMonth.objects.filter(owner=user, month=month)
         .prefetch_related("fixed_items")
         .first()
     )
     two = payment_mode_of(user, saved) == PaymentMode.TWO_PAYMENTS
+    pay_days = pay_days_of(user) if two else None
+    period = period_of(month, pay_days)
     zero = Money.zero(currency)
 
     # Salary and fixed items: only a saved month in this currency.
@@ -126,16 +108,9 @@ def overview(user: User, month: datetime.date, currency: Currency) -> Overview:
                 salary[name] = (part.salary, part.income, part.expense)
 
     in_month = {"date__gte": period.first_day, "date__lte": period.last_day}
+    found = transaction_rows(user, period, pay_days)
     transactions = _sums(
-        (
-            Transaction.objects.filter(owner=user, currency=currency.value, **in_month)
-            .order_by()
-            .annotate(half=period.half())
-            .values("kind", "half")
-            .annotate(total=Sum("amount"))
-        ),
-        "kind",
-        currency,
+        (row for row in found if row["currency"] == currency.value), "kind", currency
     )
     repayments = _sums(
         (
@@ -168,7 +143,16 @@ def overview(user: User, month: datetime.date, currency: Currency) -> Overview:
             debt_repayments_made=moved(repayments, "borrowed", halves),
         )
 
-    currencies = _currencies_of_the_month(user, period, saved)
+    repaid_in = {
+        *Repayment.objects.filter(debt__owner=user, **in_month)
+        .order_by()
+        .values_list("debt__currency", flat=True)
+        .distinct()
+    }
+    found_in = {row["currency"] for row in found} | repaid_in
+    if saved is not None:
+        found_in.add(saved.currency)
+    currencies = [Currency(code) for code in sorted(found_in)]
     return Overview(
         month=month,
         currency=currency,

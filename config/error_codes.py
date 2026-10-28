@@ -66,6 +66,10 @@ class ErrorCode(StrEnum):
     DATE_OUT_OF_RANGE = "date_out_of_range"
     INVALID_DATE_RANGE = "invalid_date_range"
     TOO_MANY_VALUES = "too_many_values"
+    INVALID_PART = "invalid_part"
+
+    # Settings (ADR 0023)
+    INVALID_PAY_DAYS = "invalid_pay_days"
 
     # Debts and repayments (ADR 0004)
     AMOUNT_BELOW_REPAID = "amount_below_repaid"
