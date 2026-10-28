@@ -3753,15 +3753,19 @@ paths:
     get:
       operationId: overview_month
       description: 'What came in, what went out and what is left in one `currency`,
-        for the whole month (`total`) and, for a month paid twice, for each part (`first_part`:
-        days 1 to 15, `second_part`: day 16 to the end; both `null` for a month paid
-        once). `balance` is `salary` + `recurring_income` + `income_transactions`
+        for the whole month (`total`) and, for a month paid twice, for each part (`first_part`,
+        `second_part`; both `null` for a month paid once). A month paid twice follows
+        the pay cycle of the Settings pay days (20 and 5 until set): the first part
+        runs from the 20th to the 4th of the next month, the second from the 5th to
+        the 19th, and the month is both together. A month paid once is the calendar
+        month. `balance` is `salary` + `recurring_income` + `income_transactions`
         - `fixed_costs` - `purchases` + `debt_repayments_received` - `debt_repayments_made`.
         The salary and the fixed items are those of the saved month and count only
         when its currency is `currency`; otherwise those lines are 0 and `currencies`
-        lists the salary month''s currency. Transactions and repayments count by their
-        calendar `date`; creating a debt is not a movement, a repayment is. `has_data`
-        is true when the month has a saved salary month or any transaction or repayment,
+        lists the salary month''s currency. Expenses and repayments count by their
+        calendar `date`, an income by the part it joined (its `part`, else the nearest
+        pay day); creating a debt is not a movement, a repayment is. `has_data` is
+        true when the month has a saved salary month or any transaction or repayment,
         in any currency. A month with nothing is `200` with every line `0.00`. Never
         paginated or cached. An unsupported `currency` is `400` `invalid_choice`.'
       summary: The Overview of a month
@@ -4048,13 +4052,14 @@ paths:
         the income transactions dated in the month (the salary and the recurring income
         are not included; the Overview has them) and `purchases` is the expense transactions
         (the fixed costs are not included). `categories` is the spending by category,
-        the biggest first, and adds up to `purchases`. A month paid twice also has
-        `first_part` (days 1 to 15) and `second_part` (day 16 to the end), cut by
-        each transaction''s own `date`; a month paid once has `null` for both. Whether
-        the month has parts follows the saved salary month, or the Settings payment
-        mode for a month never saved. A month with nothing is `200` with zero totals,
-        no categories and `has_data` false. Never paginated or cached. An unsupported
-        `currency` is `400` `invalid_choice`.'
+        the biggest first, and adds up to `purchases`. A month paid twice follows
+        the pay cycle of the Settings pay days and also has `first_part` and `second_part`:
+        expenses are cut by their own `date`, and an income joins the part it was
+        put on or the part with the nearest pay day; a month paid once is the calendar
+        month and has `null` for both. Whether the month has parts follows the saved
+        salary month, or the Settings payment mode for a month never saved. A month
+        with nothing is `200` with zero totals, no categories and `has_data` false.
+        Never paginated or cached. An unsupported `currency` is `400` `invalid_choice`.'
       summary: 'The month report: spending by category'
       parameters:
       - in: query
@@ -5073,7 +5078,9 @@ paths:
         set". Send `If-Match` with the `version` read: a stale one is `412` and changes
         nothing. Errors: `400` on the field that is wrong (`invalid_choice`, `invalid`,
         `min_value`, `max_value`, `null` for a field that cannot be cleared), `400`
-        `read_only` for a field that is not a setting.'
+        `invalid_pay_days` on `second_pay_day` when the pay days that would result
+        leave the second on or after the first, `400` `read_only` for a field that
+        is not a setting.'
       summary: Change the settings
       parameters:
       - in: header
@@ -6859,10 +6866,10 @@ components:
             `password_unchanged`, `password_attempts_exceeded`, `reset_token_invalid`,
             `name_taken`, `account_limit_reached`, `category_limit_reached`, `does_not_exist`,
             `category_not_allowed`, `transaction_limit_reached`, `date_out_of_range`,
-            `invalid_date_range`, `too_many_values`, `amount_below_repaid`, `due_before_start`,
-            `repayment_before_start`, `start_after_repayment`, `debt_limit_reached`,
-            `repayment_limit_reached`, `unknown_category`, `unknown_account`, `duplicate`,
-            `idempotency_key_required`, `idempotency_key_invalid`, `idempotency_key_reused`,
+            `invalid_date_range`, `too_many_values`, `invalid_part`, `invalid_pay_days`,
+            `amount_below_repaid`, `due_before_start`, `repayment_before_start`, `start_after_repayment`,
+            `debt_limit_reached`, `repayment_limit_reached`, `unknown_category`, `unknown_account`,
+            `duplicate`, `idempotency_key_required`, `idempotency_key_invalid`, `idempotency_key_reused`,
             `idempotency_in_progress`, `precondition_failed`, `fixed_item_limit_reached`,
             `month_has_fixed_items`, `service_unavailable`, `invalid_characters`,
             `request_too_large`, `invalid_amount`, `currency_mismatch`, `exceeds_remaining`,
@@ -7316,13 +7323,17 @@ components:
           - $ref: '#/components/schemas/ReportSlice'
           readOnly: true
           nullable: true
-          description: Days 1 to 15; `null` for a month paid once.
+          description: From the first pay day to the day before the second pay day
+            of the next month (the 20th to the 4th with 20 and 5); `null` for a month
+            paid once.
         second_part:
           allOf:
           - $ref: '#/components/schemas/ReportSlice'
           readOnly: true
           nullable: true
-          description: Day 16 to the end of the month; `null` for a month paid once.
+          description: From the second pay day of the next month to the day before
+            the next first pay day (the 5th to the 19th with 20 and 5); `null` for
+            a month paid once.
       required:
       - categories
       - currencies
@@ -7393,13 +7404,17 @@ components:
           - $ref: '#/components/schemas/OverviewBlock'
           readOnly: true
           nullable: true
-          description: Days 1 to 15; `null` for a month paid once.
+          description: From the first pay day to the day before the second pay day
+            of the next month (the 20th to the 4th with 20 and 5); `null` for a month
+            paid once.
         second_part:
           allOf:
           - $ref: '#/components/schemas/OverviewBlock'
           readOnly: true
           nullable: true
-          description: Day 16 to the end of the month; `null` for a month paid once.
+          description: From the second pay day of the next month to the day before
+            the next first pay day (the 5th to the 19th with 20 and 5); `null` for
+            a month paid once.
       required:
       - currencies
       - currency
@@ -7911,13 +7926,17 @@ components:
           maximum: 28
           minimum: 1
           nullable: true
-          description: 1 to 28. `null` goes back to "not set" (20).
+          description: 1 to 28. `null` goes back to "not set" (20). The first pay
+            day starts the first part of a month paid twice; the second pay day must
+            be before it, or the change is `400` `invalid_pay_days`.
         second_pay_day:
           type: integer
           maximum: 28
           minimum: 1
           nullable: true
-          description: 1 to 28. `null` goes back to "not set" (5).
+          description: 1 to 28. `null` goes back to "not set" (5). It starts the second
+            part, in the month after the first pay day, and must be before the first
+            pay day (`400` `invalid_pay_days`; a day never set counts as 20 or 5).
         remind_on_pay_days:
           type: boolean
     PatchedTransactionUpdateRequest:
@@ -7925,6 +7944,21 @@ components:
       description: 'A change to a transaction: the fields of the create except `currency`,
         which is `400 read_only`.'
       properties:
+        part:
+          allOf:
+          - $ref: '#/components/schemas/PartEnum'
+          nullable: true
+          description: |-
+            Income only: the payment of a month paid twice the money joins. Send it with `part_month`, or send both as `null` for the part nearest to the `date`. Ignored by the Overview of a month paid once.
+
+            * `first` - First part
+            * `second` - Second part
+        part_month:
+          type: string
+          pattern: ^20[0-9]{2}-(0[1-9]|1[0-2])$
+          example: 2026-10
+          nullable: true
+          description: The month the `part` belongs to, `YYYY-MM` (2000-01 to 2099-12).
         kind:
           $ref: '#/components/schemas/KindEnum'
         amount:
@@ -9018,6 +9052,24 @@ components:
         note:
           type: string
           readOnly: true
+        part:
+          allOf:
+          - $ref: '#/components/schemas/PartEnum'
+          readOnly: true
+          nullable: true
+          description: |-
+            Of an income: the payment it joins, the one the person chose or else the one whose pay day is nearest to the `date`. `null` for an expense. Only the Overview of a month paid twice uses it.
+
+            * `first` - First part
+            * `second` - Second part
+        part_month:
+          type: string
+          pattern: ^20[0-9]{2}-(0[1-9]|1[0-2])$
+          example: 2026-10
+          readOnly: true
+          nullable: true
+          description: 'Of an income: the month the `part` belongs to (`YYYY-MM`).
+            `null` for an expense.'
         version:
           type: integer
           readOnly: true
@@ -9039,6 +9091,8 @@ components:
       - id
       - kind
       - note
+      - part
+      - part_month
       - updated_at
       - version
     TransactionCreateRequest:
@@ -9046,6 +9100,21 @@ components:
       description: A transaction to add. Anything else (`id`, `version`, ...) is `400
         read_only`.
       properties:
+        part:
+          allOf:
+          - $ref: '#/components/schemas/PartEnum'
+          nullable: true
+          description: |-
+            Income only: the payment of a month paid twice the money joins. Send it with `part_month`, or send both as `null` for the part nearest to the `date`. Ignored by the Overview of a month paid once.
+
+            * `first` - First part
+            * `second` - Second part
+        part_month:
+          type: string
+          pattern: ^20[0-9]{2}-(0[1-9]|1[0-2])$
+          example: 2026-10
+          nullable: true
+          description: The month the `part` belongs to, `YYYY-MM` (2000-01 to 2099-12).
         kind:
           $ref: '#/components/schemas/KindEnum'
         amount:

@@ -2,7 +2,8 @@
 
 It reads transactions only. The salary, the recurring income and the fixed costs are not in it (the Overview has them);
 ``income_transactions`` and ``purchases`` are the same figures as the Overview's lines of the same name, for the same
-month, part and currency. A month paid twice is also cut into its two parts by the calendar day of each transaction.
+month, part and currency. A month paid twice follows the pay cycle: expenses are cut into its two parts by their
+calendar day, an income joins the part it was put on or the nearest pay day (ADR 0023).
 """
 
 import datetime
@@ -11,14 +12,13 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from typing import Any
 
-from django.db.models import Sum
-
 from common.enums import PaymentMode
 from common.money import Currency, Money
-from ledger.models import Transaction
+from preferences.services import pay_days_of
 from salary.models import SalaryMonth
 from users.models import User
 
+from .cuts import transaction_rows
 from .periods import FIRST, SECOND, payment_mode_of, period_of
 
 
@@ -83,30 +83,14 @@ def _slice(
 
 def month_report(user: User, month: datetime.date, currency: Currency) -> MonthReport:
     """The report of the month whose first day is ``month``. Raises ``AmountOutOfRange`` for a sum past the largest."""
-    period = period_of(month)
-    in_month = Transaction.objects.filter(
-        owner=user, date__gte=period.first_day, date__lte=period.last_day
-    ).order_by()
     saved = SalaryMonth.objects.filter(owner=user, month=month).first()
     two = payment_mode_of(user, saved) == PaymentMode.TWO_PAYMENTS
-
-    rows = list(
-        in_month.filter(currency=currency.value)
-        .annotate(half=period.half())
-        .values(
-            "kind",
-            "half",
-            "category_id",
-            "category__key",
-            "category__name",
-            "category__icon",
-        )
-        .annotate(total=Sum("amount"))
+    pay_days = pay_days_of(user) if two else None
+    found = transaction_rows(
+        user, period_of(month, pay_days), pay_days, by_category=True
     )
-    currencies = [
-        Currency(code)
-        for code in sorted(in_month.values_list("currency", flat=True).distinct())
-    ]
+    rows = [row for row in found if row["currency"] == currency.value]
+    currencies = [Currency(code) for code in sorted({row["currency"] for row in found})]
     whole = _slice(rows, currency, (FIRST, SECOND))
     return MonthReport(
         month=month,

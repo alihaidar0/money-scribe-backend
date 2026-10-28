@@ -87,8 +87,7 @@ Belongs to a month and is returned inline with it, so there is no separate list.
 
 The `day` is stored and returned as sent: a day past the end of the month (31 in September) counts as the last day of that
 month, and the reader applies that, so the item keeps its day when it is copied to a longer month. The server does not
-derive `part` from `day` and never checks one against the other; the app sends both (days 1 to 15 are the first part, day 16
-to the end the second). A `PATCH` that leaves `day` out keeps it, and `"day": null` clears it.
+derive `part` from `day` and never checks one against the other; the app sends both (the app decides which part a day falls in). A `PATCH` that leaves `day` out keeps it, and `"day": null` clears it.
 
 A fixed item has no currency of its own: it uses the month's. A request may leave `currency` out; one that carries
 another currency answers `400 currency_mismatch`. Adding an item to a month that is not saved answers `404`. A month holds at most 100 items; the 101st answers `409 fixed_item_limit_reached`. A month can
@@ -107,6 +106,15 @@ fixed-item totals and the balances.
 | `category_id` | id of a built-in category or of the person's own, required; it must allow the kind (`400 category_not_allowed`) |
 | `account_id` | id of one of the person's accounts, required |
 | `note` | text, optional, up to 100 characters, empty by default |
+| `part`, `part_month` | income only, optional: `part` is `first` or `second` and `part_month` is the month it belongs to as `YYYY-MM` (2000-01 to 2099-12). Both set or both `null` (`400 invalid_part`), and never on an expense (`400 invalid_part`). A change sends both or neither; turning an income into an expense drops them |
+
+**The part of an income** ([ADR 0023](adr/0023-pay-cycle-parts.md)). Money received on its own date joins a payment of a
+month paid twice. With `part` and `part_month` it joins that part of that month. Without them it joins the part whose pay day
+(the Settings `first_pay_day` and `second_pay_day`) is nearest to the `date` by calendar distance, in either direction; a tie
+goes to the later pay day. The second pay day of a month pays the second part of the month before, so with 20 and 5 an income
+on 3 October joins the second part of September. Both fields are always returned for an income: the chosen ones, or the
+computed ones, which follow the Settings (changing the pay days re-cuts them). For an expense they are `null`. A month paid once
+ignores them: its income counts by date.
 
 An unknown id and an id that belongs to someone else give the same answer, `400 does_not_exist` on that field. A person has
 at most 100 000 transactions (`409 transaction_limit_reached`).
@@ -117,8 +125,10 @@ within a day the entry added last comes first, and takes the filters `date_from`
 ([ADR 0003](adr/0003-cursor-pagination.md)). `search` matches the note only, as a case-insensitive substring of 2 to 100
 characters (`%` and `_` are ordinary characters); the category and account names are not searched, because the app shows
 the built-in names in its own languages. `date_from` after `date_to` is `400 invalid_date_range`. The two pay periods of a
-month are asked for with the date range (days 1 to 15 and day 16 to the end), so the list has no `part` filter; the reports
-do (see Reports). Day totals take the same filters except `search`.
+month are asked for with the date range, so the list has no `part` filter; the reports cut by part (see Reports). Day totals
+take the same filters except `search`; a day is a calendar day, so they do not follow the pay cycle themselves, and the app
+asks for the range of a part (`date_from`, `date_to`) to get its days. An income can be on a part whose range its own `date`
+is not in ([ADR 0023](adr/0023-pay-cycle-parts.md)), so the Overview, not a day range, is the source of a part's income.
 
 When a custom category is deleted its transactions move to `other` and each gets a new `version`, so a form that was open on
 one gets `412` when saved ([ADR 0017](adr/0017-deleting-a-category-moves-its-transactions.md)).
@@ -219,7 +229,7 @@ the ones of the salary month (`payment_mode`, not `mode`).
 | --- | --- |
 | `default_currency` | one of the supported currencies; `null` on a change goes back to "not set"; shows `RUB` until set |
 | `payment_mode` | `one_payment` or `two_payments`; `null` goes back to "not set"; shows `one_payment` until set |
-| `first_pay_day`, `second_pay_day` | day of month, 1 to 28, each on its own; `null` goes back to "not set"; show 20 and 5 until set |
+| `first_pay_day`, `second_pay_day` | day of month, 1 to 28; `null` goes back to "not set"; show 20 and 5 until set. The second must be before the first, checked on the pair as it would be stored (a day never set counts as 20 or 5): otherwise `400 invalid_pay_days` on `second_pay_day` and nothing changes ([ADR 0023](adr/0023-pay-cycle-parts.md)) |
 | `remind_on_pay_days` | true or false (a JSON boolean); defaults to `false` |
 | `time_zone` | an IANA name such as `Europe/Moscow`, validated; lives on the user; defaults to `UTC` |
 | `language` | `en` or `ar`; lives on the user; defaults to `en` |
@@ -362,8 +372,14 @@ are never paginated and never cached, and take no write. Which screen uses which
 against month and part against part use the Overview too (two calls, one per month or part); the Categories view uses the
 month report plus the Overview's `fixed_costs` as one more slice; the Debts view uses the debts report.
 
-**Parts.** A month paid twice is cut into two parts by the calendar `date` of each transaction and repayment: days 1 to 15
-and day 16 to the end of the month. Whether the month has parts comes from the saved salary month (it keeps the mode it was
+**Parts** ([ADR 0023](adr/0023-pay-cycle-parts.md)). A month paid once is the calendar month. A month paid twice follows the
+pay cycle of the Settings pay days (20 and 5 until set): the first part runs from `first_pay_day` of the month to the day
+before `second_pay_day` of the next month, and the second part from that day to the day before the next `first_pay_day`; with
+20 and 5, the 20th to the 4th and the 5th to the 19th. The month (`total`) is both together. Expense transactions and
+repayments are cut by their own `date`. An income joins the part it was put on (`part`, `part_month`) or the part with the
+nearest pay day, wherever its date is. Fixed items carry their own `part`. The cut is computed on every read, so changing the
+pay days re-cuts the whole history. Each month is cut under its own payment mode, so when a month paid twice is followed by one
+paid once their days overlap and a record can count in both. Whether the month has parts comes from the saved salary month (it keeps the mode it was
 saved with), and from the Settings payment mode for a month never saved. `first_part` and `second_part` are `null` for a month
 paid once.
 
@@ -381,11 +397,11 @@ balance = salary + recurring_income + income_transactions - fixed_costs - purcha
 `salary` is the saved month's `total_after_tax` in `total` and each payment in its part; `recurring_income` and `fixed_costs` are
 the saved month's fixed items of that kind and part (with one payment every item is in `total`). They count only when the
 saved month's currency is `currency`; otherwise those lines are 0 and `currencies` lists the salary month's currency.
-`income_transactions` and `purchases` are the income and expense transactions dated in the period, and
+`income_transactions` is the income that joined the period (see Parts), `purchases` the expense transactions dated in it, and
 `debt_repayments_received` and `debt_repayments_made` are the repayments dated in it on debts lent and borrowed; creating a debt
 is not a movement. `salary + recurring_income - fixed_costs` equals the `balances` of the salary month for the same part and for
 the whole month: both are worked out by `salary.presentation.part_figures`, and a test enforces it. `has_data` is true when the
-month has a saved salary month, or any transaction or repayment dated in it, in any currency; `currencies` lists the currencies
+month has a saved salary month, or any expense or repayment dated in it, or any income that joined it, in any currency; `currencies` lists the currencies
 of those, ordered by code.
 
 **Month report** (`GET /api/v1/reports/months/{month}/?currency=`). It reads transactions only: `income_transactions` is the

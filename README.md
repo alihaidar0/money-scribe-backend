@@ -13,10 +13,10 @@ Django REST backend for Money Scribe, a personal finance tracker.
 | --- | --- |
 | Python | 3.14.8 |
 | Django | 6.0.9 |
-| uv | 0.13.0 |
+| uv | 0.13.5 |
 | PostgreSQL | 18 |
 | Redis | 8 |
-| Dev container image | `alihaidar199527/django-devcontainer:python-3.14.8.1` |
+| Dev container image | `alihaidar199527/django-devcontainer:python-3.14.8.6` |
 
 Application libraries and their exact versions are pinned in `pyproject.toml` and
 `uv.lock`.

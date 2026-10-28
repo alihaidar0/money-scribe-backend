@@ -106,7 +106,7 @@ def test_the_vector_files_have_the_cases_of_the_issue() -> None:
         "another currency",
         "only repayments",
         "empty month",
-        "15th",
+        "pay days",
         "JPY",
         "KWD",
         "negative",

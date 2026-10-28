@@ -59,8 +59,9 @@ Worked example, invented values in minor units: `base` 300000, `food_per_day` 50
   month and is returned inline with it. Its `part` is stored as entered and ignored while the month has one payment, so
   switching the payment mode loses nothing; a new item defaults to `first`. It may also carry a `day` of the month
   (1 to 31, `null` for none), stored as entered; `part` is not derived from it.
-- With two payments the **parts** are calendar halves: the first is days 1 to 15 and the second is day 16 to the end of the
-  month. Overview and report read models take `part=first|second|all`.
+- With two payments the **parts** follow the pay cycle of the Settings pay days (the first part starts on the first pay
+  day, the second on the second pay day of the next month; [ADR 0023](0023-pay-cycle-parts.md), which replaced the
+  calendar halves of days 1 to 15 and 16 to the end). The Overview and the month report carry both parts.
 - The response carries the inputs used, the payment mode, the calculation version, the five results and the payments, the
   fixed-item totals per part, and the **balance after fixed items** per part (a `SignedAmount`, ADR 0008). The history list
   includes each month's results, so the app makes one call, not one per month.

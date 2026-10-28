@@ -4,9 +4,12 @@ from dataclasses import dataclass
 from typing import Any
 
 from django.db import transaction
+from rest_framework.exceptions import ErrorDetail, ValidationError
 
 from common.enums import PaymentMode
 from common.money import Currency
+from common.pay_cycle import DEFAULT_PAY_DAYS, PayDays
+from config.error_codes import ErrorCode
 from users.models import User
 
 from .models import Preferences
@@ -14,8 +17,8 @@ from .models import Preferences
 # The app's own defaults: what an answer shows for a field that was never set.
 DEFAULT_CURRENCY = Currency.RUB
 DEFAULT_PAYMENT_MODE = PaymentMode.ONE_PAYMENT
-DEFAULT_FIRST_PAY_DAY = 20
-DEFAULT_SECOND_PAY_DAY = 5
+DEFAULT_FIRST_PAY_DAY = DEFAULT_PAY_DAYS.first
+DEFAULT_SECOND_PAY_DAY = DEFAULT_PAY_DAYS.second
 
 TEXT_FIELDS = ("default_currency", "payment_mode")
 STORED_FIELDS = (
@@ -58,6 +61,20 @@ def set_values(user: User) -> SetValues:
     )
 
 
+def pay_days_of(user: User) -> PayDays:
+    """The pay days the reports cut a month by: the Settings, the app's default for a day never set.
+
+    A pair that is not ordered (the second day before the first) cannot be saved any more; one stored earlier falls
+    back to the defaults, so a report never fails on it.
+    """
+    values = set_values(user)
+    pair = PayDays(
+        first=values.first_pay_day or DEFAULT_FIRST_PAY_DAY,
+        second=values.second_pay_day or DEFAULT_SECOND_PAY_DAY,
+    )
+    return pair if pair.is_ordered else DEFAULT_PAY_DAYS
+
+
 def effective(user: User, prefs: Preferences) -> dict[str, Any]:
     """Every setting as the API shows it: the stored value, or the app's default for one never set."""
     return {
@@ -73,6 +90,29 @@ def effective(user: User, prefs: Preferences) -> dict[str, Any]:
     }
 
 
+def _ensure_pay_days_ordered(prefs: Preferences, data: dict[str, Any]) -> None:
+    """``400 invalid_pay_days`` when the pay days that would result are not ordered (ADR 0023).
+
+    The check is on the pair as it would be stored, a day never set counting as the app's default, so changing one
+    day alone can be refused because of the other.
+    """
+    if "first_pay_day" not in data and "second_pay_day" not in data:
+        return
+    first = data.get("first_pay_day", prefs.first_pay_day) or DEFAULT_FIRST_PAY_DAY
+    second = data.get("second_pay_day", prefs.second_pay_day) or DEFAULT_SECOND_PAY_DAY
+    if not PayDays(first, second).is_ordered:
+        raise ValidationError(
+            {
+                "second_pay_day": [
+                    ErrorDetail(
+                        "The second pay day must be before the first.",
+                        code=ErrorCode.INVALID_PAY_DAYS.value,
+                    )
+                ]
+            }
+        )
+
+
 def apply(user: User, prefs: Preferences, data: dict[str, Any]) -> Preferences:
     """Change the fields sent (and only those). Nothing sent changes nothing, not even the version.
 
@@ -81,6 +121,7 @@ def apply(user: User, prefs: Preferences, data: dict[str, Any]) -> Preferences:
     """
     if not data:
         return prefs
+    _ensure_pay_days_ordered(prefs, data)
     user_fields: list[str] = [
         name for name in ("language", "time_zone") if name in data
     ]

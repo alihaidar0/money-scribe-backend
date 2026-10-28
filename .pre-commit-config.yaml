@@ -44,7 +44,7 @@ repos:
         args: [--branch, main, --branch, develop]
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.17.1
+    rev: v0.17.3
     hooks:
       - id: ruff-check
         args: [--fix, --output-format=full]
@@ -60,13 +60,13 @@ repos:
 
   # Keeps uv.lock in sync whenever pyproject.toml changes.
   - repo: https://github.com/astral-sh/uv-pre-commit
-    rev: 0.13.1
+    rev: 0.13.6
     hooks:
       - id: uv-lock
 
   # Schema-validates the workflow and Dependabot files before they reach CI.
   - repo: https://github.com/python-jsonschema/check-jsonschema
-    rev: 0.38.2
+    rev: 0.39.0
     hooks:
       - id: check-github-workflows
       - id: check-dependabot
@@ -76,17 +76,17 @@ repos:
   # Not here: `docker compose config` (needs Docker, which the dev container does not have) and the online audits
   # of zizmor (they need a GitHub token), so a green commit is not a promise that Lint passes: CI stays the gate.
   - repo: https://github.com/streetsidesoftware/cspell-cli
-    rev: v10.3.0
+    rev: v10.4.0
     hooks:
       - id: cspell
 
   - repo: https://github.com/DavidAnson/markdownlint-cli2
-    rev: v0.23.3
+    rev: v0.24.0
     hooks:
       - id: markdownlint-cli2
 
   - repo: https://github.com/shellcheck-py/shellcheck-py
-    rev: v0.11.0.1
+    rev: v0.11.0.1-1
     hooks:
       - id: shellcheck
 

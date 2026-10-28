@@ -138,6 +138,11 @@ class TransactionKind(models.TextChoices):
     INCOME = "income", "Income"
 
 
+class TransactionPart(models.TextChoices):
+    FIRST = "first", "First part"
+    SECOND = "second", "Second part"
+
+
 class Transaction(VersionedModel):
     """One income or expense: an amount, a day, a category and an account.
 
@@ -166,9 +171,28 @@ class Transaction(VersionedModel):
         Account, on_delete=models.RESTRICT, related_name="transactions"
     )
     note = models.CharField(max_length=100, blank=True, default="")
+    # An income may be put on one payment of a month paid twice (ADR 0023); both are empty when it was not. The month
+    # is the first day of the month the part belongs to.
+    part = models.CharField(
+        max_length=6, blank=True, default="", choices=TransactionPart
+    )
+    part_month = models.DateField(null=True, blank=True)
 
     class Meta:
         constraints: ClassVar[list[models.BaseConstraint]] = [
+            models.CheckConstraint(
+                condition=Q(part="", part_month__isnull=True)
+                | (
+                    Q(kind="income", part__in=[p.value for p in TransactionPart])
+                    & Q(
+                        part_month__isnull=False,
+                        part_month__gte=FIRST_DAY,
+                        part_month__lte=LAST_DAY,
+                        part_month__day=1,
+                    )
+                ),
+                name="ledger_transaction_part_on_income",
+            ),
             models.CheckConstraint(
                 condition=Q(amount__gt=0, amount__lte=MAX_MINOR_UNITS),
                 name="ledger_transaction_amount_range",

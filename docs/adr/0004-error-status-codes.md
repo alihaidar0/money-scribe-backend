@@ -109,6 +109,8 @@ Initial registry:
 | `transaction_limit_reached` | 409 | the user already has 100 000 transactions |
 | `date_out_of_range` | 400 | a calendar day outside 2000-01-01 to 2099-12-31; `attr` is the field |
 | `invalid_date_range` | 400 | `date_from` is after `date_to` in a list or day totals filter; `attr` is `date_to` |
+| `invalid_part` | 400 | an income `part` and `part_month` are not both set or both `null`, or are sent on an expense; `attr` is `part` ([ADR 0023](0023-pay-cycle-parts.md)) |
+| `invalid_pay_days` | 400 | the Settings pay days would leave the second pay day on or after the first; `attr` is `second_pay_day` ([ADR 0023](0023-pay-cycle-parts.md)) |
 | `too_many_values` | 400 | more than 20 ids in a repeatable filter (`category_id`, `account_id`); `attr` is the parameter |
 | `amount_below_repaid` | 400 | lowering a debt below what was repaid; `attr` is `amount` |
 | `due_before_start` | 400 | a due date before the start date, also when the start date is the one that moved; `attr` is `due_date` |
