@@ -485,6 +485,22 @@ def test_the_debts_report_gives_the_remaining_not_the_amount(
     assert block["open"][0]["remaining"] == "125.00"
 
 
+def test_the_debts_report_follows_a_flipped_direction(
+    client: APIClient, me: tuple[User, str]
+) -> None:
+    debt = DebtFactory.create(owner=me[0], amount=20000, direction="lent")
+    RepaymentFactory.create(debt=debt, amount=5000)
+    before = get(client, DEBTS_REPORT, me[1]).json()["by_currency"][0]
+
+    debt.direction = "borrowed"
+    debt.save()
+    after = get(client, DEBTS_REPORT, me[1]).json()["by_currency"][0]
+
+    assert (before["owed_to_you"], before["you_owe"]) == ("150.00", "0.00")
+    assert (after["owed_to_you"], after["you_owe"]) == ("0.00", "150.00")
+    assert after["open"][0]["direction"] == "borrowed"
+
+
 def test_the_debts_report_queries_do_not_grow_with_the_debts(
     client: APIClient, me: tuple[User, str]
 ) -> None:

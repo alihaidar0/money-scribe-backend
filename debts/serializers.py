@@ -88,7 +88,7 @@ class DebtCreateSerializer(
 
     direction = serializers.ChoiceField(
         choices=Direction.choices,
-        help_text="`lent` is money the person gave, `borrowed` money the person received. Fixed for good.",
+        help_text="`lent` is money the person gave, `borrowed` money the person received. Can be corrected later.",
     )
     person = TextField(max_length=50, help_text="1 to 50 characters, trimmed.")
     amount = AmountField(allow_zero=False)
@@ -118,8 +118,15 @@ class DebtUpdateSerializer(
     MoneySerializerMixin,
     serializers.Serializer,  # type: ignore[misc]
 ):
-    """A change to a debt: the fields of the create except `direction` and `currency`, which are `400 read_only`."""
+    """A change to a debt: the fields of the create except the `currency`, which is `400 read_only`."""
 
+    direction = serializers.ChoiceField(
+        choices=Direction.choices,
+        help_text=(
+            "`lent` is money the person gave, `borrowed` money the person received. Flipping it keeps the "
+            "repayments, the amount and the dates, and the lists, totals and reports follow it on the next read."
+        ),
+    )
     person = TextField(max_length=50, help_text="1 to 50 characters, trimmed.")
     amount = AmountField(
         allow_zero=False,

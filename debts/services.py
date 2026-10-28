@@ -103,8 +103,9 @@ def update_debt(*, debt: Debt, data: dict[str, Any]) -> Debt:
     """Apply a partial edit to a debt the caller has locked. A request that changes nothing saves nothing.
 
     The amount cannot go below what was repaid, and the start day cannot go past a repayment. Raising the amount above
-    what was repaid reopens a settled debt: the status is derived, so nothing else changes. The ``direction`` and the
-    ``currency`` are not editable (the serializer refuses them).
+    what was repaid reopens a settled debt: the status is derived, so nothing else changes. The ``direction`` may be
+    corrected (the repayments and the figures do not depend on it); the ``currency`` is not editable (the serializer
+    refuses it).
     """
     errors: dict[str, list[ErrorDetail]] = {}
     if "amount" in data:
@@ -145,7 +146,7 @@ def update_debt(*, debt: Debt, data: dict[str, Any]) -> Debt:
     changes: dict[str, Any] = {}
     if "amount" in data:
         changes["amount"] = data["amount"].minor
-    for name in ("person", "start_date", "due_date", "note"):
+    for name in ("direction", "person", "start_date", "due_date", "note"):
         if name in data:
             changes[name] = data[name]
     changed = False
