@@ -42,7 +42,7 @@ The auth flow is the real one (register, code email, verify); only the transport
   proxy) and two-factor sign-in with a one-time code from an authenticator app. Staging, with invented data, does not need
   them. This is a step of the production deployment (`docs/steps.md`).
 
-**Real email delivery** stays a separate, later step: an SMTP provider behind the same `EMAIL_BACKEND` setting, with the
+**Real email delivery** (decided in [ADR 0024](0024-resend-email-delivery.md): Resend over HTTPS) stays a separate step: an SMTP provider behind the same `EMAIL_BACKEND` setting, with the
 sending domain authenticated (SPF, DKIM and DMARC) so that mail is not marked as spam.
 
 ## Alternatives considered
