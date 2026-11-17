@@ -55,6 +55,19 @@ Use the same region for all three services (for example Frankfurt), or every que
    interval on their free plans): call `https://<service>.onrender.com/healthz` every five minutes, so the free instance
    does not sleep between your tests. Without it, the service sleeps after 15 minutes without a request and the first
    request takes about a minute. With it, staging is awake all month and uses 720 to 744 of the 750 free hours.
+10. **The scheduled check ([ADR 0025](adr/0025-scheduled-readiness-check-for-staging.md)).** The workflow **Staging
+    check** calls `GET /readyz` every three days, which wakes the web service and the database and writes and reads the
+    Key Value instance, so none of the three goes weeks without a request, and a failed run tells you that one stopped
+    answering. Set it up once:
+    - Make a token: `openssl rand -hex 32`. Keep it out of the chat, a file and a commit.
+    - On the Render service add the variable `READINESS_TOKEN` with that value (an empty value switches `/readyz` off).
+    - In the GitHub environment `staging` add the **secret** `READINESS_TOKEN` with the same value. The variable
+      `STAGING_URL` is already there from step 5.
+    - Run it once by hand: Actions, **Staging check**, **Run workflow**. A green run says the web service, the database
+      and the cache answered; a red one names the cause (a token that does not match is `401`, an unset variable on
+      Render is `404`).
+    - It runs from `develop`, which the environment already allows. GitHub pauses a scheduled workflow after 60 days
+      without repository activity ([ADR 0020](adr/0020-scheduled-calls-instead-of-a-free-worker.md)).
 
 ## Environment variables of the web service
 
@@ -73,6 +86,7 @@ Use the same region for all three services (for example Frankfurt), or every que
 | `DEFAULT_FROM_EMAIL` | the sender, on the domain verified in Resend, for example `Money Scribe <noreply@mail.example.com>`; needed with Resend only |
 | `RESEND_API_KEY` | the Resend API key (a secret, never in the repository); `check` fails with `outbox.E003` when the Resend backend is chosen and the key is empty |
 | `NUM_PROXIES` | `3` on Render and Cloudflare (measured; start with `1` and measure it, below) |
+| `READINESS_TOKEN` | the token of `GET /readyz` for the scheduled check (step 10): `openssl rand -hex 32`; a secret, the same value as the secret of the GitHub environment `staging`; empty switches the view off |
 | `WEB_CONCURRENCY` | `1` (the free instance has 512 MB) |
 | `PWNED_PASSWORD_CHECK` | `True` |
 | `TURNSTILE_SECRET_KEY` | the secret key of the Turnstile widget ([`sign-in-challenge.md`](sign-in-challenge.md)); a secret, never in the repository |
@@ -170,4 +184,7 @@ that was built before. The workflow finds that image by its tag `sha-<short>` an
 | `/healthz` never shows the new release | The new container does not start: read the service's logs (a missing variable, a bad `DATABASE_URL`, `users.E001` for the signing key) |
 | Register or sign-in answers `503` | The Key Value instance is unreachable: check `REDIS_URL` and the region |
 | The first call after a pause is very slow | The free instance was asleep, or Neon was suspended: expected; an uptime monitor (step 9) avoids the first |
+| The workflow Staging check fails with 401 | The secret `READINESS_TOKEN` of the environment `staging` and the variable of the Render service are not the same value |
+| The workflow Staging check fails with 404 | `READINESS_TOKEN` is empty or missing on the Render service, or `STAGING_URL` is wrong |
+| The workflow Staging check reports `database` or `cache` | That dependency does not answer: check Neon (the project and its connection string) or the Key Value instance (`REDIS_URL`, the region) |
 | The admin sign-in page loops or answers 403 | `ALLOWED_HOSTS` or `CSRF_TRUSTED_ORIGINS` does not match the address |
