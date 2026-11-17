@@ -1,0 +1,53 @@
+# ============================================================
+#  .github/workflows/staging-check.yml
+#
+#  Every three days, asks staging whether the web service, the database and Redis answer (ADR 0025, docs/staging.md).
+#  One call to GET /readyz wakes the sleeping Render web service, wakes the Neon database and writes and reads the
+#  Render Key Value instance, so none of them goes weeks without a request. A run that fails is the warning that
+#  something on staging does not answer.
+#
+#    - Runs on a schedule (from the default branch, develop) and by hand (Actions, Staging check, Run workflow).
+#    - scripts/check-staging.sh makes the call and retries, because the first call after a pause takes about a minute.
+#    - Not every 5 minutes on purpose: an always-awake service would use up the 750 free instance hours of the
+#      workspace (ADR 0011).
+#
+#  The GitHub environment `staging` (deployment branches: develop) holds what this needs: the VARIABLE STAGING_URL
+#  (already there for the deploy) and the SECRET READINESS_TOKEN, the same value as the variable READINESS_TOKEN of
+#  the Render service. Nothing from a pull request is executed here.
+# ============================================================
+
+name: Staging check
+
+on:
+  schedule:
+    # Days 1, 4, 7 ... of the month, at an odd minute (a start of the hour is the busiest time on GitHub's scheduler).
+    - cron: "17 6 */3 * *"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: staging-check
+  cancel-in-progress: false
+
+jobs:
+  check:
+    name: Check staging
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
+    environment:
+      name: staging
+      url: ${{ vars.STAGING_URL }}
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Ask staging
+        env:
+          STAGING_URL: ${{ vars.STAGING_URL }}
+          READINESS_TOKEN: ${{ secrets.READINESS_TOKEN }}
+        run: bash scripts/check-staging.sh
