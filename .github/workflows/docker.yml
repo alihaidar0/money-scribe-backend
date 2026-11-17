@@ -117,7 +117,7 @@ jobs:
     name: Publish
     needs: ready
     if: needs.ready.outputs.ready == 'true'
-    uses: docker/github-builder/.github/workflows/build.yml@4345a1cea1e4cfb65c8a5e2b1b80f9e630068827 # v1.18.0
+    uses: docker/github-builder/.github/workflows/build.yml@a31d2311da4d55e21b978c1c52bab82ba97d51ee # v1.19.0
     permissions:
       contents: read
       id-token: write   # keyless (Sigstore) signing of the provenance attestation
@@ -181,7 +181,7 @@ jobs:
           exit-code: "0"
 
       - name: Upload Trivy results to Security tab
-        uses: github/codeql-action/upload-sarif@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4.39.0
+        uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
         with:
           sarif_file: trivy-results.sarif
 
