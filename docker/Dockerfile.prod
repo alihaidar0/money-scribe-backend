@@ -55,8 +55,11 @@ RUN SECRET_KEY=collectstatic-only \
 # ═════════════════════════════ runtime ═════════════════════════════
 FROM base AS runtime
 
+# Upgrade the packages of the base image first: a Debian security fix (such as DSA-6613-1 for zlib) reaches the
+# runtime image on the next build instead of waiting for the upstream base image to be rebuilt.
 # libpq5: runtime client library for psycopg (tiny; harmless with psycopg[binary]).
 RUN apt-get update \
+    && apt-get upgrade -y --no-install-recommends \
     && apt-get install -y --no-install-recommends libpq5 \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
