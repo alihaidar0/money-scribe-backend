@@ -29,6 +29,7 @@ A decision that changes gets a new record that supersedes the old one; the old f
 | [0022](0022-security-events.md) | Security events: an append-only record of account security actions, kept 90 days | accepted |
 | [0023](0023-pay-cycle-parts.md) | Pay-cycle parts: the Overview and the reports cut a month by the pay days; an income can choose its part | accepted |
 | [0024](0024-resend-email-delivery.md) | Real email delivery with Resend over HTTPS through `django-anymail`; the outbox stays for development and as a staging fallback | accepted |
+| [0025](0025-scheduled-readiness-check-for-staging.md) | A token-protected `/readyz` and a scheduled workflow, every three days, keep the free staging services in use and warn when one stops answering | accepted |
 
 The fields and limits of each resource are in [`../api-fields.md`](../api-fields.md).
 

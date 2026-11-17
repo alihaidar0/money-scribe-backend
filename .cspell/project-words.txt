@@ -54,6 +54,7 @@ pgsql
 Pwned
 pytype
 pyupgrade
+readyz
 SARIF
 Schemathesis
 Sigstore

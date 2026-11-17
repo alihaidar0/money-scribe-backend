@@ -95,6 +95,8 @@ x-dev-image: &dev-image
     # Proxies in front of the app (0 in development). Behind a reverse proxy set the real number, or every
     # client shares the proxy's address in the per-client limits.
     NUM_PROXIES: ${NUM_PROXIES:-0}
+    # The token of GET /readyz (ADR 0025); empty switches the view off.
+    READINESS_TOKEN: ${READINESS_TOKEN:-}
     # The secret key of the Cloudflare Turnstile widget (the bot challenge of sign-in, docs/sign-in-challenge.md).
     # Empty switches the challenge off; staging and production set a real one.
     TURNSTILE_SECRET_KEY: ${TURNSTILE_SECRET_KEY:-}

@@ -274,6 +274,9 @@ TURNSTILE_HOSTNAMES = [
     for h in os.environ.get("TURNSTILE_HOSTNAMES", "").split(",")
     if h.strip()
 ]
+# The token of GET /readyz (config/readiness.py, ADR 0025): a long random value that the scheduled check sends as
+# "Authorization: Bearer <token>". Empty switches the view off (it answers 404). Never log it, never commit it.
+READINESS_TOKEN = os.environ.get("READINESS_TOKEN", "")
 SIGN_IN_LOCK_SECONDS = 900
 
 # Password reset (ADR 0014): the code is verified for a reset token, which lives this long and works once.
