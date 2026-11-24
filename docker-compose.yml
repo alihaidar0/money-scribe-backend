@@ -34,7 +34,7 @@ x-dev-image: &dev-image
   # on), after which the toolchain only changes through a reviewed Dependabot
   # pull request. Keep this a literal line (no ${VAR}) so Dependabot's
   # docker-compose ecosystem can read it.
-  image: alihaidar199527/django-devcontainer:python-3.14.8.6@sha256:091462aa681833e3921d2fa0573d2d47a20b7bdb11d370629a24d4ae27be0ae1
+  image: alihaidar199527/django-devcontainer:python-3.15.2.3@sha256:82410769ebca8b5f83be6d7c0c7e9044dbe2a23ba1362f14cfa0d5414cc30670
   # tini as PID 1: forwards signals and reaps zombies, so `docker compose stop`
   # is instant instead of waiting 10 s for `sleep infinity`.
   init: true
@@ -154,7 +154,7 @@ services:
     command: bash scripts/start-beat.sh
 
   db:
-    image: postgres:18.6-alpine@sha256:10a5c69a83035ab5239f5620d708520e8b28f5aa1f2b20143e6024532edadfb5
+    image: postgres:18.6-alpine@sha256:9ba53c7d41ea093baf5c1ba635ba5434c4f979880527d49bb7d9237d3193085b
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-django}
