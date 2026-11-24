@@ -44,7 +44,7 @@ repos:
         args: [--branch, main, --branch, develop]
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.17.4
+    rev: v0.17.5
     hooks:
       - id: ruff-check
         args: [--fix, --output-format=full]
@@ -60,7 +60,7 @@ repos:
 
   # Keeps uv.lock in sync whenever pyproject.toml changes.
   - repo: https://github.com/astral-sh/uv-pre-commit
-    rev: 0.13.7
+    rev: 0.13.8
     hooks:
       - id: uv-lock
 
@@ -76,12 +76,12 @@ repos:
   # Not here: `docker compose config` (needs Docker, which the dev container does not have) and the online audits
   # of zizmor (they need a GitHub token), so a green commit is not a promise that Lint passes: CI stays the gate.
   - repo: https://github.com/streetsidesoftware/cspell-cli
-    rev: v10.4.0
+    rev: v10.4.1
     hooks:
       - id: cspell
 
   - repo: https://github.com/DavidAnson/markdownlint-cli2
-    rev: v0.24.0
+    rev: v0.24.1
     hooks:
       - id: markdownlint-cli2
 
