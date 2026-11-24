@@ -1155,7 +1155,7 @@ requires-dist = [
     { name = "drf-spectacular", extras = ["sidecar"], specifier = ">=0.30.0" },
     { name = "drf-standardized-errors", extras = ["openapi"], specifier = ">=0.16.0" },
     { name = "gunicorn", specifier = ">=27.0.1" },
-    { name = "psycopg", extras = ["binary", "pool"], specifier = ">=3.3.6" },
+    { name = "psycopg", extras = ["binary", "pool"], specifier = ">=3.3.9" },
     { name = "pyjwt", specifier = ">=2.15.1" },
     { name = "redis", specifier = ">=8.1.0" },
     { name = "whitenoise", specifier = ">=6.12.0" },
